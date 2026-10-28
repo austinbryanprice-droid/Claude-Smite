@@ -278,6 +278,41 @@ describe('combatant', () => {
     expect(a.basicAttack(new Combatant(thor, 'chaos'))).not.toBeNull();
   });
 
+  it('refreshes a zone slow on each tick instead of stacking it', () => {
+    const a = new Combatant(anubis, 'order');
+    const z = new Combatant(zeus, 'chaos');
+    a.gainXp(xpFor(5));
+    z.health = z.stats.maxHealth = 1e6;
+    const r = a.cast(4); // Sandstorm
+    if (!r.ok) throw new Error(r.error);
+    a.applySkillTo(r.cast, z);
+    z.update(1);
+    a.applySkillTo(r.cast, z);
+    expect(z.cc.totalSlow()).toBeCloseTo(0.35);
+    // A slow from a different source still stacks.
+    z.receiveCC('slow', 2, 0.2, 'other');
+    expect(z.cc.totalSlow()).toBeCloseTo(0.55);
+  });
+
+  it('only lifesteals damage the target could take', () => {
+    const o = new Combatant(odin, 'order');
+    const z = new Combatant(zeus, 'chaos');
+    o.addTimedMod('lifesteal', 0.5, 10);
+    o.health = 100;
+    z.health = 1;
+    o.basicAttack(z, () => 1);
+    expect(z.alive).toBe(false);
+    expect(o.health).toBeCloseTo(100.5);
+  });
+
+  it('clears diminishing returns on death', () => {
+    const z = new Combatant(zeus, 'order');
+    z.receiveCC('stun', 1);
+    expect(z.cc.drCount).toBe(1);
+    z.takeDamage(1e6);
+    expect(z.cc.drCount).toBe(0);
+  });
+
   it('heals allies but never damages them', () => {
     const a = new Combatant(anubis, 'order');
     const ally = new Combatant(thor, 'order');

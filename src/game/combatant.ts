@@ -49,12 +49,16 @@ export type ResolvedEffect =
   | { kind: 'debuff'; stat: StatKey; amount: number; duration: number }
   | Extract<Effect, { kind: 'movement' | 'stealth' | 'summon' | 'mark' }>;
 
+let nextUid = 1;
+
 export type CastError = 'dead' | 'locked' | 'cc' | 'cooldown' | 'mana' | 'emptySlot';
 
 export class Combatant {
   readonly god: GodDef;
   readonly team: Team;
   readonly trees: TreeIndex;
+  /** Unique per instance; tags the CC this unit applies. */
+  readonly uid = nextUid++;
 
   xp = 0;
   favor = 0;
@@ -342,7 +346,7 @@ export class Combatant {
           if (enemy) this.dealDamage(target, e.amount, e.damageType, true);
           break;
         case 'cc':
-          if (enemy) target.receiveCC(e.cc, e.duration, e.magnitude);
+          if (enemy) target.receiveCC(e.cc, e.duration, e.magnitude, `${this.uid}:${cast.skill.id}`);
           break;
         case 'debuff':
           if (enemy) target.addTimedMod(e.stat, -e.amount, e.duration);
@@ -385,12 +389,14 @@ export class Combatant {
     if (!target.alive) return { raw: 0, dealt: 0, crit: false };
     const execute = this.hasKeystone('executeBelow');
     const result = computeDamage(raw, type, this.stats, target.stats, crit);
+    // Lifesteal only counts damage the target could actually take (no overkill).
+    const sustained = Math.min(result.dealt, target.health + target.shieldTotal);
     const killed = target.takeDamage(result.dealt, this);
     if (!killed && execute && target.alive && target.health / target.stats.maxHealth < execute.healthPct) {
       target.takeDamage(target.health + target.shieldTotal, this);
     }
     const steal = this.stats.lifesteal + (fromAbility ? (this.hasKeystone('abilityLifesteal')?.pct ?? 0) : 0);
-    if (steal > 0) this.heal(result.dealt * steal);
+    if (steal > 0) this.heal(sustained * steal);
     const stacking = this.hasKeystone('stackingDamage');
     if (stacking && fromAbility) {
       this.stacks.count = Math.min(stacking.maxStacks, this.stacks.count + 1);
@@ -425,9 +431,9 @@ export class Combatant {
     this.health = Math.min(this.stats.maxHealth, this.health + amount);
   }
 
-  receiveCC(kind: CCKind, duration: number, magnitude = 0): number {
+  receiveCC(kind: CCKind, duration: number, magnitude = 0, source?: string): number {
     if (!this.alive) return 0;
-    const applied = this.cc.apply(kind, duration, magnitude, this.stats.ccReduction);
+    const applied = this.cc.apply(kind, duration, magnitude, this.stats.ccReduction, false, source);
     const k = this.hasKeystone('shieldOnHardCC');
     if (applied > 0 && k && ccClass(kind) !== 'soft' && this.hardCCShieldCooldown <= 0) {
       this.addShield(this.stats.maxHealth * k.maxHealthPct, 4);
@@ -452,7 +458,7 @@ export class Combatant {
     this.health = 0;
     this.shields = [];
     this.mods = [];
-    this.cc.cleanse();
+    this.cc.reset();
     this.respawnTimer = respawnTime(this.level);
     this.invalidate();
   }
