@@ -74,6 +74,8 @@ export const DR_DURATION = 15;
 export interface ActiveCC {
   kind: CCKind;
   remaining: number;
+  /** Who applied it, so repeated ticks of one effect refresh instead of stacking. */
+  source?: string;
   magnitude: number;
 }
 
@@ -118,7 +120,7 @@ export class CCState {
   }
 
   /** Returns the duration actually applied (0 if fully resisted). */
-  apply(kind: CCKind, duration: number, magnitude = 0, ccReduction = 0, immune = false): number {
+  apply(kind: CCKind, duration: number, magnitude = 0, ccReduction = 0, immune = false, source?: string): number {
     if (immune) return 0;
     const cls = ccClass(kind);
     let applied = duration;
@@ -126,14 +128,20 @@ export class CCState {
     else if (cls === 'soft') applied *= 1 - ccReduction;
     if (applied <= 0.01) return 0;
 
-    // A new copy of the same CC refreshes rather than stacks, except slows,
-    // which stack and are combined with effectiveSlow().
-    const existing = kind === 'slow' ? undefined : this.active.find((c) => c.kind === kind);
+    // A new copy of the same CC refreshes rather than stacks. Slows from
+    // different sources stack (combined by effectiveSlow()); a repeat from the
+    // same source, such as another tick of one zone, refreshes.
+    const existing =
+      kind === 'slow'
+        ? source === undefined
+          ? undefined
+          : this.active.find((c) => c.kind === 'slow' && c.source === source)
+        : this.active.find((c) => c.kind === kind);
     if (existing) {
       existing.remaining = Math.max(existing.remaining, applied);
       existing.magnitude = Math.max(existing.magnitude, magnitude);
     } else {
-      this.active.push({ kind, remaining: applied, magnitude });
+      this.active.push({ kind, remaining: applied, magnitude, source });
     }
 
     const stacks = cls === 'trueHard' ? 2 : cls === 'hard' ? 1 : 0;
@@ -178,5 +186,11 @@ export class CCState {
 
   cleanse(): void {
     this.active = [];
+  }
+
+  /** Clear everything, diminishing returns included (on death). */
+  reset(): void {
+    this.active = [];
+    this.drStacks = [];
   }
 }
