@@ -1,0 +1,225 @@
+import * as THREE from 'three/webgpu';
+import {
+  attribute, cameraPosition, cos, dot, faceDirection, float, mix, mx_noise_float, normalize, positionLocal, pow, sin,
+  smoothstep, time, transformNormalToView, uniform, vec2, vec3,
+} from '../render/tsl';
+import { rng } from '../core/random';
+import { Arena } from './ArenaLayout';
+import type { Terrain } from './Terrain';
+import type { QualitySettings } from '../render/Quality';
+
+const CHUNK = 14;
+/** Blades per square meter at density 1. */
+const BASE_DENSITY = 22;
+const SEGMENTS = 4;
+
+interface Chunk {
+  mesh: THREE.Mesh;
+  geometry: THREE.InstancedBufferGeometry;
+  center: THREE.Vector3;
+  total: number;
+}
+
+/**
+ * GPU-animated grass. Each blade is one instance of a tapered, curved strip;
+ * all placement, bending and wind happen in the vertex shader. The field is
+ * split into chunks so off-screen chunks are culled and distant chunks draw
+ * fewer blades (the ground texture underneath carries the look far away).
+ */
+export class Grass {
+  readonly group = new THREE.Group();
+  readonly wind = {
+    direction: uniform(new THREE.Vector2(0.8, 0.6).normalize()),
+    strength: uniform(0.55),
+    speed: uniform(0.9),
+  };
+  /** World position of the player; blades bend away from it. */
+  readonly pusher = uniform(new THREE.Vector3(0, -100, 0));
+  private chunks: Chunk[] = [];
+  private material: THREE.MeshStandardNodeMaterial;
+  private bladeGeometry: THREE.BufferGeometry;
+  private fullDistance = 25;
+  private maxDistance = 65;
+
+  constructor(private readonly terrain: Terrain, private readonly sunDirection: THREE.Vector3) {
+    this.group.name = 'grass';
+    this.bladeGeometry = Grass.buildBlade();
+    this.material = this.buildMaterial();
+  }
+
+  /** A blade in the XY plane: x in [-0.5, 0.5] (width), y in [0, 1] (height). */
+  private static buildBlade(): THREE.BufferGeometry {
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i < SEGMENTS; i++) {
+      const t = i / SEGMENTS;
+      const w = 1 - Math.pow(t, 1.6) * 0.85;
+      pos.push(-0.5 * w, t, 0, 0.5 * w, t, 0);
+    }
+    pos.push(0, 1, 0);
+    for (let i = 0; i < SEGMENTS - 1; i++) {
+      const a = i * 2;
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    const last = (SEGMENTS - 1) * 2;
+    idx.push(last, last + 1, SEGMENTS * 2);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 2 ? 1 : 0)), 3));
+    g.setIndex(idx);
+    return g;
+  }
+
+  private buildMaterial(): THREE.MeshStandardNodeMaterial {
+    const mat = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
+    const a = attribute('bladeA', 'vec4'); // x, y, z, yaw
+    const b = attribute('bladeB', 'vec4'); // height, width, lean, variation
+    const root = a.xyz;
+    const yaw = a.w;
+    const h = positionLocal.y;
+    const height = b.x;
+    const width = b.y;
+    const lean = b.z;
+    const variation = b.w;
+
+    // Wind: two octaves of drifting noise, gusts sweep across the field.
+    const t = time.mul(this.wind.speed);
+    const windUV = root.xz.mul(0.045).sub(vec2(this.wind.direction).mul(t.mul(0.6)));
+    const gust = mx_noise_float(vec3(windUV, t.mul(0.15))).mul(0.5).add(0.5);
+    const flutter = sin(t.mul(4.5).add(variation.mul(40)).add(root.x.mul(0.7))).mul(0.12);
+    const windAmt = gust.mul(this.wind.strength).add(flutter.mul(this.wind.strength));
+
+    // Push away from the player as they walk through.
+    const toBlade = root.sub(this.pusher);
+    const pushDist = toBlade.xz.length();
+    const push = smoothstep(1.4, 0.2, pushDist).mul(0.9);
+    const pushDir = toBlade.xz.div(pushDist.max(1e-3));
+
+    const dirX = cos(yaw);
+    const dirZ = sin(yaw);
+    const bendCurve = pow(h, float(1.8));
+    const local = vec3(
+      positionLocal.x.mul(width).mul(dirX),
+      h.mul(height),
+      positionLocal.x.mul(width).mul(dirZ),
+    );
+    // Facing direction is perpendicular to the blade's width axis.
+    const facing = vec2(dirZ.negate(), dirX);
+    const bendXZ = facing.mul(lean)
+      .add(vec2(this.wind.direction).mul(windAmt))
+      .add(pushDir.mul(push))
+      .mul(bendCurve).mul(height);
+    // Keep blade length roughly constant when bending.
+    const sag = bendXZ.length().mul(bendXZ.length()).mul(0.35).div(height.max(0.1));
+    const pos = root.add(vec3(local.x.add(bendXZ.x), local.y.sub(sag.mul(h)), local.z.add(bendXZ.y)));
+    mat.positionNode = pos;
+
+    // Normal: blade face normal blended toward up (softer, like a grass "card" in UE).
+    const faceN = vec3(facing.x, 0.4, facing.y).normalize();
+    mat.normalNode = transformNormalToView(normalize(mix(faceN.mul(faceDirection), vec3(0, 1, 0), 0.55)));
+
+    const base = mix(vec3(0.05, 0.09, 0.02), vec3(0.09, 0.13, 0.03), variation);
+    const tipGreen = mix(vec3(0.24, 0.34, 0.07), vec3(0.42, 0.42, 0.14), smoothstep(0.55, 0.95, variation));
+    const col = mix(base, tipGreen, pow(h, float(0.9)));
+    mat.colorNode = col;
+    mat.roughnessNode = float(0.55).add(h.mul(0.15));
+    mat.metalnessNode = float(0);
+    mat.aoNode = mix(float(0.25), float(1), smoothstep(0.0, 0.7, h));
+    // Fake subsurface: blades glow when the sun is behind them.
+    const viewDir = normalize(pos.sub(cameraPosition));
+    const sun = uniform(this.sunDirection);
+    const back = pow(dot(viewDir, sun.negate()).max(0), float(3)).mul(h).mul(0.22);
+    mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(4);
+    return mat;
+  }
+
+  build(q: QualitySettings): void {
+    for (const c of this.chunks) {
+      c.geometry.dispose();
+      this.group.remove(c.mesh);
+    }
+    this.chunks = [];
+    this.fullDistance = q.grassDistance * 0.35;
+    this.maxDistance = q.grassDistance;
+    const density = BASE_DENSITY * q.grassDensity;
+    const extent = Arena.valleyRadius + 14;
+    const n = Math.ceil((extent * 2) / CHUNK);
+    const random = rng(4242);
+    const plazaR = Arena.plaza.baseRadius + 0.6;
+    const normal = new THREE.Vector3();
+
+    for (let cz = 0; cz < n; cz++) {
+      for (let cx = 0; cx < n; cx++) {
+        const x0 = -extent + cx * CHUNK;
+        const z0 = -extent + cz * CHUNK;
+        const mid = Math.hypot(x0 + CHUNK / 2, z0 + CHUNK / 2);
+        if (mid > extent + CHUNK) continue;
+        const tries = Math.round(CHUNK * CHUNK * density);
+        const A: number[] = [];
+        const B: number[] = [];
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i < tries; i++) {
+          const x = x0 + random() * CHUNK;
+          const z = z0 + random() * CHUNK;
+          const r = Math.hypot(x, z);
+          if (r < plazaR) continue;
+          const m = this.terrain.maskAt(x, z);
+          const bare = Math.max(m.paved * 1.5, m.dirt);
+          if (random() < bare * 1.15) continue;
+          this.terrain.normalAt(x, z, normal);
+          if (normal.y < 0.86) continue;
+          const y = this.terrain.heightAt(x, z);
+          if (y > 7) continue;
+          // clumping: density modulated by low-frequency hash
+          const clump = 0.55 + 0.45 * Math.sin(x * 0.31 + Math.sin(z * 0.23) * 2.0) * Math.sin(z * 0.27 + x * 0.05);
+          if (random() > clump + 0.25) continue;
+          const edge = 1 - bare; // shorter grass at path edges
+          const height = (0.38 + random() * 0.5) * (0.55 + 0.45 * edge) * (0.8 + clump * 0.4);
+          A.push(x, y - 0.03, z, random() * Math.PI * 2);
+          B.push(height, 0.05 + random() * 0.045, (random() - 0.3) * 0.35, random());
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y + height);
+        }
+        const count = A.length / 4;
+        if (count === 0) continue;
+        const geo = new THREE.InstancedBufferGeometry();
+        geo.index = this.bladeGeometry.index;
+        geo.setAttribute('position', this.bladeGeometry.getAttribute('position'));
+        geo.setAttribute('normal', this.bladeGeometry.getAttribute('normal'));
+        geo.setAttribute('bladeA', new THREE.InstancedBufferAttribute(new Float32Array(A), 4));
+        geo.setAttribute('bladeB', new THREE.InstancedBufferAttribute(new Float32Array(B), 4));
+        geo.instanceCount = count;
+        const center = new THREE.Vector3(x0 + CHUNK / 2, (minY + maxY) / 2, z0 + CHUNK / 2);
+        geo.boundingSphere = new THREE.Sphere(center.clone(), Math.hypot(CHUNK / 2, CHUNK / 2, (maxY - minY) / 2) + 1.5);
+        geo.boundingBox = new THREE.Box3(
+          new THREE.Vector3(x0 - 1, minY - 1, z0 - 1),
+          new THREE.Vector3(x0 + CHUNK + 1, maxY + 1, z0 + CHUNK + 1),
+        );
+        const mesh = new THREE.Mesh(geo, this.material);
+        mesh.castShadow = q.grassShadows;
+        mesh.receiveShadow = true;
+        mesh.name = 'grass-chunk';
+        this.group.add(mesh);
+        this.chunks.push({ mesh, geometry: geo, center, total: count });
+      }
+    }
+  }
+
+  /** Distance-based thinning; call once per frame. */
+  update(camera: THREE.Camera, playerPosition?: THREE.Vector3): void {
+    if (playerPosition) this.pusher.value.copy(playerPosition);
+    const p = camera.position;
+    for (const c of this.chunks) {
+      const d = Math.max(0, Math.hypot(c.center.x - p.x, c.center.z - p.z) - CHUNK * 0.5);
+      const f = d <= this.fullDistance ? 1 : 1 - (d - this.fullDistance) / (this.maxDistance - this.fullDistance);
+      const k = Math.max(0, Math.min(1, f));
+      c.mesh.visible = k > 0.01;
+      c.geometry.instanceCount = Math.ceil(c.total * k * k);
+    }
+  }
+
+  get bladeCount(): number {
+    return this.chunks.reduce((s, c) => s + (c.mesh.visible ? c.geometry.instanceCount : 0), 0);
+  }
+}
