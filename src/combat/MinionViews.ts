@@ -1,0 +1,312 @@
+import * as THREE from 'three/webgpu';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import type { Team } from '../game/combatant';
+import { float, mix, mx_noise_float, positionLocal, vec3 } from '../render/tsl';
+import { lathe } from '../scene/Architecture';
+import type { MinionType } from '../sim/factory';
+import type { Unit } from '../sim/Unit';
+
+/**
+ * Lane minions, drawn with instancing: every (team, type, body part,
+ * material) is one InstancedMesh, so a hundred minions cost a few dozen draw
+ * calls. Each minion is four rigid parts (body, two legs, weapon arm) posed
+ * per instance: a walk cycle, attack swings, a hit flinch and a fall on death.
+ *
+ * Minions are mortal soldiers, about 1.75 m (gods are 2.45 m); brutes are
+ * hulking at about 2.6 m. Order wears blue and gold, Chaos crimson and black.
+ */
+
+type Mat = 'cloth' | 'trim' | 'metal' | 'leather' | 'skin' | 'wood';
+type Part = 'body' | 'legL' | 'legR' | 'arm';
+const PARTS: readonly Part[] = ['body', 'legL', 'legR', 'arm'];
+const TYPES: readonly MinionType[] = ['melee', 'archer', 'brute'];
+const CAPACITY: Record<MinionType, number> = { melee: 72, archer: 72, brute: 16 };
+
+const TEAM_LOOK: Record<Team, { cloth: number; trim: number; metal: number; skin: number }> = {
+  order: { cloth: 0x2457c9, trim: 0xd9a845, metal: 0xb8c2cc, skin: 0xc49272 },
+  chaos: { cloth: 0xa3201c, trim: 0x2a2320, metal: 0x6f6a66, skin: 0x9a6d55 },
+};
+
+/** Pivots of the animated parts, in the model's frame (front is +Z). */
+interface Rig {
+  hipY: number;
+  hipX: number;
+  shoulder: THREE.Vector3;
+  scale: number;
+}
+
+type Kit = Record<Part, Partial<Record<Mat, THREE.BufferGeometry[]>>>;
+
+const tmp = new THREE.Object3D();
+
+function put(kit: Kit, part: Part, mat: Mat, g: THREE.BufferGeometry, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): void {
+  tmp.position.set(x, y, z);
+  tmp.rotation.set(rx, ry, rz);
+  tmp.scale.set(1, 1, 1);
+  tmp.updateMatrix();
+  const geo = (g.index ? g.toNonIndexed() : g).applyMatrix4(tmp.matrix);
+  // keep only what every geometry has, so they merge
+  for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+  if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((geo.attributes.position!.count) * 2), 2));
+  ((kit[part][mat] ??= []) as THREE.BufferGeometry[]).push(geo);
+}
+
+/** A leg hanging from its hip pivot at the origin. */
+function leg(kit: Kit, part: Part, length: number, girth: number, armored: boolean): void {
+  const thigh = length * 0.5;
+  put(kit, part, 'cloth', new THREE.CapsuleGeometry(girth, thigh * 0.7, 4, 10), 0, -thigh * 0.5, 0);
+  put(kit, part, 'skin', new THREE.CapsuleGeometry(girth * 0.78, thigh * 0.7, 4, 10), 0, -thigh * 1.45, 0);
+  if (armored) put(kit, part, 'metal', lathe([[girth * 0.95, 0], [girth, thigh * 0.3], [girth * 1.05, thigh * 0.6], [girth * 0.92, thigh * 0.8]], 14), 0, -length * 0.93, 0.01);
+  else put(kit, part, 'leather', new THREE.CylinderGeometry(girth * 0.9, girth * 0.82, thigh * 0.7, 12), 0, -length * 0.8, 0);
+  put(kit, part, 'leather', new THREE.BoxGeometry(girth * 1.5, girth * 0.8, girth * 3), 0, -length + girth * 0.4, girth * 0.7);
+}
+
+function buildMelee(kit: Kit): Rig {
+  const hipY = 0.86;
+  // tunic, skirt strips and belt
+  put(kit, 'body', 'cloth', lathe([[0.001, hipY - 0.12], [0.2, hipY - 0.12], [0.24, hipY + 0.05], [0.23, hipY + 0.3], [0.2, hipY + 0.5], [0.001, hipY + 0.52]], 20).scale(1, 1, 0.8));
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    put(kit, 'body', i % 2 ? 'leather' : 'cloth', new THREE.BoxGeometry(0.1, 0.3, 0.02), Math.sin(a) * 0.23, hipY - 0.14, Math.cos(a) * 0.19, Math.cos(a) * 0.15, a, -Math.sin(a) * 0.15);
+  }
+  put(kit, 'body', 'leather', new THREE.TorusGeometry(0.22, 0.035, 8, 24).rotateX(Math.PI / 2).scale(1, 1, 0.82), 0, hipY + 0.02, 0);
+  // bronze cuirass
+  put(kit, 'body', 'trim', lathe([[0.001, 0.0], [0.22, 0.0], [0.26, 0.12], [0.28, 0.26], [0.25, 0.36], [0.16, 0.42], [0.001, 0.43]], 24).scale(1.08, 1, 0.74), 0, hipY + 0.12, 0);
+  // head, neck and crested helmet
+  put(kit, 'body', 'skin', new THREE.CylinderGeometry(0.06, 0.07, 0.1, 10), 0, hipY + 0.57, 0);
+  put(kit, 'body', 'skin', new THREE.SphereGeometry(0.105, 16, 12).scale(0.92, 1.1, 1), 0, hipY + 0.7, 0.01);
+  put(kit, 'body', 'metal', lathe([[0.001, 0.16], [0.07, 0.155], [0.11, 0.12], [0.125, 0.04], [0.125, -0.06], [0.001, -0.06]], 20).scale(1, 1, 1.08), 0, hipY + 0.71, 0);
+  put(kit, 'body', 'cloth', new THREE.BoxGeometry(0.035, 0.12, 0.3), 0, hipY + 0.9, -0.01);
+  // pauldrons
+  for (const sx of [-1, 1]) put(kit, 'body', 'metal', new THREE.SphereGeometry(0.11, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1.1, 0.85, 1.05), sx * 0.29, hipY + 0.49, 0, 0, 0, -sx * 0.35);
+  // shield arm, held forward
+  put(kit, 'body', 'skin', new THREE.CapsuleGeometry(0.055, 0.42, 4, 8), -0.31, hipY + 0.26, 0.08, 0.5, 0, 0.1);
+  put(kit, 'body', 'cloth', new THREE.CylinderGeometry(0.3, 0.3, 0.035, 24), -0.36, hipY + 0.22, 0.27, Math.PI / 2 - 0.1, 0, 0.12);
+  put(kit, 'body', 'trim', new THREE.TorusGeometry(0.3, 0.025, 6, 28), -0.36, hipY + 0.22, 0.285, -0.1, 0, 0.12);
+  put(kit, 'body', 'trim', new THREE.SphereGeometry(0.07, 12, 8).scale(1, 1, 0.6), -0.36, hipY + 0.22, 0.3);
+  // sword arm: hangs from the shoulder at the origin, sword pointing forward-down
+  put(kit, 'arm', 'skin', new THREE.CapsuleGeometry(0.055, 0.42, 4, 8), 0, -0.25, 0);
+  put(kit, 'arm', 'leather', new THREE.CylinderGeometry(0.065, 0.06, 0.14, 10), 0, -0.4, 0);
+  put(kit, 'arm', 'leather', new THREE.CylinderGeometry(0.022, 0.022, 0.14, 8), 0, -0.52, 0.04, Math.PI / 2);
+  put(kit, 'arm', 'trim', new THREE.BoxGeometry(0.16, 0.03, 0.04), 0, -0.52, 0.12);
+  put(kit, 'arm', 'metal', new THREE.BoxGeometry(0.06, 0.012, 0.62).translate(0, 0, 0.31), 0, -0.52, 0.13);
+  leg(kit, 'legL', hipY - 0.04, 0.075, true);
+  leg(kit, 'legR', hipY - 0.04, 0.075, true);
+  return { hipY, hipX: 0.12, shoulder: new THREE.Vector3(0.3, hipY + 0.47, 0), scale: 1 };
+}
+
+function buildArcher(kit: Kit): Rig {
+  const hipY = 0.86;
+  put(kit, 'body', 'cloth', lathe([[0.001, hipY - 0.32], [0.24, hipY - 0.32], [0.22, hipY], [0.22, hipY + 0.3], [0.19, hipY + 0.5], [0.001, hipY + 0.52]], 20).scale(1, 1, 0.78));
+  put(kit, 'body', 'leather', lathe([[0.001, 0], [0.2, 0], [0.235, 0.15], [0.24, 0.3], [0.17, 0.4], [0.001, 0.41]], 20).scale(1.05, 1, 0.76), 0, hipY + 0.08, 0);
+  put(kit, 'body', 'trim', new THREE.TorusGeometry(0.21, 0.025, 8, 24).rotateX(Math.PI / 2).scale(1, 1, 0.8), 0, hipY + 0.05, 0);
+  put(kit, 'body', 'skin', new THREE.SphereGeometry(0.1, 16, 12).scale(0.92, 1.1, 1), 0, hipY + 0.69, 0.01);
+  // hood and short cape
+  put(kit, 'body', 'cloth', new THREE.SphereGeometry(0.135, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.62).scale(1, 1.1, 1.12), 0, hipY + 0.7, -0.02, -0.25);
+  put(kit, 'body', 'cloth', new THREE.CylinderGeometry(0.2, 0.3, 0.55, 14, 1, true, Math.PI * 0.5, Math.PI).scale(1, 1, 0.6), 0, hipY + 0.2, -0.04);
+  // quiver with arrows
+  put(kit, 'body', 'leather', new THREE.CylinderGeometry(0.06, 0.05, 0.5, 10), 0.08, hipY + 0.35, -0.2, 0.2, 0, -0.35);
+  for (let i = 0; i < 4; i++) put(kit, 'body', 'trim', new THREE.ConeGeometry(0.025, 0.08, 6), 0.16 + i * 0.02, hipY + 0.64 - i * 0.01, -0.27, 0.2, 0, -0.35);
+  // bow arm reaching forward, bow held upright
+  put(kit, 'body', 'skin', new THREE.CapsuleGeometry(0.05, 0.42, 4, 8), -0.24, hipY + 0.44, 0.24, Math.PI / 2 - 0.1);
+  put(kit, 'body', 'wood', new THREE.TorusGeometry(0.5, 0.02, 6, 24, Math.PI * 0.75), -0.24, hipY + 0.44, 0.65, 0, Math.PI / 2, Math.PI * 0.625);
+  put(kit, 'body', 'trim', new THREE.CylinderGeometry(0.004, 0.004, 0.92, 4), -0.24, hipY + 0.44, 0.47);
+  // draw arm: pulls back to the cheek
+  put(kit, 'arm', 'skin', new THREE.CapsuleGeometry(0.05, 0.4, 4, 8), 0, -0.24, 0);
+  put(kit, 'arm', 'leather', new THREE.CylinderGeometry(0.06, 0.055, 0.12, 10), 0, -0.38, 0);
+  leg(kit, 'legL', hipY - 0.04, 0.07, false);
+  leg(kit, 'legR', hipY - 0.04, 0.07, false);
+  return { hipY, hipX: 0.11, shoulder: new THREE.Vector3(0.27, hipY + 0.46, 0), scale: 1 };
+}
+
+function buildBrute(kit: Kit): Rig {
+  const hipY = 0.95;
+  // barrel body hunched forward, huge shoulders
+  put(kit, 'body', 'skin', lathe([[0.001, -0.05], [0.34, -0.05], [0.42, 0.2], [0.46, 0.45], [0.42, 0.66], [0.25, 0.78], [0.001, 0.8]], 24).scale(1.15, 1, 0.9), 0, hipY, 0.04, 0.18);
+  put(kit, 'body', 'leather', lathe([[0.001, -0.25], [0.36, -0.25], [0.37, 0.05], [0.33, 0.1], [0.001, 0.1]], 22).scale(1.12, 1, 0.92), 0, hipY, 0);
+  put(kit, 'body', 'trim', new THREE.TorusGeometry(0.4, 0.05, 8, 26).rotateX(Math.PI / 2).scale(1.12, 1, 0.9), 0, hipY + 0.06, 0);
+  // war harness straps and chest plate
+  put(kit, 'body', 'leather', new THREE.TorusGeometry(0.44, 0.03, 6, 24).scale(1.1, 1, 0.9), 0, hipY + 0.42, 0.06, 0.5, 0, 0.6);
+  put(kit, 'body', 'metal', new THREE.SphereGeometry(0.22, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.4).scale(1.3, 1, 0.5), 0, hipY + 0.45, 0.3, Math.PI / 2 - 0.2);
+  for (const sx of [-1, 1]) {
+    put(kit, 'body', 'metal', new THREE.SphereGeometry(0.24, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1.15, 0.9, 1.1), sx * 0.52, hipY + 0.72, 0.08, 0.2, 0, -sx * 0.4);
+    for (let i = 0; i < 3; i++) put(kit, 'body', 'trim', new THREE.ConeGeometry(0.045, 0.16, 8), sx * (0.48 + i * 0.07), hipY + 0.9 - i * 0.03, 0.08 - i * 0.04, 0, 0, -sx * 0.5);
+  }
+  // small head sunk between the shoulders, horned helm
+  put(kit, 'body', 'skin', new THREE.SphereGeometry(0.15, 16, 12).scale(1, 0.95, 1.05), 0, hipY + 0.86, 0.2);
+  put(kit, 'body', 'metal', lathe([[0.001, 0.14], [0.1, 0.13], [0.15, 0.06], [0.165, -0.04], [0.001, -0.04]], 18), 0, hipY + 0.9, 0.18);
+  for (const sx of [-1, 1]) put(kit, 'body', 'trim', new THREE.ConeGeometry(0.05, 0.3, 10).translate(0, 0.15, 0), sx * 0.14, hipY + 0.96, 0.18, 0, 0, -sx * 0.9);
+  // free arm hanging, fist
+  put(kit, 'body', 'skin', new THREE.CapsuleGeometry(0.11, 0.55, 4, 10), -0.62, hipY + 0.3, 0.12, 0.25, 0, 0.12);
+  put(kit, 'body', 'leather', new THREE.CylinderGeometry(0.13, 0.12, 0.2, 12), -0.66, hipY + 0.1, 0.18, 0.25, 0, 0.12);
+  // club arm
+  put(kit, 'arm', 'skin', new THREE.CapsuleGeometry(0.11, 0.55, 4, 10), 0, -0.36, 0);
+  put(kit, 'arm', 'leather', new THREE.CylinderGeometry(0.13, 0.12, 0.2, 12), 0, -0.6, 0);
+  put(kit, 'arm', 'wood', new THREE.CylinderGeometry(0.11, 0.05, 1.2, 10).translate(0, 0.55, 0), 0, -0.72, 0.05, Math.PI / 2 + 0.3);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    put(kit, 'arm', 'metal', new THREE.ConeGeometry(0.03, 0.12, 6), Math.cos(a) * 0.1, -0.72 - 0.45 * Math.sin(0.3) + Math.sin(a) * 0.1, 0.05 + 0.85, Math.PI / 2 + 0.3, 0, a);
+  }
+  leg(kit, 'legL', hipY - 0.05, 0.14, false);
+  leg(kit, 'legR', hipY - 0.05, 0.14, false);
+  return { hipY, hipX: 0.24, shoulder: new THREE.Vector3(0.6, hipY + 0.66, 0.1), scale: 1.1 };
+}
+
+function materials(team: Team): Record<Mat, THREE.Material> {
+  const look = TEAM_LOOK[team];
+  const n = (s: number) => mx_noise_float(positionLocal.mul(s)).mul(0.5).add(0.5);
+  const cloth = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.85, sheen: 0.8, sheenRoughness: 0.5, sheenColor: new THREE.Color(look.cloth).multiplyScalar(1.6), side: THREE.DoubleSide });
+  const c = new THREE.Color(look.cloth);
+  cloth.colorNode = vec3(c.r, c.g, c.b).mul(float(0.75).add(n(40).mul(0.35)));
+  const trim = new THREE.MeshPhysicalNodeMaterial({ color: look.trim, metalness: team === 'order' ? 1 : 0.6, roughness: 0.3 });
+  trim.roughnessNode = float(0.26).add(n(30).mul(0.15));
+  const metal = new THREE.MeshPhysicalNodeMaterial({ color: look.metal, metalness: 1, roughness: 0.34 });
+  metal.roughnessNode = float(0.3).add(n(45).mul(0.14));
+  const leather = new THREE.MeshStandardNodeMaterial({ roughness: 0.72 });
+  leather.colorNode = mix(vec3(0.16, 0.09, 0.05), vec3(0.3, 0.18, 0.1), n(25));
+  const skin = new THREE.MeshPhysicalNodeMaterial({ color: look.skin, roughness: 0.55, sheen: 0.3, sheenColor: new THREE.Color(0xffc4a0) });
+  const wood = new THREE.MeshStandardNodeMaterial({ roughness: 0.75 });
+  wood.colorNode = mix(vec3(0.22, 0.13, 0.06), vec3(0.4, 0.25, 0.12), mx_noise_float(positionLocal.mul(vec3(3, 30, 3))).mul(0.5).add(0.5));
+  return { cloth, trim, metal, leather, skin, wood };
+}
+
+interface Batch {
+  rig: Rig;
+  meshes: Record<Part, THREE.InstancedMesh[]>;
+  count: number;
+}
+
+interface Pose {
+  phase: number;
+  speed: number;
+  flinch: number;
+  flinchVel: number;
+}
+
+const BUILDERS: Record<MinionType, (k: Kit) => Rig> = { melee: buildMelee, archer: buildArcher, brute: buildBrute };
+
+export class MinionViews {
+  readonly group = new THREE.Group();
+  private readonly batches = new Map<string, Batch>();
+  private readonly poses = new Map<Unit, Pose>();
+  private readonly root = new THREE.Object3D();
+  private readonly part = new THREE.Object3D();
+  private readonly m = new THREE.Matrix4();
+
+  constructor() {
+    this.group.name = 'minions';
+    for (const team of ['order', 'chaos'] as const) {
+      const mats = materials(team);
+      for (const type of TYPES) {
+        const kit: Kit = { body: {}, legL: {}, legR: {}, arm: {} };
+        const rig = BUILDERS[type](kit);
+        const meshes = { body: [], legL: [], legR: [], arm: [] } as Record<Part, THREE.InstancedMesh[]>;
+        for (const p of PARTS) {
+          for (const [mat, geos] of Object.entries(kit[p]) as [Mat, THREE.BufferGeometry[]][]) {
+            const merged = mergeGeometries(geos, false);
+            if (!merged) continue;
+            const mesh = new THREE.InstancedMesh(merged, mats[mat], CAPACITY[type]);
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.frustumCulled = false;
+            mesh.count = 0;
+            mesh.visible = false;
+            meshes[p].push(mesh);
+            this.group.add(mesh);
+          }
+        }
+        this.batches.set(`${team}:${type}`, { rig, meshes, count: 0 });
+      }
+    }
+  }
+
+  hit(u: Unit, amount: number): void {
+    const p = this.poses.get(u);
+    if (p) p.flinchVel += Math.min(8, 2 + amount / 25);
+  }
+
+  /**
+   * Pose every minion. `at` gives the interpolated feet position; `deathTime`
+   * is seconds since death or -1.
+   */
+  frame(minions: readonly Unit[], dt: number, at: (u: Unit) => THREE.Vector3, deathTime: (u: Unit) => number, visible: (u: Unit) => boolean): void {
+    for (const b of this.batches.values()) b.count = 0;
+    const seen = new Set<Unit>();
+    for (const u of minions) {
+      const type = u.tag.split(':')[1] as MinionType;
+      const b = this.batches.get(`${u.team}:${type}`);
+      if (!b || b.count >= CAPACITY[type] || !visible(u)) continue;
+      seen.add(u);
+      let pose = this.poses.get(u);
+      if (!pose) {
+        pose = { phase: Math.random() * 6, speed: 0, flinch: 0, flinchVel: 0 };
+        this.poses.set(u, pose);
+      }
+      this.pose(u, b, pose, dt, at(u), deathTime(u), type);
+      b.count++;
+    }
+    for (const u of this.poses.keys()) if (!seen.has(u)) this.poses.delete(u);
+    for (const b of this.batches.values()) {
+      for (const p of PARTS) {
+        for (const mesh of b.meshes[p]) {
+          mesh.count = b.count;
+          mesh.visible = b.count > 0;
+          mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
+    }
+  }
+
+  private pose(u: Unit, b: Batch, pose: Pose, dt: number, pos: THREE.Vector3, death: number, type: MinionType): void {
+    const rig = b.rig;
+    const speedNow = Math.hypot(u.vx, u.vz);
+    pose.speed += (speedNow - pose.speed) * (1 - Math.exp(-dt * 10));
+    pose.phase += dt * pose.speed * (type === 'brute' ? 1.7 : 2.6);
+    pose.flinchVel += (-pose.flinch * 90 - pose.flinchVel * 9) * dt;
+    pose.flinch += pose.flinchVel * dt;
+    const walk = Math.min(1, pose.speed / 3);
+    const swing = Math.sin(pose.phase) * 0.55 * walk;
+    const bob = Math.abs(Math.cos(pose.phase)) * 0.05 * walk;
+
+    // root: feet, facing, death fall
+    const fall = death < 0 ? 0 : Math.min(1, death / 0.5);
+    const sink = death < 0 ? 0 : Math.max(0, death - 0.8) * 0.9;
+    this.root.position.set(pos.x, pos.y + bob - sink, pos.z);
+    this.root.rotation.set(-fall * fall * 1.5 - pose.flinch * 0.06 + walk * 0.08, u.body.yaw + Math.PI, 0, 'YXZ');
+    this.root.scale.setScalar(rig.scale);
+    this.root.updateMatrix();
+
+    const index = b.count;
+    const write = (p: Part) => {
+      this.part.updateMatrix();
+      this.m.multiplyMatrices(this.root.matrix, this.part.matrix);
+      for (const mesh of b.meshes[p]) mesh.setMatrixAt(index, this.m);
+    };
+    this.part.scale.set(1, 1, 1);
+    this.part.position.set(0, 0, 0);
+    this.part.rotation.set(0, Math.sin(pose.phase) * 0.08 * walk, 0);
+    write('body');
+    for (const [p, sx, s] of [['legL', -1, 1], ['legR', 1, -1]] as const) {
+      this.part.position.set(sx * rig.hipX, rig.hipY, 0);
+      this.part.rotation.set(swing * s * (death < 0 ? 1 : 0), 0, 0);
+      write(p);
+    }
+    // weapon arm: swings with the walk; an attack winds up and strikes
+    const t = u.sinceAction;
+    let armX = -swing * 0.6;
+    if (death < 0 && t < 0.6) {
+      if (type === 'archer') {
+        // raise to the bowstring, hold, release
+        const k = t < 0.15 ? t / 0.15 : t < 0.3 ? 1 : 1 - (t - 0.3) / 0.3;
+        armX = -1.45 * k;
+      } else {
+        const k = t / 0.4;
+        armX = k < 0.35 ? -2.3 * (k / 0.35) : k < 1 ? -2.3 + 3.0 * ((k - 0.35) / 0.65) : 0.7 * Math.max(0, 1 - (t - 0.4) / 0.2);
+      }
+    }
+    this.part.position.copy(rig.shoulder);
+    this.part.rotation.set(armX, 0, type === 'archer' ? -0.25 : 0.12);
+    write('arm');
+  }
+}

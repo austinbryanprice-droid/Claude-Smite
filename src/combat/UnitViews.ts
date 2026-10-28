@@ -2,7 +2,10 @@ import * as THREE from 'three/webgpu';
 import type { GodModel } from '../actors/GodModel';
 import { createGodModel } from './godModels';
 import { float, fract, length, mix, mx_noise_float, positionLocal, smoothstep, uv, vec3 } from '../render/tsl';
-import type { SimEvent, Unit } from '../sim/Unit';
+import type { StructureKind } from '../sim/factory';
+import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
+import { MinionViews } from './MinionViews';
+import { createStructureModel, type StructureModel } from './structures';
 
 /** A wooden training post with a straw body and a painted target shield. */
 function buildDummy(): THREE.Group {
@@ -56,6 +59,9 @@ interface UnitView {
   deathTime: number;
   localDir: THREE.Vector2;
   lift: number;
+  structure: StructureModel | null;
+  /** Seconds since a destroyed structure began to rise again, or -1. */
+  rebirth: number;
 }
 
 /**
@@ -65,6 +71,7 @@ interface UnitView {
  */
 export class UnitViews {
   readonly group = new THREE.Group();
+  readonly minions = new MinionViews();
   private readonly views = new Map<Unit, UnitView>();
   private readonly prev = new Map<Unit, THREE.Vector3>();
   private readonly cur = new Map<Unit, THREE.Vector3>();
@@ -74,6 +81,7 @@ export class UnitViews {
     private playerModel: GodModel,
   ) {
     this.group.name = 'units';
+    this.group.add(this.minions.group);
   }
 
   /** After a god switch: the old player's view is dropped (its model belongs to the controller). */
@@ -102,13 +110,23 @@ export class UnitViews {
     }
   }
 
-  frame(units: readonly Unit[], dt: number, alpha: number): void {
+  frame(units: readonly Unit[], dt: number, alpha: number, time = 0): void {
     const seen = new Set<Unit>();
+    const minions: Unit[] = [];
     for (const u of units) {
       seen.add(u);
       const v = this.views.get(u) ?? this.create(u);
       this.animate(u, v, dt, alpha);
+      if (u.kind === 'minion') minions.push(u);
+      v.structure?.update(dt, time);
     }
+    this.minions.frame(
+      minions,
+      dt,
+      (u) => this.views.get(u)!.root.position,
+      (u) => this.views.get(u)!.deathTime,
+      (u) => this.views.get(u)!.root.visible,
+    );
     for (const [u, v] of this.views) {
       if (seen.has(u)) continue;
       if (u !== this.player) this.group.remove(v.root);
@@ -121,10 +139,16 @@ export class UnitViews {
   onEvent(e: SimEvent): void {
     if (e.type === 'damage') {
       const v = this.views.get(e.target);
-      if (v) v.wobbleVel += Math.min(6, 1.5 + e.amount / 40);
+      if (v && !v.structure) v.wobbleVel += Math.min(6, 1.5 + e.amount / 40);
+      if (e.target.kind === 'minion') this.minions.hit(e.target, e.amount);
+    } else if (e.type === 'basic') {
+      this.views.get(e.unit)?.structure?.pulseFire();
     } else if (e.type === 'death') {
       const v = this.views.get(e.unit);
       if (v) v.deathTime = 0;
+    } else if (e.type === 'respawn' && isStructure(e.unit)) {
+      const v = this.views.get(e.unit);
+      if (v) v.rebirth = 0;
     } else if (e.type === 'respawn' || e.type === 'teleport') {
       // don't interpolate across the map
       const p = this.prev.get(e.unit);
@@ -144,6 +168,7 @@ export class UnitViews {
   private create(u: Unit): UnitView {
     let root: THREE.Group;
     let model: GodModel | null = null;
+    let structure: StructureModel | null = null;
     let height = 2.45;
     if (u === this.player) {
       model = this.playerModel;
@@ -152,6 +177,17 @@ export class UnitViews {
       root = buildDummy();
       height = 2.3;
       this.group.add(root);
+    } else if (u.kind === 'minion') {
+      // drawn by the instanced crowd; this root only carries the position
+      root = new THREE.Group();
+      height = u.tag.endsWith('brute') ? 2.7 : 1.85;
+    } else if (isStructure(u)) {
+      structure = createStructureModel(u.kind as StructureKind, u.team);
+      root = structure.root as THREE.Group;
+      height = structure.height;
+      root.position.set(u.x, u.body.y, u.z);
+      root.rotation.y = u.body.yaw + Math.PI;
+      this.group.add(root);
     } else {
       const summoned = u.kind === 'summon' && u.name === 'Einherjar';
       model = createGodModel(u.combatant.god.id, summoned ? 'einherjar' : 'god');
@@ -159,7 +195,7 @@ export class UnitViews {
       if (summoned) root.scale.setScalar(0.88);
       this.group.add(root);
     }
-    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0 };
+    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1 };
     this.views.set(u, v);
     return v;
   }
@@ -188,6 +224,17 @@ export class UnitViews {
       return;
     }
 
+    if (v.structure) {
+      v.structure.setShielded(u.alive && u.shielded());
+      if (v.rebirth >= 0) {
+        v.rebirth += dt;
+        v.structure.setRebirth?.(Math.min(1, v.rebirth / 2.5));
+        if (v.rebirth >= 2.5) v.rebirth = -1;
+      } else v.structure.setDestroyed(u.alive ? 0 : Math.min(1, v.deathTime / 2.2));
+      v.root.visible = true;
+      return;
+    }
+
     const p = this.prev.get(u);
     const c = this.cur.get(u);
     if (p && c) v.root.position.lerpVectors(p, c, alpha);
@@ -201,6 +248,11 @@ export class UnitViews {
       const fall = v.deathTime < 0 ? 0 : Math.min(1, v.deathTime / 0.6);
       v.root.rotation.x = fall * fall * 1.45 + v.wobble * 0.12;
       v.root.visible = v.deathTime < 2.5;
+      return;
+    }
+    if (u.kind === 'minion') {
+      // the crowd poses the body (and its fall) from this root
+      v.root.visible = !hidden && v.deathTime < 2.2;
       return;
     }
     v.root.visible = !hidden && (u.alive || v.deathTime < 0.05);
