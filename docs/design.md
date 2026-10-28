@@ -102,7 +102,7 @@ Gamepad support comes later.
 ### 3.3 Skill trees
 
 - Each god has **three themed trees**. For Zeus: **Tempest** (ability damage and storm effects), **Sky Father** (basic attacks, attack speed, charges) and **Olympian Aegis** (health, protections, sustain, CC reduction).
-- Each tree has **about 15 nodes in 4 tiers**:
+- Each tree has **10 nodes in 4 tiers** (3 in each of tiers 1 to 3, plus a keystone):
   - **Stat nodes** (1 to 3 ranks): health, protections, Strength or Intelligence, attack speed, cooldown reduction, mana, movement speed.
   - **Modifier nodes**: change a specific skill. For example, Chain Lightning gains 2 bounces, or Thunderclap leaves a lingering field. A modifier only does something if that skill is in your loadout, so trees and loadout build on each other.
   - **Keystones** (tier 4, one per tree): build-defining effects, like an ultimate that refunds 30% cooldown on a takedown.
@@ -115,12 +115,12 @@ Gamepad support comes later.
 - **Hard cap: 35 points** per match.
 - **Levels:** 1 point per level from 2 to 20 (19 points).
 - **Favor (16 points):** earned from minion kills, god kills and assists, jungle camps, structures and bosses. A point unlocks at each Favor threshold. This keeps farming and objectives meaningful now that gold is gone.
-- A full tree costs about 30 points, so no one can max everything. Choosing what to skip is the build decision.
+- A full tree costs 25 points, so no one can max everything. Choosing what to skip is the build decision.
 
 ### 3.5 Skill ranks
 
 - There are no manual rank-ups. Each skill's **rank follows god level automatically**: rank 1 at level 1, rank 2 at 4, rank 3 at 8, rank 4 at 12 and rank 5 at 16.
-- Ultimates **unlock at level 5** and rank up at 9, 13 and 17.
+- Ultimates **unlock at level 5** and rank up at 9, 13, 17 and 20.
 - This keeps the point system simple: levels give tree points, and ranks take care of themselves.
 
 ---
@@ -155,7 +155,7 @@ All skills are original designs. A sample pool for Zeus:
 | Ultimate | Olympian Spear | Long-range line bolt, executes low-health gods |
 | Ultimate | Ascension | Lift off for 4 s, raining bolts at the cursor |
 
-Full numbers for all five gods go in `src/data/gods/*.ts` during step 3.
+Full numbers for all five gods live in `src/game/gods/*.ts`.
 
 ---
 
