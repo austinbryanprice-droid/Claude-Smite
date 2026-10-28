@@ -254,6 +254,30 @@ describe('combatant', () => {
     expect(z.stats.physicalProtection).toBe(zeus.base.physicalProtection);
   });
 
+  it('cannot refill health or mana by cycling a respec', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(2));
+    z.health = 100;
+    z.mana = 50;
+    for (let i = 0; i < 3; i++) {
+      expect(z.allocate('aegis.vigor')).toBeNull();
+      expect(z.deallocate('aegis.vigor')).toBeNull();
+    }
+    z.allocate('tempest.flow');
+    z.deallocate('tempest.flow');
+    expect(z.health).toBeCloseTo(100);
+    expect(z.mana).toBeCloseTo(50);
+  });
+
+  it('basic attacks never hit allies or yourself', () => {
+    const a = new Combatant(zeus, 'order');
+    const ally = new Combatant(zeus, 'order');
+    expect(a.basicAttack(ally)).toBeNull();
+    expect(a.basicAttack(a)).toBeNull();
+    expect(ally.health).toBe(ally.stats.maxHealth);
+    expect(a.basicAttack(new Combatant(thor, 'chaos'))).not.toBeNull();
+  });
+
   it('heals allies but never damages them', () => {
     const a = new Combatant(anubis, 'order');
     const ally = new Combatant(thor, 'order');

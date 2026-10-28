@@ -188,12 +188,19 @@ export class Combatant {
     this.cached = null;
   }
 
-  /** When max health or mana grows, current values grow by the same amount. */
+  /**
+   * When max health or mana changes, keep the missing amount the same. Growth
+   * adds to current values, and taking a point back removes exactly what it
+   * gave, so allocate/respec cycles can never refill resources.
+   */
   private growResources(before: Stats): void {
     this.invalidate();
+    if (!this.alive) return;
     const after = this.stats;
-    this.health = Math.min(after.maxHealth, this.health + Math.max(0, after.maxHealth - before.maxHealth));
-    this.mana = Math.min(after.maxMana, this.mana + Math.max(0, after.maxMana - before.maxMana));
+    const missingHealth = before.maxHealth - this.health;
+    const missingMana = before.maxMana - this.mana;
+    this.health = Math.max(1, Math.min(after.maxHealth, after.maxHealth - missingHealth));
+    this.mana = Math.max(0, Math.min(after.maxMana, after.maxMana - missingMana));
   }
 
   get moveSpeed(): number {
@@ -363,7 +370,7 @@ export class Combatant {
   }
 
   basicAttack(target: Combatant, rng: () => number = Math.random): DamageResult | null {
-    if (!this.basicReady) return null;
+    if (!this.basicReady || target.team === this.team) return null;
     this.basicCooldown = 1 / this.attackSpeed;
     let raw = basicAttackRaw(this.stats);
     if (this.empoweredBasic) {
