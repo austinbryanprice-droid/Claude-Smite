@@ -1,0 +1,1937 @@
+{
+  "$comment": "Asset manifest for scripts/fetch-assets.mjs. Every source is pinned to a commit. See docs/assets.md.",
+  "version": 1,
+  "roots": {
+    "public": "public/assets",
+    "src": "assets-src"
+  },
+  "assets": [
+    {
+      "id": "hdri/kloppenheim_05_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "gkjohnson/3d-demo-data",
+      "commit": "c82e657bdaf1748fa4edffd4858e41733ce1932e",
+      "root": "public",
+      "files": [
+        {
+          "src": "hdri/kloppenheim_05_2k.hdr",
+          "dest": "hdri/kloppenheim_05_2k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/kloppenheim_05",
+      "use": "Default daytime sky and IBL: partly cloudy midday."
+    },
+    {
+      "id": "hdri/aristea_wreck_puresky_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "gkjohnson/3d-demo-data",
+      "commit": "c82e657bdaf1748fa4edffd4858e41733ce1932e",
+      "root": "public",
+      "files": [
+        {
+          "src": "hdri/aristea_wreck_puresky_2k.hdr",
+          "dest": "hdri/aristea_wreck_puresky_2k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/aristea_wreck_puresky",
+      "use": "Clean sky-only HDRI for the main map background."
+    },
+    {
+      "id": "hdri/wasteland_clouds_puresky_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "gkjohnson/3d-demo-data",
+      "commit": "c82e657bdaf1748fa4edffd4858e41733ce1932e",
+      "root": "public",
+      "files": [
+        {
+          "src": "hdri/wasteland_clouds_puresky_2k.hdr",
+          "dest": "hdri/wasteland_clouds_puresky_2k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/wasteland_clouds_puresky",
+      "use": "Dramatic cloudy sky, alternate map mood."
+    },
+    {
+      "id": "hdri/noon_grass_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "gkjohnson/3d-demo-data",
+      "commit": "c82e657bdaf1748fa4edffd4858e41733ce1932e",
+      "root": "public",
+      "files": [
+        {
+          "src": "hdri/noon_grass_2k.hdr",
+          "dest": "hdri/noon_grass_2k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/noon_grass",
+      "use": "Bright outdoor lighting for the god select / showcase scene."
+    },
+    {
+      "id": "hdri/hilly_terrain_01_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "gkjohnson/3d-demo-data",
+      "commit": "c82e657bdaf1748fa4edffd4858e41733ce1932e",
+      "root": "public",
+      "files": [
+        {
+          "src": "hdri/hilly_terrain_01_2k.hdr",
+          "dest": "hdri/hilly_terrain_01_2k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/hilly_terrain_01",
+      "use": "Warm low-sun lighting, sunset variant."
+    },
+    {
+      "id": "hdri/sepulchral_chapel_rotunda_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "gkjohnson/3d-demo-data",
+      "commit": "c82e657bdaf1748fa4edffd4858e41733ce1932e",
+      "root": "public",
+      "files": [
+        {
+          "src": "hdri/sepulchral_chapel_rotunda_2k.hdr",
+          "dest": "hdri/sepulchral_chapel_rotunda_2k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/sepulchral_chapel_rotunda",
+      "use": "Dim stone interior lighting for underworld or temple interiors."
+    },
+    {
+      "id": "hdri/spruit_sunrise_4k",
+      "category": "sky",
+      "type": "github",
+      "repo": "mrdoob/three.js",
+      "commit": "83f6bd095356c68334df7d9b7ec03a0abebff3fc",
+      "root": "public",
+      "files": [
+        {
+          "src": "examples/textures/equirectangular/spruit_sunrise_4k.hdr.jpg",
+          "dest": "hdri/spruit_sunrise_4k.hdr.jpg"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven (Greg Zaal)",
+      "origin": "https://polyhaven.com/a/spruit_sunrise",
+      "use": "4K sunrise sky as a compact Ultra HDR (gain-map) JPEG; sharp enough to show as a visible background."
+    },
+    {
+      "id": "env/the_sky_is_on_fire_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "mrdoob/three.js",
+      "commit": "83f6bd095356c68334df7d9b7ec03a0abebff3fc",
+      "root": "public",
+      "files": [
+        {
+          "src": "examples/textures/pmrem/the_sky_is_on_fire_2k.pmrem.ktx2",
+          "dest": "env/the_sky_is_on_fire_2k.pmrem.ktx2"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven (Greg Zaal)",
+      "origin": "https://polyhaven.com/a/the_sky_is_on_fire",
+      "use": "Pre-filtered (PMREM) environment cubemap; load with KTX2Loader and set isPMREMTexture = true. Zero runtime prefilter cost."
+    },
+    {
+      "id": "env/cape_hill_2k",
+      "category": "sky",
+      "type": "github",
+      "repo": "mrdoob/three.js",
+      "commit": "83f6bd095356c68334df7d9b7ec03a0abebff3fc",
+      "root": "public",
+      "files": [
+        {
+          "src": "examples/textures/pmrem/cape_hill_2k.pmrem.ktx2",
+          "dest": "env/cape_hill_2k.pmrem.ktx2"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven (Greg Zaal)",
+      "origin": "https://polyhaven.com/a/cape_hill",
+      "use": "Pre-filtered (PMREM) environment cubemap; load with KTX2Loader and set isPMREMTexture = true. Zero runtime prefilter cost."
+    },
+    {
+      "id": "hdri/harties_cliff_view_4k",
+      "category": "sky",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "ibl/harties_cliff_view/harties_cliff_view_4k.hdr",
+          "dest": "hdri/harties_cliff_view_4k.hdr"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven (Dimitrios Savva, Jarod Guest)",
+      "origin": "https://polyhaven.com/a/harties_cliff_view",
+      "use": "4K cliffside HDRI for high-quality background and reflections (26 MB).",
+      "heavy": true
+    },
+    {
+      "id": "characters/ual",
+      "category": "character",
+      "type": "github",
+      "repo": "J-Ponzo/gltf-universal-animation-library",
+      "commit": "e24c23cf2a1323488a3faa226ea7ea21f644b73e",
+      "root": "public",
+      "files": [
+        {
+          "src": "glTF/AnimationLibrary_Godot_Standard.gltf",
+          "dest": "characters/ual/ual_standard.gltf"
+        },
+        {
+          "src": "glTF/AnimationLibrary_Godot_Standard.bin",
+          "dest": "characters/ual/AnimationLibrary_Godot_Standard.bin"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Quaternius",
+      "origin": "https://quaternius.com/packs/universalanimationlibrary.html",
+      "use": "Mannequin with a 53-bone humanoid rig and 46 clips (idle, walk, jog, sprint, roll, jump, punch, sword attack, spell cast, hit, death). The shared skeleton every god is built on."
+    },
+    {
+      "id": "characters/lee-perry-smith",
+      "category": "character",
+      "type": "github",
+      "repo": "mrdoob/three.js",
+      "commit": "83f6bd095356c68334df7d9b7ec03a0abebff3fc",
+      "root": "public",
+      "files": [
+        {
+          "src": "examples/models/gltf/LeePerrySmith/LeePerrySmith.glb",
+          "dest": "characters/lee-perry-smith/LeePerrySmith.glb"
+        },
+        {
+          "src": "examples/models/gltf/LeePerrySmith/Map-COL.jpg",
+          "dest": "characters/lee-perry-smith/Map-COL.jpg"
+        },
+        {
+          "src": "examples/models/gltf/LeePerrySmith/Map-SPEC.jpg",
+          "dest": "characters/lee-perry-smith/Map-SPEC.jpg"
+        },
+        {
+          "src": "examples/models/gltf/LeePerrySmith/Infinite-Level_02_Tangent_SmoothUV.jpg",
+          "dest": "characters/lee-perry-smith/Infinite-Level_02_Tangent_SmoothUV.jpg"
+        }
+      ],
+      "license": "CC-BY-3.0",
+      "author": "Lee Perry-Smith / Infinite Realities",
+      "origin": "https://threejs.org/examples/#webgl_materials_skin",
+      "use": "Photoscanned human head with color, specular and normal maps. Reference and test subject for the skin shader (subsurface look) used on god faces."
+    },
+    {
+      "id": "characters/scattering-skull",
+      "category": "character",
+      "type": "github",
+      "repo": "KhronosGroup/glTF-Sample-Assets",
+      "commit": "8f492390ddc7a2ae221a1369ef560589cf8c70fb",
+      "root": "public",
+      "files": [
+        {
+          "src": "Models/ScatteringSkull/glTF-Binary/ScatteringSkull.glb",
+          "dest": "characters/scattering-skull/ScatteringSkull.glb"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Vladimir Petkovic",
+      "origin": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ScatteringSkull",
+      "use": "Realistic human skull: underworld set dressing, death-god props, ability VFX."
+    },
+    {
+      "id": "statues/athena",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/Athena/Athena.fbx",
+          "dest": "props/statues/athena/Athena.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/Athena/Athena_curvature.png",
+          "dest": "props/statues/athena/Athena_curvature.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Athena/Athena_normals.png",
+          "dest": "props/statues/athena/Athena_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Athena/Athena_occlusion.png",
+          "dest": "props/statues/athena/Athena_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (Athena), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/column03",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/Column03/Column03.fbx",
+          "dest": "props/statues/column03/Column03.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/Column03/Column03_curvature.png",
+          "dest": "props/statues/column03/Column03_curvature.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Column03/Column03_normals.png",
+          "dest": "props/statues/column03/Column03_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Column03/Column03_occlusion.png",
+          "dest": "props/statues/column03/Column03_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (Column03), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/hermes",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/Hermes/Hermes.fbx",
+          "dest": "props/statues/hermes/Hermes.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/Hermes/Hermes_curvature.png",
+          "dest": "props/statues/hermes/Hermes_curvature.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Hermes/Hermes_normals.png",
+          "dest": "props/statues/hermes/Hermes_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Hermes/Hermes_occlusion.png",
+          "dest": "props/statues/hermes/Hermes_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (Hermes), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/marbleplayer",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/MarblePlayer/MarblePlayer.fbx",
+          "dest": "props/statues/marbleplayer/MarblePlayer.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/MarblePlayer/MarblePlayer_normals.png",
+          "dest": "props/statues/marbleplayer/MarblePlayer_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/MarblePlayer/MarblePlayer_occlusion.png",
+          "dest": "props/statues/marbleplayer/MarblePlayer_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (MarblePlayer), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/nymph",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/Nymph/Nymph.fbx",
+          "dest": "props/statues/nymph/Nymph.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/Nymph/Nymph_curvature.png",
+          "dest": "props/statues/nymph/Nymph_curvature.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Nymph/Nymph_normals.png",
+          "dest": "props/statues/nymph/Nymph_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Nymph/Nymph_occlusion.png",
+          "dest": "props/statues/nymph/Nymph_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (Nymph), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/penelope",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/Penelope/Penelope.fbx",
+          "dest": "props/statues/penelope/Penelope.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/Penelope/Penelope_curvature.png",
+          "dest": "props/statues/penelope/Penelope_curvature.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Penelope/Penelope_normals.png",
+          "dest": "props/statues/penelope/Penelope_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/Penelope/Penelope_occlusion.png",
+          "dest": "props/statues/penelope/Penelope_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (Penelope), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/shepherdboy",
+      "category": "statue",
+      "type": "github",
+      "repo": "keijiro/ThreeDScans",
+      "commit": "d7c6be2a997fb38ec850d7a0f03fa627bd736216",
+      "root": "public",
+      "files": [
+        {
+          "src": "Assets/ThreeDScans/SphepherdBoy/ShepherdBoy.fbx",
+          "dest": "props/statues/shepherdboy/ShepherdBoy.fbx"
+        },
+        {
+          "src": "Assets/ThreeDScans/SphepherdBoy/ShepherdBoy_curvature.png",
+          "dest": "props/statues/shepherdboy/ShepherdBoy_curvature.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/SphepherdBoy/ShepherdBoy_normals.png",
+          "dest": "props/statues/shepherdboy/ShepherdBoy_normals.png"
+        },
+        {
+          "src": "Assets/ThreeDScans/SphepherdBoy/ShepherdBoy_occlusion.png",
+          "dest": "props/statues/shepherdboy/ShepherdBoy_occlusion.png"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans (scan); Keijiro Takahashi (game-ready retopology)",
+      "origin": "https://threedscans.com/info/",
+      "use": "Photoscanned marble sculpture (ShepherdBoy), decimated for real time, with baked normal and AO maps. FBX: load with FBXLoader or convert to GLB at build time."
+    },
+    {
+      "id": "statues/tennyson-bust",
+      "category": "statue",
+      "type": "github",
+      "repo": "mrdoob/three.js",
+      "commit": "83f6bd095356c68334df7d9b7ec03a0abebff3fc",
+      "root": "public",
+      "files": [
+        {
+          "src": "examples/models/gltf/tennyson-bust.glb",
+          "dest": "props/statues/tennyson-bust/tennyson-bust.glb"
+        }
+      ],
+      "license": "LicenseRef-ThreeDScans-NoCopyright",
+      "author": "Three D Scans",
+      "origin": "https://threedscans.com/lincoln/tennyson/",
+      "use": "Marble bust scan already in GLB; shrine and temple dressing."
+    },
+    {
+      "id": "statues/nemetona",
+      "category": "statue",
+      "type": "github",
+      "repo": "mrdoob/three.js",
+      "commit": "83f6bd095356c68334df7d9b7ec03a0abebff3fc",
+      "root": "public",
+      "files": [
+        {
+          "src": "examples/models/gltf/nemetona.glb",
+          "dest": "props/statues/nemetona/nemetona.glb"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "JOJObrush",
+      "origin": "https://skfb.ly/pAQvU",
+      "use": "Sculpted goddess head (Nemetona). Shrine centerpiece or shading reference for divine faces."
+    },
+    {
+      "id": "props/pot-of-coals",
+      "category": "prop",
+      "type": "github",
+      "repo": "KhronosGroup/glTF-Sample-Assets",
+      "commit": "8f492390ddc7a2ae221a1369ef560589cf8c70fb",
+      "root": "public",
+      "files": [
+        {
+          "src": "Models/PotOfCoals/glTF-Binary/PotOfCoals.glb",
+          "dest": "props/pot-of-coals/PotOfCoals.glb"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "Eric Chadwick",
+      "origin": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/PotOfCoals",
+      "use": "Copper brazier with emissive coals; fire braziers along lanes and at towers."
+    },
+    {
+      "id": "props/lantern",
+      "category": "prop",
+      "type": "github",
+      "repo": "KhronosGroup/glTF-Sample-Assets",
+      "commit": "8f492390ddc7a2ae221a1369ef560589cf8c70fb",
+      "root": "public",
+      "files": [
+        {
+          "src": "Models/Lantern/glTF-Binary/Lantern.glb",
+          "dest": "props/lantern/Lantern.glb"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "sbtron, Frank Galligan",
+      "origin": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Lantern",
+      "use": "Old wooden lamp post with emissive lantern; base-area lighting props."
+    },
+    {
+      "id": "props/coastal-cliff",
+      "category": "prop",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "meshes/MeshBlending/coastalCliff.glb",
+          "dest": "props/coastal-cliff/coastalCliff.glb"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Poly Haven (processed by Babylon.js team)",
+      "origin": "https://polyhaven.com/",
+      "use": "Photoscanned cliff composition; map boundary walls and jungle rock outcrops."
+    },
+    {
+      "id": "props/gothic-cloister",
+      "category": "prop",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "meshes/GothicCloisterCorner/gothic_cloister_corner_mobile.glb",
+          "dest": "props/gothic-cloister/gothic_cloister_corner_mobile.glb"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "Zoilo",
+      "origin": "https://sketchfab.com/3d-models/gothic-cloister-corner-69f4351215e84d3ca61feea9fe9890db",
+      "use": "Photoscanned stone arcade; lighting and material benchmark for stone architecture (44 MB).",
+      "heavy": true
+    },
+    {
+      "id": "props/tarisland-dragon",
+      "category": "prop",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "meshes/tarisland_dragon/tarisland_dragon_high_poly.glb",
+          "dest": "props/tarisland-dragon/tarisland_dragon_high_poly.glb"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "Dr A",
+      "origin": "https://skfb.ly/oPPnU",
+      "use": "High-poly dragon; candidate for a boss objective (the Fire Giant / Gold Fury role) (47 MB).",
+      "heavy": true
+    },
+    {
+      "id": "nature/ez-tree",
+      "category": "nature",
+      "type": "github",
+      "repo": "dgreenheck/ez-tree",
+      "commit": "dcf309bd86bd521083d9c70f01f2de45fdc7c457",
+      "root": "public",
+      "files": [
+        {
+          "src": "src/app/public/models/flower_blue.glb",
+          "dest": "nature/ez-tree/models/flower_blue.glb"
+        },
+        {
+          "src": "src/app/public/models/flower_white.glb",
+          "dest": "nature/ez-tree/models/flower_white.glb"
+        },
+        {
+          "src": "src/app/public/models/flower_yellow.glb",
+          "dest": "nature/ez-tree/models/flower_yellow.glb"
+        },
+        {
+          "src": "src/app/public/models/grass.glb",
+          "dest": "nature/ez-tree/models/grass.glb"
+        },
+        {
+          "src": "src/app/public/models/rock1.glb",
+          "dest": "nature/ez-tree/models/rock1.glb"
+        },
+        {
+          "src": "src/app/public/models/rock2.glb",
+          "dest": "nature/ez-tree/models/rock2.glb"
+        },
+        {
+          "src": "src/app/public/models/rock3.glb",
+          "dest": "nature/ez-tree/models/rock3.glb"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark001_1K-JPG/Bark001_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark001_1K-JPG/Bark001_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark001_1K-JPG/Bark001_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark001_1K-JPG/Bark001_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark001_1K-JPG/Bark001_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark001_1K-JPG/Bark001_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark002_1K-JPG/Bark002_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark002_1K-JPG/Bark002_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark002_1K-JPG/Bark002_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark002_1K-JPG/Bark002_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark002_1K-JPG/Bark002_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark002_1K-JPG/Bark002_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark003_1K-JPG/Bark003_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark003_1K-JPG/Bark003_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark003_1K-JPG/Bark003_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark003_1K-JPG/Bark003_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark003_1K-JPG/Bark003_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark003_1K-JPG/Bark003_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark004_1K-JPG/Bark004_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark004_1K-JPG/Bark004_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark004_1K-JPG/Bark004_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark004_1K-JPG/Bark004_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark004_1K-JPG/Bark004_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark004_1K-JPG/Bark004_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark006_1K-JPG/Bark006_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark006_1K-JPG/Bark006_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark006_1K-JPG/Bark006_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark006_1K-JPG/Bark006_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark006_1K-JPG/Bark006_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark006_1K-JPG/Bark006_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark007_1K-JPG/Bark007_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark007_1K-JPG/Bark007_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark007_1K-JPG/Bark007_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark007_1K-JPG/Bark007_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark007_1K-JPG/Bark007_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark007_1K-JPG/Bark007_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark008_1K-JPG/Bark008_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark008_1K-JPG/Bark008_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark008_1K-JPG/Bark008_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark008_1K-JPG/Bark008_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark008_1K-JPG/Bark008_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark008_1K-JPG/Bark008_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark012_1K-JPG/Bark012_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark012_1K-JPG/Bark012_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark012_1K-JPG/Bark012_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark012_1K-JPG/Bark012_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark012_1K-JPG/Bark012_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark012_1K-JPG/Bark012_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark013_1K-JPG/Bark013_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark013_1K-JPG/Bark013_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark013_1K-JPG/Bark013_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark013_1K-JPG/Bark013_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark013_1K-JPG/Bark013_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark013_1K-JPG/Bark013_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark014_1K-JPG/Bark014_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark014_1K-JPG/Bark014_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark014_1K-JPG/Bark014_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark014_1K-JPG/Bark014_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark014_1K-JPG/Bark014_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark014_1K-JPG/Bark014_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark015_1K-JPG/Bark015_1K-JPG_Color.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark015_1K-JPG/Bark015_1K-JPG_Color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark015_1K-JPG/Bark015_1K-JPG_NormalGL.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark015_1K-JPG/Bark015_1K-JPG_NormalGL.jpg"
+        },
+        {
+          "src": "src/app/public/textures/bark/Bark015_1K-JPG/Bark015_1K-JPG_Roughness.jpg",
+          "dest": "nature/ez-tree/textures/bark/Bark015_1K-JPG/Bark015_1K-JPG_Roughness.jpg"
+        },
+        {
+          "src": "src/app/public/textures/ground/dirt_color.jpg",
+          "dest": "nature/ez-tree/textures/ground/dirt_color.jpg"
+        },
+        {
+          "src": "src/app/public/textures/ground/dirt_normal.jpg",
+          "dest": "nature/ez-tree/textures/ground/dirt_normal.jpg"
+        },
+        {
+          "src": "src/app/public/textures/ground/grass.jpg",
+          "dest": "nature/ez-tree/textures/ground/grass.jpg"
+        },
+        {
+          "src": "src/app/public/textures/leaves/ash.png",
+          "dest": "nature/ez-tree/textures/leaves/ash.png"
+        },
+        {
+          "src": "src/app/public/textures/leaves/aspen.png",
+          "dest": "nature/ez-tree/textures/leaves/aspen.png"
+        },
+        {
+          "src": "src/app/public/textures/leaves/oak.png",
+          "dest": "nature/ez-tree/textures/leaves/oak.png"
+        },
+        {
+          "src": "src/app/public/textures/leaves/pine.png",
+          "dest": "nature/ez-tree/textures/leaves/pine.png"
+        }
+      ],
+      "license": "MIT (bark textures CC0-1.0 from ambientCG)",
+      "author": "Daniel Greenheck; bark by ambientCG",
+      "origin": "https://github.com/dgreenheck/ez-tree",
+      "use": "Inputs for the EZ-Tree procedural tree generator (npm @dgreenheck/ez-tree, MIT): 11 PBR bark sets, leaf cards, ground textures, rock and grass meshes for jungle foliage."
+    },
+    {
+      "id": "textures/rocky-ground",
+      "category": "texture",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "textures/rockyGround_basecolor.png",
+          "dest": "textures/rocky-ground/rockyGround_basecolor.png"
+        },
+        {
+          "src": "textures/rockyGround_normal.png",
+          "dest": "textures/rocky-ground/rockyGround_normal.png"
+        },
+        {
+          "src": "textures/rockyGround_metalRough.png",
+          "dest": "textures/rocky-ground/rockyGround_metalRough.png"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "Babylon.js team",
+      "origin": "https://github.com/BabylonJS/Assets",
+      "use": "Tileable PBR rocky ground; offline fallback terrain layer when Poly Haven textures are not available."
+    },
+    {
+      "id": "vfx/kenney",
+      "category": "vfx",
+      "type": "github",
+      "repo": "Calinou/kenney-particle-pack",
+      "commit": "ab7086639ee73be31abd87feb21bf1402d4e8144",
+      "root": "public",
+      "files": [
+        {
+          "src": "addons/kenney_particle_pack/circle_01.png",
+          "dest": "vfx/kenney/circle_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/circle_02.png",
+          "dest": "vfx/kenney/circle_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/circle_03.png",
+          "dest": "vfx/kenney/circle_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/circle_04.png",
+          "dest": "vfx/kenney/circle_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/circle_05.png",
+          "dest": "vfx/kenney/circle_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/dirt_01.png",
+          "dest": "vfx/kenney/dirt_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/dirt_02.png",
+          "dest": "vfx/kenney/dirt_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/dirt_03.png",
+          "dest": "vfx/kenney/dirt_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/fire_01.png",
+          "dest": "vfx/kenney/fire_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/fire_02.png",
+          "dest": "vfx/kenney/fire_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flame_01.png",
+          "dest": "vfx/kenney/flame_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flame_02.png",
+          "dest": "vfx/kenney/flame_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flame_03.png",
+          "dest": "vfx/kenney/flame_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flame_04.png",
+          "dest": "vfx/kenney/flame_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flame_05.png",
+          "dest": "vfx/kenney/flame_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flame_06.png",
+          "dest": "vfx/kenney/flame_06.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/flare_01.png",
+          "dest": "vfx/kenney/flare_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/light_01.png",
+          "dest": "vfx/kenney/light_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/light_02.png",
+          "dest": "vfx/kenney/light_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/light_03.png",
+          "dest": "vfx/kenney/light_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/magic_01.png",
+          "dest": "vfx/kenney/magic_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/magic_02.png",
+          "dest": "vfx/kenney/magic_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/magic_03.png",
+          "dest": "vfx/kenney/magic_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/magic_04.png",
+          "dest": "vfx/kenney/magic_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/magic_05.png",
+          "dest": "vfx/kenney/magic_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/muzzle_01.png",
+          "dest": "vfx/kenney/muzzle_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/muzzle_02.png",
+          "dest": "vfx/kenney/muzzle_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/muzzle_03.png",
+          "dest": "vfx/kenney/muzzle_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/muzzle_04.png",
+          "dest": "vfx/kenney/muzzle_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/muzzle_05.png",
+          "dest": "vfx/kenney/muzzle_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/scorch_01.png",
+          "dest": "vfx/kenney/scorch_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/scorch_02.png",
+          "dest": "vfx/kenney/scorch_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/scorch_03.png",
+          "dest": "vfx/kenney/scorch_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/scratch_01.png",
+          "dest": "vfx/kenney/scratch_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/slash_01.png",
+          "dest": "vfx/kenney/slash_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/slash_02.png",
+          "dest": "vfx/kenney/slash_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/slash_03.png",
+          "dest": "vfx/kenney/slash_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/slash_04.png",
+          "dest": "vfx/kenney/slash_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_01.png",
+          "dest": "vfx/kenney/smoke_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_02.png",
+          "dest": "vfx/kenney/smoke_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_03.png",
+          "dest": "vfx/kenney/smoke_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_04.png",
+          "dest": "vfx/kenney/smoke_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_05.png",
+          "dest": "vfx/kenney/smoke_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_06.png",
+          "dest": "vfx/kenney/smoke_06.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_07.png",
+          "dest": "vfx/kenney/smoke_07.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_08.png",
+          "dest": "vfx/kenney/smoke_08.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_09.png",
+          "dest": "vfx/kenney/smoke_09.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/smoke_10.png",
+          "dest": "vfx/kenney/smoke_10.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_01.png",
+          "dest": "vfx/kenney/spark_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_02.png",
+          "dest": "vfx/kenney/spark_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_03.png",
+          "dest": "vfx/kenney/spark_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_04.png",
+          "dest": "vfx/kenney/spark_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_05.png",
+          "dest": "vfx/kenney/spark_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_06.png",
+          "dest": "vfx/kenney/spark_06.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/spark_07.png",
+          "dest": "vfx/kenney/spark_07.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_01.png",
+          "dest": "vfx/kenney/star_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_02.png",
+          "dest": "vfx/kenney/star_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_03.png",
+          "dest": "vfx/kenney/star_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_04.png",
+          "dest": "vfx/kenney/star_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_05.png",
+          "dest": "vfx/kenney/star_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_06.png",
+          "dest": "vfx/kenney/star_06.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_07.png",
+          "dest": "vfx/kenney/star_07.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_08.png",
+          "dest": "vfx/kenney/star_08.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/star_09.png",
+          "dest": "vfx/kenney/star_09.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/symbol_01.png",
+          "dest": "vfx/kenney/symbol_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/symbol_02.png",
+          "dest": "vfx/kenney/symbol_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_01.png",
+          "dest": "vfx/kenney/trace_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_02.png",
+          "dest": "vfx/kenney/trace_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_03.png",
+          "dest": "vfx/kenney/trace_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_04.png",
+          "dest": "vfx/kenney/trace_04.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_05.png",
+          "dest": "vfx/kenney/trace_05.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_06.png",
+          "dest": "vfx/kenney/trace_06.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/trace_07.png",
+          "dest": "vfx/kenney/trace_07.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/twirl_01.png",
+          "dest": "vfx/kenney/twirl_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/twirl_02.png",
+          "dest": "vfx/kenney/twirl_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/twirl_03.png",
+          "dest": "vfx/kenney/twirl_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/window_01.png",
+          "dest": "vfx/kenney/window_01.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/window_02.png",
+          "dest": "vfx/kenney/window_02.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/window_03.png",
+          "dest": "vfx/kenney/window_03.png"
+        },
+        {
+          "src": "addons/kenney_particle_pack/window_04.png",
+          "dest": "vfx/kenney/window_04.png"
+        }
+      ],
+      "license": "CC0-1.0",
+      "author": "Kenney",
+      "origin": "https://kenney.nl/assets/particle-pack",
+      "use": "80 grayscale particle sprites (fire, flame, smoke, spark, magic, slash, trace, twirl, star, light, scorch). Tint per ability in the shader."
+    },
+    {
+      "id": "vfx/babylon-flipbooks",
+      "category": "vfx",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "particles/textures/explosion/FlameBlastSpriteSheet.png",
+          "dest": "vfx/flipbooks/FlameBlastSpriteSheet.png"
+        },
+        {
+          "src": "particles/textures/explosion/Flare.png",
+          "dest": "vfx/flipbooks/Flare.png"
+        },
+        {
+          "src": "particles/textures/explosion/FlashParticle.png",
+          "dest": "vfx/flipbooks/FlashParticle.png"
+        },
+        {
+          "src": "particles/textures/explosion/Smoke_SpriteSheet_8x8.png",
+          "dest": "vfx/flipbooks/Smoke_SpriteSheet_8x8.png"
+        },
+        {
+          "src": "particles/textures/fire/Fire_SpriteSheet1_8x8.png",
+          "dest": "vfx/flipbooks/Fire_SpriteSheet1_8x8.png"
+        },
+        {
+          "src": "particles/textures/fire/Fire_SpriteSheet2_8x8.png",
+          "dest": "vfx/flipbooks/Fire_SpriteSheet2_8x8.png"
+        },
+        {
+          "src": "particles/textures/fire/Fire_SpriteSheet3_8x8.png",
+          "dest": "vfx/flipbooks/Fire_SpriteSheet3_8x8.png"
+        },
+        {
+          "src": "particles/textures/fire/sparks.png",
+          "dest": "vfx/flipbooks/sparks.png"
+        },
+        {
+          "src": "particles/textures/sun/T_SunFlare.png",
+          "dest": "vfx/flipbooks/T_SunFlare.png"
+        },
+        {
+          "src": "particles/textures/sun/T_Star.png",
+          "dest": "vfx/flipbooks/T_Star.png"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "Babylon.js team",
+      "origin": "https://github.com/BabylonJS/Assets/tree/master/particles",
+      "use": "8x8 animated flipbooks for fire, smoke and explosions, plus flares; the base for ultimates and tower shots."
+    },
+    {
+      "id": "vfx/spell-meshes",
+      "category": "vfx",
+      "type": "github",
+      "repo": "BabylonJS/Assets",
+      "commit": "ffbd501c388cbf3ba29936851ef4b36bada145dc",
+      "root": "public",
+      "files": [
+        {
+          "src": "meshes/TrailMeshSpell/greenEnergyBall.glb",
+          "dest": "vfx/spell-meshes/greenEnergyBall.glb"
+        },
+        {
+          "src": "meshes/TrailMeshSpell/pinkEnergyBall.glb",
+          "dest": "vfx/spell-meshes/pinkEnergyBall.glb"
+        },
+        {
+          "src": "meshes/TrailMeshSpell/yellowEnergyBall.glb",
+          "dest": "vfx/spell-meshes/yellowEnergyBall.glb"
+        },
+        {
+          "src": "meshes/TrailMeshSpell/spellDisk.glb",
+          "dest": "vfx/spell-meshes/spellDisk.glb"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "author": "Babylon.js team",
+      "origin": "https://github.com/BabylonJS/Assets/tree/master/meshes/TrailMeshSpell",
+      "use": "Energy-ball and spell-disk meshes for projectile and ground-target ability visuals."
+    },
+    {
+      "id": "src/makehuman",
+      "category": "source",
+      "type": "git-sparse",
+      "repo": "makehumancommunity/makehuman",
+      "commit": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482",
+      "root": "src",
+      "paths": [
+        "LICENSE.ASSETS.md",
+        "makehuman/data/3dobjs",
+        "makehuman/data/rigs",
+        "makehuman/data/targets/macrodetails/*young*.target",
+        "makehuman/data/targets/macrodetails/height/*young*.target",
+        "makehuman/data/targets/macrodetails/proportions/*young*.target",
+        "makehuman/data/targets/bodyshapes",
+        "makehuman/data/targets/armslegs",
+        "makehuman/data/targets/torso",
+        "makehuman/data/targets/stomach",
+        "makehuman/data/targets/head",
+        "makehuman/data/eyes",
+        "makehuman/data/eyebrows",
+        "makehuman/data/skins"
+      ],
+      "dest": "makehuman",
+      "license": "CC0-1.0",
+      "author": "MakeHuman team (Data Collection AB, Joel Palmius, Jonas Hauquier)",
+      "origin": "http://www.makehumancommunity.org",
+      "use": "Realistic human base mesh (about 13k quads) with age/gender/muscle/weight morph targets, skeleton and skin weights. Input for the god body generator (bake a muscular male or female body to GLB, then retarget to the UAL rig)."
+    },
+    {
+      "id": "src/cmu-mocap",
+      "category": "source",
+      "type": "github",
+      "repo": "una-dinosauria/cmu-mocap",
+      "commit": "09a07f54f3bbb58797325f009282d0b2048a2871",
+      "root": "src",
+      "files": [
+        {
+          "src": "data/002/02_01.bvh",
+          "dest": "mocap/cmu/02_01_walk.bvh"
+        },
+        {
+          "src": "data/002/02_03.bvh",
+          "dest": "mocap/cmu/02_03_run_jog.bvh"
+        },
+        {
+          "src": "data/002/02_05.bvh",
+          "dest": "mocap/cmu/02_05_punch_strike.bvh"
+        },
+        {
+          "src": "data/002/02_07.bvh",
+          "dest": "mocap/cmu/02_07_swordplay_a.bvh"
+        },
+        {
+          "src": "data/002/02_08.bvh",
+          "dest": "mocap/cmu/02_08_swordplay_b.bvh"
+        },
+        {
+          "src": "data/002/02_09.bvh",
+          "dest": "mocap/cmu/02_09_swordplay_c.bvh"
+        },
+        {
+          "src": "data/009/09_01.bvh",
+          "dest": "mocap/cmu/09_01_run.bvh"
+        },
+        {
+          "src": "data/013/13_17.bvh",
+          "dest": "mocap/cmu/13_17_boxing.bvh"
+        },
+        {
+          "src": "data/075/75_16.bvh",
+          "dest": "mocap/cmu/75_16_jump_kick.bvh"
+        },
+        {
+          "src": "READMEFIRST.txt",
+          "dest": "mocap/cmu/READMEFIRST.txt"
+        }
+      ],
+      "license": "LicenseRef-CMU-Mocap",
+      "author": "CMU Graphics Lab (BVH conversion by Bruce Hahne)",
+      "origin": "http://mocap.cs.cmu.edu",
+      "use": "Raw motion capture (walk, run, swordplay, boxing, kicks) for retargeting extra combat clips onto the UAL rig. Needs cleanup; not shipped as-is."
+    },
+    {
+      "id": "polyhaven/textures/marble_01",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "marble_01",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/marble_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/marble_01",
+      "use": "Polished marble for temple floors and god statues.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/floor_tiles_06",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "floor_tiles_06",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/floor_tiles_06",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/floor_tiles_06",
+      "use": "Worn stone floor tiles for base plazas.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/rabdentse_ruins_wall",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "rabdentse_ruins_wall",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/rabdentse_ruins_wall",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/rabdentse_ruins_wall",
+      "use": "Ancient ruin masonry for lane walls and towers.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/castle_wall_slates",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "castle_wall_slates",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/castle_wall_slates",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/castle_wall_slates",
+      "use": "Stacked slate wall; fortifications and phoenix bases.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/medieval_blocks_02",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "medieval_blocks_02",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/medieval_blocks_02",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/medieval_blocks_02",
+      "use": "Large dressed stone blocks for titans' keeps.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/rustic_stone_wall",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "rustic_stone_wall",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/rustic_stone_wall",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/rustic_stone_wall",
+      "use": "Rough fieldstone walls for jungle camps.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/cobblestone_floor_01",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "cobblestone_floor_01",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/cobblestone_floor_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/cobblestone_floor_01",
+      "use": "Paved lane surface.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/cliff_side",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "cliff_side",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/cliff_side",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/cliff_side",
+      "use": "Vertical rock for map boundaries.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/lichen_rock",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "lichen_rock",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/lichen_rock",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/lichen_rock",
+      "use": "Mossy rock for jungle boulders.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/marble_cliff_01",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "marble_cliff_01",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/marble_cliff_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/marble_cliff_01",
+      "use": "Pale marble rock face for a Greek-themed cliff set.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/aerial_grass_rock",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "aerial_grass_rock",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/aerial_grass_rock",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/aerial_grass_rock",
+      "use": "Large-scale grass and rock blend for top-down terrain.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/aerial_rocks_02",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "aerial_rocks_02",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/aerial_rocks_02",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/aerial_rocks_02",
+      "use": "Large-scale rocky terrain layer.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/forest_ground_04",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "forest_ground_04",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/forest_ground_04",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/forest_ground_04",
+      "use": "Jungle floor.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/leafy_grass",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "leafy_grass",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/leafy_grass",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/leafy_grass",
+      "use": "Lush grass layer.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/textures/brown_mud_leaves_01",
+      "category": "texture",
+      "type": "polyhaven",
+      "kind": "texture",
+      "asset": "brown_mud_leaves_01",
+      "res": "2k",
+      "maps": [
+        "Diffuse",
+        "nor_gl",
+        "arm",
+        "Displacement"
+      ],
+      "dest": "polyhaven/textures/brown_mud_leaves_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/brown_mud_leaves_01",
+      "use": "Mud and leaf litter near river banks.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/marble_bust_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "marble_bust_01",
+      "res": "2k",
+      "dest": "polyhaven/models/marble_bust_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/marble_bust_01",
+      "use": "Classical marble bust (photoscan).",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/gothic_statue",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "gothic_statue",
+      "res": "2k",
+      "dest": "polyhaven/models/gothic_statue",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/gothic_statue",
+      "use": "Weathered stone statue.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/lion_head",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "lion_head",
+      "res": "2k",
+      "dest": "polyhaven/models/lion_head",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/lion_head",
+      "use": "Carved lion head for gates and fountains.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/horse_statue_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "horse_statue_01",
+      "res": "2k",
+      "dest": "polyhaven/models/horse_statue_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/horse_statue_01",
+      "use": "Horse statue for plaza centerpieces.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/bull_head",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "bull_head",
+      "res": "2k",
+      "dest": "polyhaven/models/bull_head",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/bull_head",
+      "use": "Bull head carving (Minotaur and Egyptian Apis motifs).",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/antique_ceramic_vase_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "antique_ceramic_vase_01",
+      "res": "2k",
+      "dest": "polyhaven/models/antique_ceramic_vase_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/antique_ceramic_vase_01",
+      "use": "Amphora-style vase for shrines.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/boulder_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "boulder_01",
+      "res": "2k",
+      "dest": "polyhaven/models/boulder_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/boulder_01",
+      "use": "Large boulder.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/rock_face_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "rock_face_01",
+      "res": "2k",
+      "dest": "polyhaven/models/rock_face_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/rock_face_01",
+      "use": "Rock face chunk for walls.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/rock_moss_set_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "rock_moss_set_01",
+      "res": "2k",
+      "dest": "polyhaven/models/rock_moss_set_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/rock_moss_set_01",
+      "use": "Mossy rock set for the jungle.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/namaqualand_cliff_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "namaqualand_cliff_01",
+      "res": "2k",
+      "dest": "polyhaven/models/namaqualand_cliff_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/namaqualand_cliff_01",
+      "use": "Cliff piece for map borders.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/dead_tree_trunk",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "dead_tree_trunk",
+      "res": "2k",
+      "dest": "polyhaven/models/dead_tree_trunk",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/dead_tree_trunk",
+      "use": "Fallen trunk for jungle paths.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/island_tree_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "island_tree_01",
+      "res": "2k",
+      "dest": "polyhaven/models/island_tree_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/island_tree_01",
+      "use": "Broadleaf tree.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/pine_tree_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "pine_tree_01",
+      "res": "2k",
+      "dest": "polyhaven/models/pine_tree_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/pine_tree_01",
+      "use": "Pine tree (Norse-themed areas).",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/shrub_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "shrub_01",
+      "res": "2k",
+      "dest": "polyhaven/models/shrub_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/shrub_01",
+      "use": "Shrub ground cover.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/fern_02",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "fern_02",
+      "res": "2k",
+      "dest": "polyhaven/models/fern_02",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/fern_02",
+      "use": "Fern ground cover.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/grass_medium_01",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "grass_medium_01",
+      "res": "2k",
+      "dest": "polyhaven/models/grass_medium_01",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/grass_medium_01",
+      "use": "Grass clump for instanced grass fields.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/models/ornate_war_hammer",
+      "category": "prop",
+      "type": "polyhaven",
+      "kind": "model",
+      "asset": "ornate_war_hammer",
+      "res": "2k",
+      "dest": "polyhaven/models/ornate_war_hammer",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/ornate_war_hammer",
+      "use": "Ornate war hammer; reference prop for a thunder god weapon.",
+      "optional": true
+    },
+    {
+      "id": "polyhaven/hdri/kloofendal_43d_clear_puresky",
+      "category": "sky",
+      "type": "polyhaven",
+      "kind": "hdri",
+      "asset": "kloofendal_43d_clear_puresky",
+      "res": "4k",
+      "dest": "polyhaven/hdri/kloofendal_43d_clear_puresky",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/kloofendal_43d_clear_puresky",
+      "use": "Clear blue midday sky, 4K background.",
+      "optional": true,
+      "heavy": true
+    },
+    {
+      "id": "polyhaven/hdri/kloppenheim_06_puresky",
+      "category": "sky",
+      "type": "polyhaven",
+      "kind": "hdri",
+      "asset": "kloppenheim_06_puresky",
+      "res": "4k",
+      "dest": "polyhaven/hdri/kloppenheim_06_puresky",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/kloppenheim_06_puresky",
+      "use": "Soft sunset sky, 4K background.",
+      "optional": true,
+      "heavy": true
+    },
+    {
+      "id": "polyhaven/hdri/belfast_sunset_puresky",
+      "category": "sky",
+      "type": "polyhaven",
+      "kind": "hdri",
+      "asset": "belfast_sunset_puresky",
+      "res": "4k",
+      "dest": "polyhaven/hdri/belfast_sunset_puresky",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/belfast_sunset_puresky",
+      "use": "Golden-hour sky, 4K background.",
+      "optional": true,
+      "heavy": true
+    },
+    {
+      "id": "polyhaven/hdri/drakensberg_solitary_mountain_puresky",
+      "category": "sky",
+      "type": "polyhaven",
+      "kind": "hdri",
+      "asset": "drakensberg_solitary_mountain_puresky",
+      "res": "4k",
+      "dest": "polyhaven/hdri/drakensberg_solitary_mountain_puresky",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/drakensberg_solitary_mountain_puresky",
+      "use": "Crisp high-contrast sky, 4K background.",
+      "optional": true,
+      "heavy": true
+    },
+    {
+      "id": "polyhaven/hdri/kloppenheim_02_puresky",
+      "category": "sky",
+      "type": "polyhaven",
+      "kind": "hdri",
+      "asset": "kloppenheim_02_puresky",
+      "res": "4k",
+      "dest": "polyhaven/hdri/kloppenheim_02_puresky",
+      "license": "CC0-1.0",
+      "author": "Poly Haven",
+      "origin": "https://polyhaven.com/a/kloppenheim_02_puresky",
+      "use": "Clear night sky, 4K background.",
+      "optional": true,
+      "heavy": true
+    }
+  ]
+}

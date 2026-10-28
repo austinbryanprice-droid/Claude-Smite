@@ -1,2 +1,7 @@
 node_modules/
 dist/
+
+# Downloaded by scripts/fetch-assets.mjs (see docs/assets.md); never commit binaries
+public/assets/
+assets-src/
+*.part
