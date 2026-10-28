@@ -8,6 +8,7 @@ import type { CollisionWorld } from './Collision';
 import { Fire, Relic } from './Effects';
 import type { MaterialLibrary } from './Materials';
 import type { Terrain } from './Terrain';
+import type { MapContent } from './World';
 
 /**
  * The ruined temple at the center of the arena: a stepped circular platform,
@@ -15,9 +16,11 @@ import type { Terrain } from './Terrain';
  * intact span, the floating relic, gateways over both lanes, ruined lane
  * walls, braziers and scattered boulders.
  */
-export class Temple {
+export class Temple implements MapContent {
   readonly group = new THREE.Group();
   readonly fires: Fire[] = [];
+  readonly spawn = Arena.spawn;
+  readonly groundColor = new THREE.Color(0.16, 0.17, 0.09);
   readonly relic: Relic;
 
   constructor(
@@ -352,7 +355,7 @@ export class Temple {
     }
   }
 
-  update(time: number): void {
+  update(_dt: number, time: number): void {
     for (const f of this.fires) f.update(time);
     this.relic.update(time);
   }

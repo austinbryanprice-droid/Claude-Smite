@@ -4,7 +4,6 @@ import {
   smoothstep, time, transformNormalToView, uniform, vec2, vec3,
 } from '../render/tsl';
 import { rng } from '../core/random';
-import { Arena } from './ArenaLayout';
 import type { Terrain } from './Terrain';
 import type { QualitySettings } from '../render/Quality';
 
@@ -26,6 +25,20 @@ interface Chunk {
  * split into chunks so off-screen chunks are culled and distant chunks draw
  * fewer blades (the ground texture underneath carries the look far away).
  */
+/** Where a map wants grass. */
+export interface GrassField {
+  /** Half-size of the area covered with chunks, meters. */
+  extent: number;
+  /** Skip chunks outside the circle of radius `extent`. */
+  round: boolean;
+  /** Multiplier on the preset's blade density. */
+  density: number;
+  /** No blades above this terrain height. */
+  maxHeight: number;
+  /** True where no grass may grow (plazas, structures). */
+  reject(x: number, z: number): boolean;
+}
+
 export class Grass {
   readonly group = new THREE.Group();
   readonly wind = {
@@ -41,7 +54,7 @@ export class Grass {
   private fullDistance = 25;
   private maxDistance = 65;
 
-  constructor(private readonly terrain: Terrain, private readonly sunDirection: THREE.Vector3) {
+  constructor(private readonly terrain: Terrain, private readonly sunDirection: THREE.Vector3, private readonly field: GrassField) {
     this.group.name = 'grass';
     this.bladeGeometry = Grass.buildBlade();
     this.material = this.buildMaterial();
@@ -129,7 +142,7 @@ export class Grass {
     const viewDir = normalize(pos.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
     const back = pow(dot(viewDir, sun.negate()).max(0), float(3)).mul(h).mul(0.22);
-    mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(4);
+    mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(1.8);
     return mat;
   }
 
@@ -141,19 +154,17 @@ export class Grass {
     this.chunks = [];
     this.fullDistance = q.grassDistance * 0.35;
     this.maxDistance = q.grassDistance;
-    const density = BASE_DENSITY * q.grassDensity;
-    const extent = Arena.valleyRadius + 14;
+    const density = BASE_DENSITY * q.grassDensity * this.field.density;
+    const extent = this.field.extent;
     const n = Math.ceil((extent * 2) / CHUNK);
     const random = rng(4242);
-    const plazaR = Arena.plaza.baseRadius + 0.6;
     const normal = new THREE.Vector3();
 
     for (let cz = 0; cz < n; cz++) {
       for (let cx = 0; cx < n; cx++) {
         const x0 = -extent + cx * CHUNK;
         const z0 = -extent + cz * CHUNK;
-        const mid = Math.hypot(x0 + CHUNK / 2, z0 + CHUNK / 2);
-        if (mid > extent + CHUNK) continue;
+        if (this.field.round && Math.hypot(x0 + CHUNK / 2, z0 + CHUNK / 2) > extent + CHUNK) continue;
         const tries = Math.round(CHUNK * CHUNK * density);
         const A: number[] = [];
         const B: number[] = [];
@@ -162,15 +173,14 @@ export class Grass {
         for (let i = 0; i < tries; i++) {
           const x = x0 + random() * CHUNK;
           const z = z0 + random() * CHUNK;
-          const r = Math.hypot(x, z);
-          if (r < plazaR) continue;
+          if (this.field.reject(x, z)) continue;
           const m = this.terrain.maskAt(x, z);
           const bare = Math.max(m.paved * 1.5, m.dirt);
           if (random() < bare * 1.15) continue;
           this.terrain.normalAt(x, z, normal);
           if (normal.y < 0.86) continue;
           const y = this.terrain.heightAt(x, z);
-          if (y > 7) continue;
+          if (y > this.field.maxHeight) continue;
           // clumping: density modulated by low-frequency hash
           const clump = 0.55 + 0.45 * Math.sin(x * 0.31 + Math.sin(z * 0.23) * 2.0) * Math.sin(z * 0.27 + x * 0.05);
           if (random() > clump + 0.25) continue;

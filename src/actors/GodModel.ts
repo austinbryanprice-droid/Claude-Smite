@@ -39,6 +39,7 @@ export class GodModel {
   private readonly capeSway = uniform(0);
   private readonly capeLift = uniform(0);
   private phase = 0;
+  private readonly customCape: boolean;
   private smoothedSpeed = 0;
   private hipYaw = 0;
   private breath = 0;
@@ -47,16 +48,29 @@ export class GodModel {
 
   readonly height = 2.45;
 
-  constructor(palette: { cloth?: number; trim?: number; glow?: number } = {}) {
-    const skin = new THREE.MeshPhysicalNodeMaterial({ color: 0xb98a6a, roughness: 0.48, sheen: 0.4, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xffc4a0) });
-    const gold = new THREE.MeshPhysicalNodeMaterial({ color: palette.trim ?? 0xe0b04a, metalness: 1, roughness: 0.24, clearcoat: 0.3 });
+  /**
+   * `overrides` swaps whole materials, e.g. marble skin for a statue. The cape
+   * keeps its own colors unless `cloth` is overridden.
+   */
+  constructor(
+    palette: { cloth?: number; trim?: number; glow?: number } = {},
+    overrides: Partial<Record<'skin' | 'gold' | 'steel' | 'leather' | 'cloth' | 'beard', THREE.Material>> = {},
+  ) {
+    const skin0 = new THREE.MeshPhysicalNodeMaterial({ color: 0xb98a6a, roughness: 0.48, sheen: 0.4, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xffc4a0) });
+    const gold0 = new THREE.MeshPhysicalNodeMaterial({ color: palette.trim ?? 0xe0b04a, metalness: 1, roughness: 0.24, clearcoat: 0.3 });
     // hammered-metal variation so the armor isn't a flat mirror
-    gold.roughnessNode = float(0.22).add(mx_noise_float(positionLocal.mul(38)).mul(0.08));
-    const steel = new THREE.MeshPhysicalNodeMaterial({ color: 0x9aa3ad, metalness: 1, roughness: 0.3 });
-    const leather = new THREE.MeshStandardNodeMaterial({ color: 0x3b2417, roughness: 0.7 });
-    const cloth = new THREE.MeshPhysicalNodeMaterial({
+    gold0.roughnessNode = float(0.22).add(mx_noise_float(positionLocal.mul(38)).mul(0.08));
+    const steel0 = new THREE.MeshPhysicalNodeMaterial({ color: 0x9aa3ad, metalness: 1, roughness: 0.3 });
+    const leather0 = new THREE.MeshStandardNodeMaterial({ color: 0x3b2417, roughness: 0.7 });
+    const cloth0 = new THREE.MeshPhysicalNodeMaterial({
       color: palette.cloth ?? 0x8a1218, roughness: 0.85, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color(0xff8a7a), side: THREE.DoubleSide,
     });
+    const skin = overrides.skin ?? skin0;
+    const gold = overrides.gold ?? gold0;
+    const steel = overrides.steel ?? steel0;
+    const leather = overrides.leather ?? leather0;
+    const cloth = overrides.cloth ?? cloth0;
+    this.customCape = overrides.cloth !== undefined;
     const glowColor = new THREE.Color(palette.glow ?? 0x6fe3ff);
     const eyes = new THREE.MeshBasicNodeMaterial({ color: glowColor });
     eyes.colorNode = color(glowColor).mul(12);
@@ -114,7 +128,7 @@ export class GodModel {
     this.head.position.y = 0.72;
     m(new THREE.SphereGeometry(0.135, 32, 24).scale(0.92, 1.12, 1.0), skin, this.head, 0, 0, 0.01);
     // beard (sculpted, like a marble statue)
-    m(new THREE.SphereGeometry(0.11, 20, 14).scale(1.0, 1.15, 0.8), new THREE.MeshStandardNodeMaterial({ color: 0xd9d6d0, roughness: 0.9 }), this.head, 0, -0.1, 0.06);
+    m(new THREE.SphereGeometry(0.11, 20, 14).scale(1.0, 1.15, 0.8), overrides.beard ?? new THREE.MeshStandardNodeMaterial({ color: 0xd9d6d0, roughness: 0.9 }), this.head, 0, -0.1, 0.06);
     // helmet: crested Corinthian-style
     const helm = lathe([
       [0.001, 0.2], [0.08, 0.195], [0.13, 0.16], [0.155, 0.08], [0.16, 0.0], [0.155, -0.06], [0.16, -0.08], [0.001, -0.08],
@@ -241,11 +255,13 @@ export class GodModel {
     const band = smoothstep(0.1, 0.11, v.y).mul(float(1).sub(smoothstep(0.17, 0.18, v.y)));
     const meander = step(0.5, fract(v.x.mul(14).add(step(0.5, fract(v.y.mul(28))).mul(0.5)))).mul(band);
     const trim = max(border, meander);
-    const base = mix(color(0x5a0d12), color(0xa3151c), v.y.mul(0.7).add(0.15));
-    mat.colorNode = mix(base, color(0xe3b04b), trim);
-    mat.metalnessNode = trim;
-    mat.roughnessNode = mix(float(0.85), float(0.32), trim);
-    mat.sheenColor = new THREE.Color(0xff8a7a);
+    if (!this.customCape) {
+      const base = mix(color(0x5a0d12), color(0xa3151c), v.y.mul(0.7).add(0.15));
+      mat.colorNode = mix(base, color(0xe3b04b), trim);
+      mat.metalnessNode = trim;
+      mat.roughnessNode = mix(float(0.85), float(0.32), trim);
+      mat.sheenColor = new THREE.Color(0xff8a7a);
+    }
     const cape = new THREE.Mesh(geo, mat);
     cape.position.set(0, 0.42, -0.24);
     cape.castShadow = true;

@@ -2,26 +2,41 @@ import * as THREE from 'three/webgpu';
 import {
   float, max, mix, normalWorld, positionWorld, sin, smoothstep, texture, transformNormalToView, vec2, vec3,
 } from '../render/tsl';
-import { fbm2, simplex2, smoothstep as sstep } from '../core/random';
-import { Arena, laneDistance, pathDistance } from './ArenaLayout';
 import { planar, triplanar, type TextureLibrary } from './Materials';
 
-const SEGMENTS = 400;
+/** Everything a map supplies to build its terrain. */
+export interface TerrainDef {
+  /** Side length of the square heightfield, meters, centered on the origin. */
+  size: number;
+  /** Grid cells per side. */
+  segments: number;
+  /** Side length of the centered region covered by the splat mask. */
+  maskSize: number;
+  /** Mask texels per side. */
+  maskRes: number;
+  height(x: number, z: number): number;
+  /** Splat weights at a point, each 0..1: dirt, paved, damp, macro variation. */
+  mask(x: number, z: number): readonly [number, number, number, number];
+}
 
 /**
- * Heightfield terrain: a grassy valley floor around the temple, rising into
- * layered cliffs with canyons where the lanes exit. Heights live on the CPU
+ * Heightfield terrain built from a map's `TerrainDef`: grass, dirt, paved and
+ * rock layers blended by a splat mask and by slope. Heights live on the CPU
  * too, so movement and prop placement can query them.
  */
 export class Terrain {
   readonly mesh: THREE.Mesh;
-  readonly size = Arena.terrainSize;
+  readonly size: number;
+  private readonly segments: number;
   private readonly heights: Float32Array;
-  private readonly res = SEGMENTS + 1;
-  /** RGBA splat mask over `Arena.maskSize`: R dirt path, G paved lane, B damp/dark, A macro variation. */
+  private readonly res: number;
+  /** RGBA splat mask over `def.maskSize`: R dirt path, G paved lane, B damp/dark, A macro variation. */
   readonly mask: THREE.DataTexture;
 
-  constructor(textures: TextureLibrary) {
+  constructor(textures: TextureLibrary, readonly def: TerrainDef) {
+    this.size = def.size;
+    this.segments = def.segments;
+    this.res = def.segments + 1;
     this.heights = this.generateHeights();
     this.mask = this.generateMask();
     const geometry = this.buildGeometry();
@@ -32,78 +47,31 @@ export class Terrain {
     this.mesh.castShadow = true;
   }
 
-  /** Raw procedural height function (before sampling into the grid). */
-  private static heightFn(): (x: number, z: number) => number {
-    const n1 = simplex2(11);
-    const n2 = simplex2(23);
-    const n3 = simplex2(37);
-    const { valleyRadius, plaza } = Arena;
-    return (x, z) => {
-      const r = Math.hypot(x, z);
-      // gentle undulation on the valley floor
-      let h = fbm2(n1, x * 0.018, z * 0.018, 4) * 1.6 + fbm2(n2, x * 0.07, z * 0.07, 2) * 0.25;
-      // cliffs: warped radius so the rim is irregular
-      const warpR = r + fbm2(n2, x * 0.012, z * 0.012, 3) * 22;
-      const rim = sstep(valleyRadius - 4, valleyRadius + 38, warpR);
-      const ridge = 1 - Math.abs(fbm2(n3, x * 0.02, z * 0.02, 5));
-      const strata = Math.round(rim * 7 + ridge * 0.6) / 7; // terraced ledges
-      const cliffH = (38 + ridge * 40 + fbm2(n1, x * 0.008, z * 0.008, 3) * 25) * (rim * 0.55 + strata * 0.45);
-      // canyons where lanes leave the valley
-      const lane = laneDistance(x, z);
-      const canyon = 1 - sstep(4, 26 + Math.max(0, r - valleyRadius) * 0.25, lane);
-      h += cliffH * (1 - canyon * 0.92);
-      // distant mountains
-      h += sstep(170, 250, r) * (60 + fbm2(n3, x * 0.004, z * 0.004, 4) * 60);
-      // flatten under the temple and lanes so architecture sits cleanly
-      const plazaFlat = 1 - sstep(plaza.baseRadius + 1, plaza.baseRadius + 10, r);
-      const laneFlat = 1 - sstep(1.5, 7, lane);
-      const flat = Math.max(plazaFlat, laneFlat * (1 - rim));
-      h = h * (1 - flat) + -0.05 * flat;
-      // slight dip of the dirt paths
-      const pd = pathDistance(x, z);
-      h -= (1 - sstep(-1, 2.5, pd)) * 0.12;
-      return h;
-    };
-  }
-
   private generateHeights(): Float32Array {
-    const f = Terrain.heightFn();
     const h = new Float32Array(this.res * this.res);
     const half = this.size / 2;
-    const step = this.size / SEGMENTS;
+    const step = this.size / this.segments;
     for (let j = 0; j < this.res; j++) {
       for (let i = 0; i < this.res; i++) {
-        h[j * this.res + i] = f(-half + i * step, -half + j * step);
+        h[j * this.res + i] = this.def.height(-half + i * step, -half + j * step);
       }
     }
     return h;
   }
 
   private generateMask(): THREE.DataTexture {
-    const N = 512;
+    const N = this.def.maskRes;
+    const S = this.def.maskSize;
     const data = new Uint8Array(N * N * 4);
-    const n = simplex2(91);
-    const half = Arena.maskSize / 2;
+    const half = S / 2;
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        const x = -half + ((i + 0.5) / N) * Arena.maskSize;
-        const z = -half + ((j + 0.5) / N) * Arena.maskSize;
-        const edgeNoise = fbm2(n, x * 0.25, z * 0.25, 3);
-        const pd = pathDistance(x, z) + edgeNoise * 0.9;
-        const ld = laneDistance(x, z) + edgeNoise * 0.5;
-        const r = Math.hypot(x, z);
-        const dirt = 1 - sstep(-0.6, 1.4, pd);
-        // dirt apron around the temple base and lane borders
-        const apron = (1 - sstep(Arena.plaza.baseRadius - 0.5, Arena.plaza.baseRadius + 3.5 + edgeNoise * 2, r));
-        const laneDirt = 1 - sstep(0, 2.2, ld);
-        const paved = 1 - sstep(-0.4, 0.3, ld);
-        const damp = Math.max(0, fbm2(n, x * 0.05, z * 0.05, 3)) * 0.8;
-        const macro = fbm2(n, x * 0.015 + 100, z * 0.015, 4) * 0.5 + 0.5;
+        const w = this.def.mask(-half + ((i + 0.5) / N) * S, -half + ((j + 0.5) / N) * S);
         const k = (j * N + i) * 4;
-        data[k] = Math.round(Math.min(1, Math.max(dirt, apron * 0.9, laneDirt * 0.85)) * 255);
-        data[k + 1] = Math.round(paved * 255);
-        data[k + 2] = Math.round(damp * 255);
-        data[k + 3] = Math.round(macro * 255);
+        data[k] = Math.round(w[0] * 255);
+        data[k + 1] = Math.round(w[1] * 255);
+        data[k + 2] = Math.round(w[2] * 255);
+        data[k + 3] = Math.round(w[3] * 255);
       }
     }
     const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
@@ -116,7 +84,7 @@ export class Terrain {
   }
 
   private buildGeometry(): THREE.BufferGeometry {
-    const geo = new THREE.PlaneGeometry(this.size, this.size, SEGMENTS, SEGMENTS);
+    const geo = new THREE.PlaneGeometry(this.size, this.size, this.segments, this.segments);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position as THREE.BufferAttribute;
     // PlaneGeometry rotated: vertex rows run from -z (j=0) to +z after rotation.
@@ -133,7 +101,7 @@ export class Terrain {
 
   private buildMaterial(textures: TextureLibrary): THREE.MeshStandardNodeMaterial {
     const mat = new THREE.MeshStandardNodeMaterial();
-    const maskUV = positionWorld.xz.div(Arena.maskSize).add(0.5);
+    const maskUV = positionWorld.xz.div(this.def.maskSize).add(0.5);
     const m = texture(this.mask, maskUV);
     const edge = maskUV.sub(0.5).abs();
     const inMask = smoothstep(0.5, 0.47, max(edge.x, edge.y));
@@ -193,10 +161,10 @@ export class Terrain {
   /** Bilinear height lookup in world space. */
   heightAt(x: number, z: number): number {
     const half = this.size / 2;
-    const fx = ((x + half) / this.size) * SEGMENTS;
-    const fz = ((z + half) / this.size) * SEGMENTS;
-    const i = Math.max(0, Math.min(SEGMENTS - 1, Math.floor(fx)));
-    const j = Math.max(0, Math.min(SEGMENTS - 1, Math.floor(fz)));
+    const fx = ((x + half) / this.size) * this.segments;
+    const fz = ((z + half) / this.size) * this.segments;
+    const i = Math.max(0, Math.min(this.segments - 1, Math.floor(fx)));
+    const j = Math.max(0, Math.min(this.segments - 1, Math.floor(fz)));
     const tx = Math.min(Math.max(fx - i, 0), 1);
     const tz = Math.min(Math.max(fz - j, 0), 1);
     const r = this.res;
@@ -209,7 +177,7 @@ export class Terrain {
 
   /** Approximate surface normal from the height grid. */
   normalAt(x: number, z: number, out = new THREE.Vector3()): THREE.Vector3 {
-    const e = this.size / SEGMENTS;
+    const e = this.size / this.segments;
     const hx = this.heightAt(x + e, z) - this.heightAt(x - e, z);
     const hz = this.heightAt(x, z + e) - this.heightAt(x, z - e);
     return out.set(-hx, 2 * e, -hz).normalize();
@@ -217,9 +185,9 @@ export class Terrain {
 
   /** 0..1 weights from the splat mask, sampled on the CPU (for grass placement). */
   maskAt(x: number, z: number): { dirt: number; paved: number } {
-    const N = 512;
-    const u = (x / Arena.maskSize + 0.5) * N;
-    const v = (z / Arena.maskSize + 0.5) * N;
+    const N = this.def.maskRes;
+    const u = (x / this.def.maskSize + 0.5) * N;
+    const v = (z / this.def.maskSize + 0.5) * N;
     if (u < 0 || v < 0 || u >= N || v >= N) return { dirt: 0, paved: 0 };
     const k = (Math.floor(v) * N + Math.floor(u)) * 4;
     const d = this.mask.image.data as Uint8Array;

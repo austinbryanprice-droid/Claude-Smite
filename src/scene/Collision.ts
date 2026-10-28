@@ -31,6 +31,8 @@ export type GroundSurface = (x: number, z: number) => number | null;
 export class CollisionWorld {
   readonly colliders: Collider[] = [];
   private readonly surfaces: GroundSurface[] = [];
+  /** Signed distance to the edge of the walkable area (positive inside), if the map has walls. */
+  private walkable: ((x: number, z: number) => number) | null = null;
 
   constructor(private readonly baseGround: (x: number, z: number) => number) {}
 
@@ -40,6 +42,11 @@ export class CollisionWorld {
 
   addBox(x: number, z: number, hx: number, hz: number, yaw: number, top = Infinity): void {
     this.colliders.push({ kind: 'box', x, z, hx, hz, yaw, top });
+  }
+
+  /** Confines movement to where `field` is positive (meters to the nearest wall). */
+  setWalkable(field: (x: number, z: number) => number): void {
+    this.walkable = field;
   }
 
   addSurface(s: GroundSurface): void {
@@ -105,6 +112,21 @@ export class CollisionWorld {
           }
           x = c.x + nlx * cos + nlz * sin;
           z = c.z - nlx * sin + nlz * cos;
+        }
+      }
+      if (this.walkable) {
+        const f = this.walkable(x, z);
+        if (f < radius) {
+          // push out along the field's gradient
+          const e = 0.3;
+          const gx = this.walkable(x + e, z) - this.walkable(x - e, z);
+          const gz = this.walkable(x, z + e) - this.walkable(x, z - e);
+          const g = Math.hypot(gx, gz);
+          if (g > 1e-6) {
+            x += (gx / g) * (radius - f);
+            z += (gz / g) * (radius - f);
+            moved = true;
+          }
         }
       }
       if (!moved) break;

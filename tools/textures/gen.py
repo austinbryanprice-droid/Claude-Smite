@@ -45,6 +45,26 @@ def value_noise(size, period, rng):
     return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
 
 
+def value_noise2(size, px, py, rng):
+    """Tileable value noise with separate cell counts across X and Y."""
+    grid = rng.random((py, px)).astype(np.float32)
+    cx = np.arange(size, dtype=np.float32) * px / size
+    cy = np.arange(size, dtype=np.float32) * py / size
+    x0 = np.floor(cx).astype(int)
+    y0 = np.floor(cy).astype(int)
+    fx = _fade(cx - x0)[None, :]
+    fy = _fade(cy - y0)[:, None]
+    x1 = (x0 + 1) % px
+    y1 = (y0 + 1) % py
+    x0 %= px
+    y0 %= py
+    a = grid[np.ix_(y0, x0)]
+    b = grid[np.ix_(y0, x1)]
+    c = grid[np.ix_(y1, x0)]
+    d = grid[np.ix_(y1, x1)]
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
+
+
 def fbm(size, base_period, octaves, rng, gain=0.5, lacunarity=2):
     total = np.zeros((size, size), np.float32)
     amp, norm, period = 1.0, 0.0, base_period
@@ -400,6 +420,126 @@ def dirt(size, rng):
     save('dirt', col, normal, ao, rough)
 
 
+def bark(size, rng):
+    """Tree bark: deep vertical furrows between plated ridges, with lichen."""
+    # Furrows are the contour lines of noise stretched along the trunk, so
+    # they run long and wavy; a second, finer set splits the plates.
+    wx = fbm(size, 4, 3, rng) * 2 - 1
+    wy = fbm(size, 4, 3, rng) * 2 - 1
+    major = warp(1 - np.abs(value_noise2(size, 26, 3, rng) * 2 - 1), wx, wy, size * 0.01)
+    minor = warp(1 - np.abs(value_noise2(size, 64, 5, rng) * 2 - 1), wx, wy, size * 0.01)
+    furrow = np.maximum(smoothstep(0.62, 0.95, major), smoothstep(0.8, 0.97, minor) * 0.7)
+    plates = value_noise2(size, 18, 6, rng)
+    h = 1 - furrow * 0.85 + (plates - 0.5) * 0.12 + (grain(size, rng, 1) - 0.5) * 0.08
+    col = lerp(np.broadcast_to(rgb('#8a7158'), (size, size, 3)), rgb('#6e5a47'), fbm(size, 8, 4, rng))
+    col = lerp(col, rgb('#2f241b'), furrow * 0.85)
+    lichen = smoothstep(0.7, 0.82, fbm(size, 8, 5, rng)) * (1 - furrow)
+    col = lerp(col, rgb('#8f9a5a'), lichen * 0.4)
+    normal = normal_from_height(h, size / 40)
+    ao = ao_from_height(h, 3, 2.5)
+    rough = np.clip(0.82 + furrow * 0.12 - lichen * 0.05, 0, 1)
+    save('bark', col, normal, ao, rough)
+
+
+def _leaf_polygon(cx, cy, angle, length, width, bend=0.0, steps=14):
+    """Outline of a pointed leaf from its base (cx, cy) toward `angle`."""
+    left, right, mid = [], [], []
+    ca, sa = np.cos(angle), np.sin(angle)
+    for i in range(steps + 1):
+        t = i / steps
+        w = width * (np.sin(np.pi * t) ** 0.75) * (1 - 0.35 * t)
+        along = t * length
+        off = bend * length * t * t
+        px = cx + ca * along - sa * off
+        py = cy + sa * along + ca * off
+        left.append((px - sa * w, py + ca * w))
+        right.append((px + sa * w, py - ca * w))
+        mid.append((px, py))
+    return left, right, mid
+
+
+def foliage_atlas(size, rng):
+    """2x2 atlas of leaf sprigs with alpha, for the foliage cards.
+
+    0: broadleaf sprig (canopy)   1: dense small-leaf clump (canopy, bushes)
+    2: fern frond                  3: long blade leaves (undergrowth)
+    Color is sRGB with gentle variation; the shader tints per instance.
+    """
+    from PIL import ImageDraw
+    S = size * 2  # supersample, then downsample for clean edges
+    img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    T = S // 2
+
+    def shade(base, k):
+        return tuple(int(np.clip(c * k, 0, 255)) for c in base) + (255,)
+
+    def leaf(ox, oy, x, y, ang, ln, wd, base, bend=0.0):
+        left, right, mid = _leaf_polygon(ox + x, oy + y, ang, ln, wd, bend)
+        d.polygon(left + mid[::-1], fill=shade(base, 1.08))
+        d.polygon(right + mid[::-1], fill=shade(base, 0.86))
+        d.line(mid, fill=shade(base, 0.7), width=max(1, int(wd * 0.12)))
+
+    greens = [(86, 140, 46), (104, 158, 52), (72, 124, 40), (118, 166, 64), (92, 150, 58)]
+
+    # 0: broadleaf sprig: a curved twig with alternating large leaves
+    ox, oy = 0, 0
+    stem = [(T * 0.5 + np.sin(t * 2) * T * 0.04, T * (0.97 - t * 0.85)) for t in np.linspace(0, 1, 20)]
+    d.line(stem, fill=(70, 52, 34, 255), width=int(S * 0.006))
+    for i in range(11):
+        t = 0.12 + i * 0.08
+        px, py = stem[min(19, int(t * 19))]
+        side = 1 if i % 2 else -1
+        ang = -np.pi / 2 + side * (0.9 - t * 0.4) + rng.normal() * 0.12
+        ln = T * (0.30 - abs(t - 0.5) * 0.18) * (0.9 + rng.random() * 0.2)
+        leaf(ox, oy, px, py, ang, ln, ln * 0.3, greens[rng.integers(len(greens))], bend=side * 0.08)
+    leaf(ox, oy, *stem[-1], -np.pi / 2, T * 0.2, T * 0.06, greens[1])
+
+    # 1: dense clump of small leaves filling the tile
+    ox, oy = T, 0
+    for _ in range(170):
+        r = T * 0.42 * np.sqrt(rng.random())
+        a = rng.random() * np.pi * 2
+        x, y = T / 2 + np.cos(a) * r, T / 2 + np.sin(a) * r
+        ln = T * (0.07 + rng.random() * 0.06)
+        leaf(ox, oy, x, y, a + rng.normal() * 0.6, ln, ln * 0.42, greens[rng.integers(len(greens))])
+
+    # 2: fern frond: a rachis with paired pinnae shrinking toward the tip
+    ox, oy = 0, T
+    rach = [(T * 0.5 + np.sin(t * 2.2) * T * 0.08, T * (0.98 - t * 0.92)) for t in np.linspace(0, 1, 40)]
+    d.line(rach, fill=(64, 92, 34, 255), width=int(S * 0.004))
+    for i in range(2, 38, 2):
+        t = i / 39
+        px, py = rach[i]
+        ln = T * 0.36 * np.sin(np.pi * (0.15 + t * 0.85)) ** 0.7 * (1 - t * 0.55)
+        for side in (-1, 1):
+            ang = -np.pi / 2 + side * (1.35 - t * 0.55)
+            leaf(ox, oy, px, py, ang, ln, ln * 0.16, greens[(i // 2 + side) % len(greens)], bend=-side * 0.1)
+
+    # 3: long arching blades from a common base (undergrowth, palms)
+    ox, oy = T, T
+    for i in range(9):
+        a = -np.pi / 2 + (i - 4) * 0.2 + rng.normal() * 0.05
+        ln = T * (0.75 - abs(i - 4) * 0.07)
+        leaf(ox, oy, T * 0.5, T * 0.98, a, ln, T * 0.035, greens[i % len(greens)], bend=(i - 4) * 0.06)
+
+    img = img.resize((size, size), Image.LANCZOS)
+    # Bleed color into transparent texels so mipmaps don't darken leaf edges.
+    arr = np.asarray(img).astype(np.float32)
+    rgbch, a = arr[..., :3], arr[..., 3:] / 255
+    acc = rgbch * a
+    wsum = a.copy()
+    for _ in range(6):
+        acc = (acc + np.roll(acc, 1, 0) + np.roll(acc, -1, 0) + np.roll(acc, 1, 1) + np.roll(acc, -1, 1))
+        wsum = (wsum + np.roll(wsum, 1, 0) + np.roll(wsum, -1, 0) + np.roll(wsum, 1, 1) + np.roll(wsum, -1, 1))
+    bled = acc / np.maximum(wsum, 1e-4)
+    out = np.where(a > 0.5, rgbch, bled)
+    out = np.concatenate([np.clip(out, 0, 255), arr[..., 3:]], -1).astype(np.uint8)
+    os.makedirs(OUT, exist_ok=True)
+    Image.fromarray(out, 'RGBA').save(os.path.join(OUT, 'foliage_atlas.png'), optimize=True)
+    print('wrote foliage_atlas')
+
+
 MATERIALS = {
     'flagstone': flagstone,
     'marble': marble,
@@ -407,6 +547,8 @@ MATERIALS = {
     'rock': rock,
     'grass_ground': grass_ground,
     'dirt': dirt,
+    'bark': bark,
+    'foliage_atlas': foliage_atlas,
 }
 
 
