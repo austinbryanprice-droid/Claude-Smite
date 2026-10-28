@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CCState, computeDamage, mitigation } from './combat';
 import { Combatant } from './combatant';
-import { anubis, loki, thor, zeus } from './gods';
+import { anubis, loki, odin, thor, zeus } from './gods';
 import { validateLoadout } from './loadout';
 import { MAX_TREE_POINTS, skillRank, treePointsEarned, XP_TABLE } from './progression';
 import { effectiveSlow, zeroStats } from './stats';
@@ -201,6 +201,116 @@ describe('combatant', () => {
     a.takeDamage(60);
     expect(a.health).toBe(a.stats.maxHealth);
     expect(a.shieldTotal).toBe(40);
+  });
+
+  it('keeps cooldowns when a skill is swapped out and back in', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(5));
+    expect(z.cast(4).ok).toBe(true);
+    expect(z.swap(4, 'zeus.skyfall-storm')).toBeNull();
+    expect(z.canCast(4)).toBe('cooldown');
+    z.swap(4, 'zeus.olympian-spear');
+    z.swap(4, 'zeus.skyfall-storm');
+    expect(z.canCast(4)).toBe('cooldown');
+    z.update(z.cooldownOf(4) + 0.01);
+    expect(z.cooldownOf(4)).toBe(0);
+  });
+
+  it('only grants the hard-CC keystone shield for hard CC', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(20));
+    z.gainFavor(1e9);
+    const aegis = zeus.trees[2].nodes;
+    for (const n of aegis.filter((n) => n.tier < 4)) while (z.allocate(n.id) === null);
+    expect(z.allocate('aegis.throne')).toBeNull();
+    z.receiveCC('blind', 1);
+    z.receiveCC('cripple', 1);
+    expect(z.shieldTotal).toBe(0);
+    z.receiveCC('stun', 1);
+    expect(z.shieldTotal).toBeGreaterThan(0);
+  });
+
+  it('keeps cooldowns ticking while dead', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(20));
+    z.cast(4);
+    const cd = z.cooldownOf(4);
+    z.takeDamage(1e6);
+    z.update(z.respawnTimer + 0.1);
+    expect(z.alive).toBe(true);
+    expect(z.cooldownOf(4)).toBeLessThan(cd - 50);
+  });
+
+  it('does not carry debuffs from a lethal hit into the next life', () => {
+    const o = new Combatant(odin, 'order');
+    const z = new Combatant(zeus, 'chaos');
+    expect(o.loadout[1]).toBe('odin.ravens');
+    const r = o.cast(1);
+    if (!r.ok) throw new Error(r.error);
+    z.health = 1;
+    o.applySkillTo(r.cast, z);
+    expect(z.alive).toBe(false);
+    z.update(z.respawnTimer + 0.1);
+    expect(z.stats.physicalProtection).toBe(zeus.base.physicalProtection);
+  });
+
+  it('cannot refill health or mana by cycling a respec', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(2));
+    z.health = 100;
+    z.mana = 50;
+    for (let i = 0; i < 3; i++) {
+      expect(z.allocate('aegis.vigor')).toBeNull();
+      expect(z.deallocate('aegis.vigor')).toBeNull();
+    }
+    z.allocate('tempest.flow');
+    z.deallocate('tempest.flow');
+    expect(z.health).toBeCloseTo(100);
+    expect(z.mana).toBeCloseTo(50);
+  });
+
+  it('basic attacks never hit allies or yourself', () => {
+    const a = new Combatant(zeus, 'order');
+    const ally = new Combatant(zeus, 'order');
+    expect(a.basicAttack(ally)).toBeNull();
+    expect(a.basicAttack(a)).toBeNull();
+    expect(ally.health).toBe(ally.stats.maxHealth);
+    expect(a.basicAttack(new Combatant(thor, 'chaos'))).not.toBeNull();
+  });
+
+  it('refreshes a zone slow on each tick instead of stacking it', () => {
+    const a = new Combatant(anubis, 'order');
+    const z = new Combatant(zeus, 'chaos');
+    a.gainXp(xpFor(5));
+    z.health = z.stats.maxHealth = 1e6;
+    const r = a.cast(4); // Sandstorm
+    if (!r.ok) throw new Error(r.error);
+    a.applySkillTo(r.cast, z);
+    z.update(1);
+    a.applySkillTo(r.cast, z);
+    expect(z.cc.totalSlow()).toBeCloseTo(0.35);
+    // A slow from a different source still stacks.
+    z.receiveCC('slow', 2, 0.2, 'other');
+    expect(z.cc.totalSlow()).toBeCloseTo(0.55);
+  });
+
+  it('only lifesteals damage the target could take', () => {
+    const o = new Combatant(odin, 'order');
+    const z = new Combatant(zeus, 'chaos');
+    o.addTimedMod('lifesteal', 0.5, 10);
+    o.health = 100;
+    z.health = 1;
+    o.basicAttack(z, () => 1);
+    expect(z.alive).toBe(false);
+    expect(o.health).toBeCloseTo(100.5);
+  });
+
+  it('clears diminishing returns on death', () => {
+    const z = new Combatant(zeus, 'order');
+    z.receiveCC('stun', 1);
+    expect(z.cc.drCount).toBe(1);
+    z.takeDamage(1e6);
+    expect(z.cc.drCount).toBe(0);
   });
 
   it('heals allies but never damages them', () => {

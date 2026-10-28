@@ -1,4 +1,4 @@
-import { basicAttackRaw, CCState, computeDamage, type DamageResult } from './combat';
+import { basicAttackRaw, CCState, ccClass, computeDamage, type DamageResult } from './combat';
 import { skillById, swapSkill, ULTIMATE_SLOT, type Loadout, type LoadoutError } from './loadout';
 import { levelForXp, ranked, skillRank, treePointsEarned, XP_TABLE, MAX_LEVEL } from './progression';
 import { addStats, effectiveAttackSpeed, effectiveMoveSpeed, finalizeStats, statsAtLevel } from './stats';
@@ -49,12 +49,16 @@ export type ResolvedEffect =
   | { kind: 'debuff'; stat: StatKey; amount: number; duration: number }
   | Extract<Effect, { kind: 'movement' | 'stealth' | 'summon' | 'mark' }>;
 
+let nextUid = 1;
+
 export type CastError = 'dead' | 'locked' | 'cc' | 'cooldown' | 'mana' | 'emptySlot';
 
 export class Combatant {
   readonly god: GodDef;
   readonly team: Team;
   readonly trees: TreeIndex;
+  /** Unique per instance; tags the CC this unit applies. */
+  readonly uid = nextUid++;
 
   xp = 0;
   favor = 0;
@@ -65,8 +69,11 @@ export class Combatant {
   respawnTimer = 0;
   loadout: Loadout;
   allocation: Allocation = {};
-  /** Remaining cooldown per loadout slot. */
-  cooldowns = [0, 0, 0, 0, 0];
+  /**
+   * Remaining cooldown per skill id. Keyed by skill, not slot, so swapping a
+   * skill out and back in at the fountain never resets its cooldown.
+   */
+  private cooldowns = new Map<string, number>();
   basicCooldown = 0;
   readonly cc = new CCState();
 
@@ -150,7 +157,6 @@ export class Combatant {
     const r = swapSkill(this.god, this.loadout, slot, skillId, this.inBase);
     if (!r.ok) return r.error;
     this.loadout = r.loadout;
-    this.cooldowns[slot] = 0;
     return null;
   }
 
@@ -186,12 +192,19 @@ export class Combatant {
     this.cached = null;
   }
 
-  /** When max health or mana grows, current values grow by the same amount. */
+  /**
+   * When max health or mana changes, keep the missing amount the same. Growth
+   * adds to current values, and taking a point back removes exactly what it
+   * gave, so allocate/respec cycles can never refill resources.
+   */
   private growResources(before: Stats): void {
     this.invalidate();
+    if (!this.alive) return;
     const after = this.stats;
-    this.health = Math.min(after.maxHealth, this.health + Math.max(0, after.maxHealth - before.maxHealth));
-    this.mana = Math.min(after.maxMana, this.mana + Math.max(0, after.maxMana - before.maxMana));
+    const missingHealth = before.maxHealth - this.health;
+    const missingMana = before.maxMana - this.mana;
+    this.health = Math.max(1, Math.min(after.maxHealth, after.maxHealth - missingHealth));
+    this.mana = Math.max(0, Math.min(after.maxMana, after.maxMana - missingMana));
   }
 
   get moveSpeed(): number {
@@ -207,11 +220,13 @@ export class Combatant {
   }
 
   addTimedMod(stat: StatKey, amount: number, duration: number): void {
+    if (!this.alive) return;
     this.mods.push({ stat, amount, remaining: duration });
     this.invalidate();
   }
 
   addShield(amount: number, duration: number): void {
+    if (!this.alive) return;
     this.shields.push({ amount, remaining: duration });
   }
 
@@ -226,9 +241,15 @@ export class Combatant {
     const locks = this.cc.locks();
     if (locks.cast) return 'cc';
     if (locks.movementAbilities && skill.effects.some((e) => e.kind === 'movement')) return 'cc';
-    if (this.cooldowns[slot]! > 0) return 'cooldown';
+    if (this.cooldownOf(slot) > 0) return 'cooldown';
     if (this.mana < this.resolveCost(slot)) return 'mana';
     return null;
+  }
+
+  /** Seconds until the skill in a slot is ready. */
+  cooldownOf(slot: number): number {
+    const id = this.loadout[slot];
+    return id === undefined ? 0 : (this.cooldowns.get(id) ?? 0);
   }
 
   resolveCost(slot: number): number {
@@ -251,7 +272,7 @@ export class Combatant {
     const error = this.canCast(slot);
     if (error) return { ok: false, error };
     this.mana -= this.resolveCost(slot);
-    this.cooldowns[slot] = this.resolveCooldown(slot);
+    this.cooldowns.set(this.loadout[slot]!, this.resolveCooldown(slot));
     if (this.hasKeystone('empoweredBasicAfterSkill')) this.empoweredBasic = true;
     return { ok: true, cast: this.resolve(slot) };
   }
@@ -319,12 +340,13 @@ export class Combatant {
   applySkillTo(cast: ResolvedSkill, target: Combatant): void {
     const enemy = target.team !== this.team;
     for (const e of cast.hits) {
+      if (!target.alive) return; // a lethal hit carries nothing into the next life
       switch (e.kind) {
         case 'damage':
           if (enemy) this.dealDamage(target, e.amount, e.damageType, true);
           break;
         case 'cc':
-          if (enemy) target.receiveCC(e.cc, e.duration, e.magnitude);
+          if (enemy) target.receiveCC(e.cc, e.duration, e.magnitude, `${this.uid}:${cast.skill.id}`);
           break;
         case 'debuff':
           if (enemy) target.addTimedMod(e.stat, -e.amount, e.duration);
@@ -352,7 +374,7 @@ export class Combatant {
   }
 
   basicAttack(target: Combatant, rng: () => number = Math.random): DamageResult | null {
-    if (!this.basicReady) return null;
+    if (!this.basicReady || target.team === this.team) return null;
     this.basicCooldown = 1 / this.attackSpeed;
     let raw = basicAttackRaw(this.stats);
     if (this.empoweredBasic) {
@@ -367,12 +389,14 @@ export class Combatant {
     if (!target.alive) return { raw: 0, dealt: 0, crit: false };
     const execute = this.hasKeystone('executeBelow');
     const result = computeDamage(raw, type, this.stats, target.stats, crit);
+    // Lifesteal only counts damage the target could actually take (no overkill).
+    const sustained = Math.min(result.dealt, target.health + target.shieldTotal);
     const killed = target.takeDamage(result.dealt, this);
     if (!killed && execute && target.alive && target.health / target.stats.maxHealth < execute.healthPct) {
       target.takeDamage(target.health + target.shieldTotal, this);
     }
     const steal = this.stats.lifesteal + (fromAbility ? (this.hasKeystone('abilityLifesteal')?.pct ?? 0) : 0);
-    if (steal > 0) this.heal(result.dealt * steal);
+    if (steal > 0) this.heal(sustained * steal);
     const stacking = this.hasKeystone('stackingDamage');
     if (stacking && fromAbility) {
       this.stacks.count = Math.min(stacking.maxStacks, this.stacks.count + 1);
@@ -407,11 +431,11 @@ export class Combatant {
     this.health = Math.min(this.stats.maxHealth, this.health + amount);
   }
 
-  receiveCC(kind: CCKind, duration: number, magnitude = 0): number {
+  receiveCC(kind: CCKind, duration: number, magnitude = 0, source?: string): number {
     if (!this.alive) return 0;
-    const applied = this.cc.apply(kind, duration, magnitude, this.stats.ccReduction);
+    const applied = this.cc.apply(kind, duration, magnitude, this.stats.ccReduction, false, source);
     const k = this.hasKeystone('shieldOnHardCC');
-    if (applied > 0 && k && kind !== 'slow' && this.hardCCShieldCooldown <= 0) {
+    if (applied > 0 && k && ccClass(kind) !== 'soft' && this.hardCCShieldCooldown <= 0) {
       this.addShield(this.stats.maxHealth * k.maxHealthPct, 4);
       this.hardCCShieldCooldown = k.cooldown;
     }
@@ -421,7 +445,10 @@ export class Combatant {
   /** Called on the killer (and by the simulation for assists). */
   onTakedown(): void {
     const refund = this.hasKeystone('ultimateRefundOnTakedown');
-    if (refund) this.cooldowns[ULTIMATE_SLOT] = this.cooldowns[ULTIMATE_SLOT]! * (1 - refund.pct);
+    const ult = this.skillInSlot(ULTIMATE_SLOT);
+    if (refund && ult?.kind === 'ultimate') {
+      this.cooldowns.set(ult.id, (this.cooldowns.get(ult.id) ?? 0) * (1 - refund.pct));
+    }
     const speed = this.hasKeystone('speedOnTakedown');
     if (speed) this.addTimedMod('bonusMoveSpeed', speed.pct, speed.duration);
   }
@@ -431,13 +458,15 @@ export class Combatant {
     this.health = 0;
     this.shields = [];
     this.mods = [];
-    this.cc.cleanse();
+    this.cc.reset();
     this.respawnTimer = respawnTime(this.level);
     this.invalidate();
   }
 
   respawn(): void {
     this.alive = true;
+    this.mods = [];
+    this.shields = [];
     this.inBase = true;
     this.invalidate();
     this.health = this.stats.maxHealth;
@@ -448,6 +477,11 @@ export class Combatant {
   // Tick
 
   update(dt: number): void {
+    // Cooldowns keep running while dead so a respawn doesn't extend them.
+    for (const [id, c] of this.cooldowns) {
+      if (c <= dt) this.cooldowns.delete(id);
+      else this.cooldowns.set(id, c - dt);
+    }
     if (!this.alive) {
       this.respawnTimer -= dt;
       if (this.respawnTimer <= 0) this.respawn();
@@ -470,7 +504,6 @@ export class Combatant {
     }
 
     this.cc.update(dt);
-    this.cooldowns = this.cooldowns.map((c) => Math.max(0, c - dt));
     this.basicCooldown = Math.max(0, this.basicCooldown - dt);
     this.hardCCShieldCooldown = Math.max(0, this.hardCCShieldCooldown - dt);
 
