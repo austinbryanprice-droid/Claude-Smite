@@ -51,6 +51,12 @@ export type ResolvedEffect =
 
 let nextUid = 1;
 
+/** A basic attack in flight: damage is fixed when the attack starts. */
+export interface BasicShot {
+  raw: number;
+  crit: boolean;
+}
+
 export type CastError = 'dead' | 'locked' | 'cc' | 'cooldown' | 'mana' | 'emptySlot';
 
 export class Combatant {
@@ -373,16 +379,32 @@ export class Combatant {
     return this.alive && this.basicCooldown <= 0 && !this.cc.locks().attack;
   }
 
+  /** Swing and hit in one step (melee, or tests). */
   basicAttack(target: Combatant, rng: () => number = Math.random): DamageResult | null {
-    if (!this.basicReady || target.team === this.team) return null;
+    if (target.team === this.team) return null;
+    const shot = this.startBasic(rng);
+    return shot && this.landBasic(target, shot);
+  }
+
+  /**
+   * Start a basic attack: spends the attack timer and any empowered charge and
+   * rolls the crit. Ranged attacks call this when the projectile leaves and
+   * `landBasic` when it connects; a melee swing lands on every unit in its arc.
+   */
+  startBasic(rng: () => number = Math.random): BasicShot | null {
+    if (!this.basicReady) return null;
     this.basicCooldown = 1 / this.attackSpeed;
     let raw = basicAttackRaw(this.stats);
     if (this.empoweredBasic) {
       raw *= 1 + (this.hasKeystone('empoweredBasicAfterSkill')?.damagePct ?? 0);
       this.empoweredBasic = false;
     }
-    const crit = rng() < this.stats.critChance;
-    return this.dealDamage(target, raw, this.god.basicAttack.damageType, false, crit);
+    return { raw, crit: rng() < this.stats.critChance };
+  }
+
+  landBasic(target: Combatant, shot: BasicShot): DamageResult | null {
+    if (target.team === this.team || !target.alive) return null;
+    return this.dealDamage(target, shot.raw, this.god.basicAttack.damageType, false, shot.crit);
   }
 
   dealDamage(target: Combatant, raw: number, type: DamageType, fromAbility: boolean, crit = false): DamageResult {
