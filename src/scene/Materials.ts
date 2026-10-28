@@ -1,16 +1,16 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, float, normalWorld, positionWorld, texture, transformNormalToView, uniform, vec3,
+  abs, float, normalWorld, positionWorld, sqrt, texture, transformNormalToView, uniform, vec3,
 } from '../render/tsl';
 
 /** Names of the generated PBR sets in public/textures/pbr (see tools/textures/gen.py). */
 export type PbrName = 'flagstone' | 'marble' | 'sandstone_blocks' | 'rock' | 'grass_ground' | 'dirt';
 
 export interface PbrSet {
+  /** sRGB base color with baked cavity occlusion. */
   albedo: THREE.Texture;
-  normal: THREE.Texture;
-  /** R = ambient occlusion, G = roughness, B = metalness. */
-  orm: THREE.Texture;
+  /** R,G = tangent normal XY, B = roughness. */
+  nr: THREE.Texture;
 }
 
 const ALL: PbrName[] = ['flagstone', 'marble', 'sandstone_blocks', 'rock', 'grass_ground', 'dirt'];
@@ -27,23 +27,22 @@ export class TextureLibrary {
 
   async load(onProgress?: (fraction: number) => void): Promise<void> {
     let done = 0;
-    const total = ALL.length * 3;
+    const total = ALL.length * 2;
     const tick = () => onProgress?.(++done / total);
     await Promise.all(ALL.map(async (name) => {
       const base = `${import.meta.env.BASE_URL}textures/pbr/${name}`;
-      const [albedo, normal, orm] = await Promise.all([
+      const [albedo, nr] = await Promise.all([
         this.loader.loadAsync(`${base}_albedo.jpg`).then((t) => (tick(), t)),
-        this.loader.loadAsync(`${base}_normal.jpg`).then((t) => (tick(), t)),
-        this.loader.loadAsync(`${base}_orm.jpg`).then((t) => (tick(), t)),
+        this.loader.loadAsync(`${base}_nr.jpg`).then((t) => (tick(), t)),
       ]);
       albedo.colorSpace = THREE.SRGBColorSpace;
-      for (const t of [albedo, normal, orm]) {
+      for (const t of [albedo, nr]) {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = this.anisotropy;
         t.generateMipmaps = true;
         t.minFilter = THREE.LinearMipmapLinearFilter;
       }
-      this.sets.set(name, { albedo, normal, orm });
+      this.sets.set(name, { albedo, nr });
     }));
   }
 
@@ -76,23 +75,31 @@ export function triplanar(set: PbrSet, scale: any, sharpness = 4, positionNode: 
   const uvY = p.xz;
   const uvZ = p.xy;
 
-  const sample3 = (tex: THREE.Texture) => [texture(tex, uvX), texture(tex, uvY), texture(tex, uvZ)];
-  const [cx, cy, cz] = sample3(set.albedo);
-  const [ox, oy, oz] = sample3(set.orm);
-  const [nx, ny, nz] = sample3(set.normal);
+  const cx = texture(set.albedo, uvX);
+  const cy = texture(set.albedo, uvY);
+  const cz = texture(set.albedo, uvZ);
+  const nx = texture(set.nr, uvX);
+  const ny = texture(set.nr, uvY);
+  const nz = texture(set.nr, uvZ);
 
   const color = cx.rgb.mul(w.x).add(cy.rgb.mul(w.y)).add(cz.rgb.mul(w.z));
-  const orm = ox.rgb.mul(w.x).add(oy.rgb.mul(w.y)).add(oz.rgb.mul(w.z));
+  const rough = nx.z.mul(w.x).add(ny.z.mul(w.y)).add(nz.z.mul(w.z));
 
-  const tnx = nx.xyz.mul(2).sub(1);
-  const tny = ny.xyz.mul(2).sub(1);
-  const tnz = nz.xyz.mul(2).sub(1);
+  const tnx = unpackNormal(nx);
+  const tny = unpackNormal(ny);
+  const tnz = unpackNormal(nz);
   const bx = vec3(tnx.xy.add(n.zy), abs(tnx.z).mul(n.x));
   const by = vec3(tny.xy.add(n.xz), abs(tny.z).mul(n.y));
   const bz = vec3(tnz.xy.add(n.xy), abs(tnz.z).mul(n.z));
   const normal = bx.zyx.mul(w.x).add(by.xzy.mul(w.y)).add(bz.xyz.mul(w.z)).normalize();
 
-  return { color, normal, roughness: orm.y, ao: orm.x };
+  return { color, normal, roughness: rough, ao: float(1) };
+}
+
+/** Tangent normal from the RG channels, rebuilding Z. */
+function unpackNormal(sampleNode: any): any {
+  const xy = sampleNode.xy.mul(2).sub(1);
+  return vec3(xy, sqrt(float(1).sub(xy.dot(xy)).max(0)));
 }
 
 /**
@@ -101,11 +108,11 @@ export function triplanar(set: PbrSet, scale: any, sharpness = 4, positionNode: 
  */
 export function planar(set: PbrSet, uvNode: any, geomNormal: any = normalWorld): SurfaceNodes {
   const c = texture(set.albedo, uvNode);
-  const o = texture(set.orm, uvNode);
-  const t = texture(set.normal, uvNode).xyz.mul(2).sub(1);
+  const nr = texture(set.nr, uvNode);
+  const t = unpackNormal(nr);
   const n = geomNormal.normalize();
   const normal = vec3(t.x.add(n.x), n.y, t.y.add(n.z)).normalize();
-  return { color: c.rgb, normal, roughness: o.y, ao: o.x };
+  return { color: c.rgb, normal, roughness: nr.z, ao: float(1) };
 }
 
 export function applySurface(mat: THREE.MeshStandardNodeMaterial, s: SurfaceNodes, opts: { tint?: any; roughnessMul?: any; aoStrength?: number } = {}): void {
@@ -151,9 +158,10 @@ export class MaterialLibrary {
     const wear = s.color.r.mul(2.2).clamp(0, 1);
     const baseCol = vec3(base.r, base.g, base.b);
     let col: any = baseCol.mul(wear.mul(0.35).add(0.75));
-    if (patina) col = col.mix(vec3(0.16, 0.36, 0.3), s.ao.oneMinus().mul(2.5).clamp(0, 0.6));
+    const patinaMask = float(1).sub(s.color.r.mul(4)).clamp(0, 0.6);
+    if (patina) col = col.mix(vec3(0.16, 0.36, 0.3), patinaMask);
     mat.colorNode = col;
-    mat.metalnessNode = patina ? float(1).sub(s.ao.oneMinus().mul(2.5).clamp(0, 0.6)) : float(1);
+    mat.metalnessNode = patina ? float(1).sub(patinaMask) : float(1);
     mat.roughnessNode = float(roughness).add(s.roughness.sub(0.8).mul(0.4));
     mat.normalNode = transformNormalToView(s.normal.mix(normalWorld, 0.6).normalize());
     return mat;

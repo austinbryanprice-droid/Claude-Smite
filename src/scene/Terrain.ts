@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  float, Fn, mix, normalWorld, positionWorld, smoothstep, texture, transformNormalToView, vec2, vec3,
+  float, max, mix, normalWorld, positionWorld, smoothstep, texture, transformNormalToView, vec2, vec3,
 } from '../render/tsl';
 import { fbm2, simplex2, smoothstep as sstep } from '../core/random';
 import { Arena, laneDistance, pathDistance } from './ArenaLayout';
@@ -135,7 +135,8 @@ export class Terrain {
     const mat = new THREE.MeshStandardNodeMaterial();
     const maskUV = positionWorld.xz.div(Arena.maskSize).add(0.5);
     const m = texture(this.mask, maskUV);
-    const inMask = smoothstep(0.5, 0.47, maskUV.sub(0.5).abs().max()).toVar();
+    const edge = maskUV.sub(0.5).abs();
+    const inMask = smoothstep(0.5, 0.47, max(edge.x, edge.y));
     const dirtW = m.r.mul(inMask);
     const pavedW = m.g.mul(inMask);
     const damp = m.b.mul(inMask);
@@ -152,39 +153,31 @@ export class Terrain {
 
     const slope = n.y;
     // Rock on steep slopes and high up; noise breaks up the transition line.
-    const rockW = smoothstep(0.82, 0.62, slope.add(macro.sub(0.5).mul(0.2))).max(smoothstep(14, 30, positionWorld.y).mul(0.6)).toVar();
+    const rockW = max(smoothstep(0.82, 0.62, slope.add(macro.sub(0.5).mul(0.2))), smoothstep(14, 30, positionWorld.y).mul(0.6));
 
-    const grassCol = mix(gA.color, gB.color, 0.4).mul(mix(vec3(0.92, 1.0, 0.85), vec3(1.08, 1.0, 0.92), macro)).toVar();
-    const result = Fn(() => {
-      const col = grassCol.toVar();
-      const nrm = mix(gA.normal, gB.normal, 0.4).toVar();
-      const rough = mix(gA.roughness, gB.roughness, 0.4).toVar();
-      const ao = gA.ao.toVar();
-      // Height-aware blend: pebbles poke through the grass edge first.
-      const dW = smoothstep(0.25, 0.75, dirtW.add(dirt.ao.oneMinus().mul(0.3)).sub(0.15)).toVar();
-      col.assign(mix(col, dirt.color, dW));
-      nrm.assign(mix(nrm, dirt.normal, dW));
-      rough.assign(mix(rough, dirt.roughness, dW));
-      ao.assign(mix(ao, dirt.ao, dW));
-      col.assign(mix(col, paved.color, pavedW));
-      nrm.assign(mix(nrm, paved.normal, pavedW));
-      rough.assign(mix(rough, paved.roughness, pavedW));
-      ao.assign(mix(ao, paved.ao, pavedW));
-      const rc = rock.color.mul(rockFine.color.mul(1.6)).toVar();
-      col.assign(mix(col, rc, rockW));
-      nrm.assign(mix(nrm, rock.normal.add(rockFine.normal).normalize(), rockW));
-      rough.assign(mix(rough, rock.roughness, rockW));
-      ao.assign(mix(ao, rock.ao.mul(rockFine.ao), rockW));
-      // Damp patches: darker and slightly glossier.
-      col.mulAssign(float(1).sub(damp.mul(0.25)));
-      rough.assign(rough.sub(damp.mul(0.12)));
-      return { col, nrm, rough, ao };
+    const grassCol = mix(gA.color, gB.color, 0.4).mul(mix(vec3(0.92, 1.0, 0.85), vec3(1.08, 1.0, 0.92), macro));
+    // Layer stack: grass -> dirt -> paved -> rock. Pebbles poke through the
+    // grass edge first (height-aware blend using the dirt AO as a height proxy).
+    const dW = smoothstep(0.25, 0.75, dirtW.add(dirt.color.g.mul(0.8)).sub(0.2));
+    const lerp4 = (a: any, b: any, w: any) => ({
+      col: mix(a.col, b.col, w), nrm: mix(a.nrm, b.nrm, w), rough: mix(a.rough, b.rough, w), ao: mix(a.ao, b.ao, w),
     });
-    const r = result() as any;
-    mat.colorNode = r.col;
-    mat.normalNode = transformNormalToView(r.nrm.normalize());
-    mat.roughnessNode = r.rough;
-    mat.aoNode = r.ao;
+    let L: any = {
+      col: grassCol, nrm: mix(gA.normal, gB.normal, 0.4), rough: mix(gA.roughness, gB.roughness, 0.4), ao: gA.ao,
+    };
+    L = lerp4(L, { col: dirt.color, nrm: dirt.normal, rough: dirt.roughness, ao: dirt.ao }, dW);
+    L = lerp4(L, { col: paved.color, nrm: paved.normal, rough: paved.roughness, ao: paved.ao }, pavedW);
+    L = lerp4(L, {
+      col: rock.color.mul(rockFine.color.mul(1.6)),
+      nrm: rock.normal.add(rockFine.normal).normalize(),
+      rough: rock.roughness,
+      ao: rock.ao.mul(rockFine.ao),
+    }, rockW);
+    // Damp patches: darker and slightly glossier.
+    mat.colorNode = L.col.mul(float(1).sub(damp.mul(0.25)));
+    mat.normalNode = transformNormalToView(L.nrm.normalize());
+    mat.roughnessNode = L.rough.sub(damp.mul(0.12));
+    mat.aoNode = L.ao;
     mat.metalnessNode = float(0);
     return mat;
   }
