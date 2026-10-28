@@ -67,8 +67,8 @@ export function pathDistance(x: number, z: number): number {
   let d = Infinity;
   for (const p of Arena.paths) {
     for (let i = 0; i < p.points.length - 1; i++) {
-      const [ax, az] = p.points[i];
-      const [bx, bz] = p.points[i + 1];
+      const [ax, az] = p.points[i]!;
+      const [bx, bz] = p.points[i + 1]!;
       d = Math.min(d, distToSegment(x, z, ax, az, bx, bz) - p.width / 2);
     }
   }

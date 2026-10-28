@@ -18,12 +18,13 @@ export function simplex2(seed: number): (x: number, y: number) => number {
   for (let i = 0; i < 256; i++) p[i] = i;
   for (let i = 255; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
-    [p[i], p[j]] = [p[j], p[i]];
+    const tmp = p[i]!;
+    p[i] = p[j]!;
+    p[j] = tmp;
   }
-  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
-  const grad = [
-    [1, 1], [-1, 1], [1, -1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1],
-  ];
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255]!;
+  const gx = [1, -1, 1, -1, 1, -1, 0, 0];
+  const gy = [1, 1, -1, -1, 0, 0, 1, -1];
   const F2 = 0.5 * (Math.sqrt(3) - 1);
   const G2 = (3 - Math.sqrt(3)) / 6;
   return (xin: number, yin: number) => {
@@ -44,21 +45,21 @@ export function simplex2(seed: number): (x: number, y: number) => number {
     let n = 0;
     let t0 = 0.5 - x0 * x0 - y0 * y0;
     if (t0 > 0) {
-      const g = grad[perm[ii + perm[jj]] & 7];
+      const g = perm[ii + perm[jj]!]! & 7;
       t0 *= t0;
-      n += t0 * t0 * (g[0] * x0 + g[1] * y0);
+      n += t0 * t0 * (gx[g]! * x0 + gy[g]! * y0);
     }
     let t1 = 0.5 - x1 * x1 - y1 * y1;
     if (t1 > 0) {
-      const g = grad[perm[ii + i1 + perm[jj + j1]] & 7];
+      const g = perm[ii + i1 + perm[jj + j1]!]! & 7;
       t1 *= t1;
-      n += t1 * t1 * (g[0] * x1 + g[1] * y1);
+      n += t1 * t1 * (gx[g]! * x1 + gy[g]! * y1);
     }
     let t2 = 0.5 - x2 * x2 - y2 * y2;
     if (t2 > 0) {
-      const g = grad[perm[ii + 1 + perm[jj + 1]] & 7];
+      const g = perm[ii + 1 + perm[jj + 1]!]! & 7;
       t2 *= t2;
-      n += t2 * t2 * (g[0] * x2 + g[1] * y2);
+      n += t2 * t2 * (gx[g]! * x2 + gy[g]! * y2);
     }
     return 70 * n;
   };

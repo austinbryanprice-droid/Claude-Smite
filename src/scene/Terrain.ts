@@ -199,10 +199,10 @@ export class Terrain {
     const tx = Math.min(Math.max(fx - i, 0), 1);
     const tz = Math.min(Math.max(fz - j, 0), 1);
     const r = this.res;
-    const h00 = this.heights[j * r + i];
-    const h10 = this.heights[j * r + i + 1];
-    const h01 = this.heights[(j + 1) * r + i];
-    const h11 = this.heights[(j + 1) * r + i + 1];
+    const h00 = this.heights[j * r + i]!;
+    const h10 = this.heights[j * r + i + 1]!;
+    const h01 = this.heights[(j + 1) * r + i]!;
+    const h11 = this.heights[(j + 1) * r + i + 1]!;
     return (h00 * (1 - tx) + h10 * tx) * (1 - tz) + (h01 * (1 - tx) + h11 * tx) * tz;
   }
 
@@ -222,6 +222,6 @@ export class Terrain {
     if (u < 0 || v < 0 || u >= N || v >= N) return { dirt: 0, paved: 0 };
     const k = (Math.floor(v) * N + Math.floor(u)) * 4;
     const d = this.mask.image.data as Uint8Array;
-    return { dirt: d[k] / 255, paved: d[k + 1] / 255 };
+    return { dirt: d[k]! / 255, paved: d[k + 1]! / 255 };
   }
 }
