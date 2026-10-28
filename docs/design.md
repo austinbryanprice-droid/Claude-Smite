@@ -1,10 +1,10 @@
 # Game Design Document
 
-Working title: **Ascendant** (placeholder, final name TBD).
+Title: **Ascendant**.
 
 A third-person, browser-based 5v5 MOBA modeled on Smite 2, with one big change: there is no item shop. Gods grow through a skill loadout system and three skill trees instead. The top priority across the whole project is visual quality.
 
-Status: draft v1, written 2026-10-28. Open questions are collected at the end.
+Status: v1, written 2026-10-28. Austin's decisions are recorded in section 9.
 
 ---
 
@@ -89,7 +89,8 @@ Gamepad support comes later.
 
 - Every god has a **passive** (fixed, part of the god's identity) and a **basic attack** (fixed).
 - On top of that, the god has **5 active skill slots**: four **regular** slots (keys 1 to 4) and one **ultimate** slot (key R).
-- The ultimate slot only takes ultimates, and regular slots only take regular skills. That keeps fights readable, since you always know what a big cooldown looks like.
+- The ultimate slot normally holds an ultimate, but you may **put a regular skill in it instead**, giving you five regular skills and no ultimate.
+- Regular slots only take regular skills, so you can never equip more than one ultimate.
 
 ### 3.2 Skill pools
 
@@ -126,14 +127,17 @@ Gamepad support comes later.
 
 ## 4. First gods (v1)
 
-Four gods covering four roles, from four pantheons. Hercules (Solo) comes right after.
+The most famous gods come first, one for each role, so a full 5-god team can be fielded from the start.
 
 | God | Pantheon | Role | Style | Trees |
 |---|---|---|---|---|
 | Zeus | Greek | Mid | Ranged magical burst | Tempest, Sky Father, Olympian Aegis |
 | Thor | Norse | Jungle | Melee physical assassin with a hammer throw and leaps | Mjolnir, Thunderer, Jotun-Slayer |
-| Artemis | Greek | Carry | Ranged physical hunter with traps and a beast companion | Huntress, Moonlight, Wild |
-| Athena | Greek | Support | Melee magical guardian with shields, taunts and a team dash | Aegis, Strategist, War-Goddess |
+| Odin | Norse | Solo | Melee physical warrior with a spear, ravens and a battle ring | Allfather, Gungnir, Valhalla |
+| Loki | Norse | Carry | Ranged physical trickster with thrown daggers, decoys and stealth | Deceiver, Shapeshifter, Silvertongue |
+| Anubis | Egyptian | Support | Ranged magical guardian of the dead with curses, soul shields and a sandstorm | Judgment, Embalmer, Duat |
+
+Next wave, also chosen by fame: Hercules, Athena, Ra, Poseidon and Hades.
 
 All skills are original designs. A sample pool for Zeus:
 
@@ -151,7 +155,7 @@ All skills are original designs. A sample pool for Zeus:
 | Ultimate | Olympian Spear | Long-range line bolt, executes low-health gods |
 | Ultimate | Ascension | Lift off for 4 s, raining bolts at the cursor |
 
-Full numbers for all four gods go in `src/data/gods/*.ts` during step 3.
+Full numbers for all five gods go in `src/data/gods/*.ts` during step 3.
 
 ---
 
@@ -195,16 +199,16 @@ Target: as close to the look of Unreal Engine 5 as a browser can get.
 
 1. **This design doc** (done when approved).
 2. **Graphics foundation** in progress: the arena, the camera and one movable god.
-3. **Combat and skills:** stats, damage, CC, the loadout and tree system and its menus, the four gods, minions and towers.
+3. **Combat and skills:** stats, damage, CC, the loadout and tree system and its menus, the five gods, minions and towers.
 4. **Full match vs bots:** the map, jungle, bosses, bot AI, win and loss, and performance tuning.
 5. Later: online multiplayer, more gods, more modes (Arena, Joust).
 
 ---
 
-## 9. Open questions for Austin
+## 9. Decisions (Austin, 2026-10-28)
 
-1. **Name:** keep "Ascendant" as the working title, or choose another?
-2. **Ultimate slot:** may it hold only ultimates (proposed), or any skill?
-3. **Swapping:** in base only (proposed), or anywhere outside combat?
-4. **Point cap:** is 35 points (19 from levels, 16 from Favor) the right size, or should it be fixed per level only?
-5. **First gods:** are Zeus, Thor, Artemis and Athena good choices?
+1. **Name:** Ascendant.
+2. **Ultimate slot:** may hold a regular skill instead of an ultimate.
+3. **Swapping:** in base only.
+4. **Point cap:** 35 points (19 from levels, 16 from Favor) as proposed.
+5. **First gods:** the most famous first: Zeus, Thor, Odin, Loki and Anubis.
