@@ -10,7 +10,7 @@ import type { QualitySettings } from '../render/Quality';
 
 const CHUNK = 14;
 /** Blades per square meter at density 1. */
-const BASE_DENSITY = 22;
+const BASE_DENSITY = 34;
 const SEGMENTS = 4;
 
 interface Chunk {
@@ -116,15 +116,15 @@ export class Grass {
 
     // Normal: blade face normal blended toward up (softer, like a grass "card" in UE).
     const faceN = vec3(facing.x, 0.4, facing.y).normalize();
-    mat.normalNode = transformNormalToView(normalize(mix(faceN.mul(faceDirection), vec3(0, 1, 0), 0.55)));
+    mat.normalNode = transformNormalToView(normalize(mix(faceN.mul(faceDirection), vec3(0, 1, 0), 0.75)));
 
-    const base = mix(vec3(0.05, 0.09, 0.02), vec3(0.09, 0.13, 0.03), variation);
-    const tipGreen = mix(vec3(0.24, 0.34, 0.07), vec3(0.42, 0.42, 0.14), smoothstep(0.55, 0.95, variation));
+    const base = mix(vec3(0.06, 0.12, 0.025), vec3(0.1, 0.15, 0.03), variation);
+    const tipGreen = mix(vec3(0.3, 0.48, 0.08), vec3(0.55, 0.55, 0.16), smoothstep(0.6, 0.97, variation));
     const col = mix(base, tipGreen, pow(h, float(0.9)));
     mat.colorNode = col;
     mat.roughnessNode = float(0.55).add(h.mul(0.15));
     mat.metalnessNode = float(0);
-    mat.aoNode = mix(float(0.25), float(1), smoothstep(0.0, 0.7, h));
+    mat.aoNode = mix(float(0.55), float(1), smoothstep(0.0, 0.6, h));
     // Fake subsurface: blades glow when the sun is behind them.
     const viewDir = normalize(pos.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
@@ -175,9 +175,9 @@ export class Grass {
           const clump = 0.55 + 0.45 * Math.sin(x * 0.31 + Math.sin(z * 0.23) * 2.0) * Math.sin(z * 0.27 + x * 0.05);
           if (random() > clump + 0.25) continue;
           const edge = 1 - bare; // shorter grass at path edges
-          const height = (0.38 + random() * 0.5) * (0.55 + 0.45 * edge) * (0.8 + clump * 0.4);
+          const height = (0.32 + random() * 0.38) * (0.5 + 0.5 * edge) * (0.8 + clump * 0.4);
           A.push(x, y - 0.03, z, random() * Math.PI * 2);
-          B.push(height, 0.05 + random() * 0.045, (random() - 0.3) * 0.35, random());
+          B.push(height, 0.09 + random() * 0.08, (random() - 0.2) * 0.45, random());
           minY = Math.min(minY, y);
           maxY = Math.max(maxY, y + height);
         }

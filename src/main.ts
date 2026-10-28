@@ -5,7 +5,7 @@ import { Loop } from './core/Loop';
 import { GodModel } from './actors/GodModel';
 import { PlayerController } from './player/PlayerController';
 import { ThirdPersonCamera } from './player/ThirdPersonCamera';
-import { PostFX } from './render/PostFX';
+import { grading, PostFX } from './render/PostFX';
 import { createRenderer } from './render/Renderer';
 import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from './render/Quality';
 import { TextureLibrary } from './scene/Materials';
@@ -63,6 +63,7 @@ async function main(): Promise<void> {
   const loop = new Loop();
   loop.addFixed(player);
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
+  player.render(0, 1);
   follow.update(1 / 60);
   await renderer.compileAsync(world.scene, camera);
   hud.ready();
@@ -107,7 +108,7 @@ async function main(): Promise<void> {
   };
 
   // Hooks for automated screenshots and for gameplay code during development.
-  const debug = { world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
+  const debug = { grading, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
   (window as unknown as { __game: typeof debug }).__game = debug;
 }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  cameraPosition, dot, exp, float, fog, max, mix, positionWorld, pow, uniform, vec4,
+  cameraPosition, dot, exp, float, fog, max, min, mix, positionWorld, pow, uniform, vec3, vec4,
 } from '../render/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -22,24 +22,24 @@ export class Environment {
   private envTarget: THREE.RenderTarget | null = null;
 
   /** Brightness multiplier that puts the sky model in the same units as the sun. */
-  readonly skyScale = uniform(9);
-  readonly fogDensity = uniform(0.0065);
-  readonly fogHeightFalloff = uniform(0.085);
-  readonly fogColor = uniform(new THREE.Color(0.62, 0.7, 0.8));
-  readonly sunColor = new THREE.Color(1.0, 0.93, 0.82);
+  readonly skyScale = uniform(0.5);
+  readonly fogDensity = uniform(0.0035);
+  readonly fogHeightFalloff = uniform(0.06);
+  readonly fogColor = uniform(new THREE.Color(0.55, 0.68, 0.86));
+  readonly sunColor = new THREE.Color(1.0, 0.9, 0.76);
 
   /** Sun elevation and azimuth in degrees. Late-morning sun gives long, readable shadows. */
-  elevation = 38;
+  elevation = 42;
   azimuth = -142;
 
   constructor(private readonly scene: THREE.Scene, private readonly camera: THREE.PerspectiveCamera) {
     this.sky = new SkyMesh();
     this.sky.scale.setScalar(4000);
-    this.sky.turbidity.value = 3.2;
-    this.sky.rayleigh.value = 1.4;
+    this.sky.turbidity.value = 2.2;
+    this.sky.rayleigh.value = 2.0;
     this.sky.mieCoefficient.value = 0.004;
     this.sky.mieDirectionalG.value = 0.82;
-    this.sky.cloudCoverage.value = 0.38;
+    this.sky.cloudCoverage.value = 0.3;
     this.sky.cloudDensity.value = 0.55;
     this.sky.cloudElevation.value = 0.55;
     this.sky.cloudScale.value = 0.00028;
@@ -51,7 +51,7 @@ export class Environment {
     this.sky.renderOrder = -1;
     scene.add(this.sky);
 
-    this.sun = new THREE.DirectionalLight(this.sunColor, 4.2);
+    this.sun = new THREE.DirectionalLight(this.sunColor, 5.5);
     this.sun.castShadow = true;
     scene.add(this.sun);
     scene.add(this.sun.target);
@@ -132,7 +132,9 @@ export class Environment {
     sky.sunPosition.value.copy(this.sunDirection);
     sky.showSunDisc.value = 0; // the directional light already provides the sun
     const smat = sky.material as THREE.NodeMaterial;
-    smat.colorNode = vec4((smat.colorNode as any).rgb.mul(this.skyScale), 1);
+    // Clamp the bright Mie lobe around the sun: the directional light already
+    // provides that energy, and leaving it in the map makes specular blotchy.
+    smat.colorNode = vec4(min((smat.colorNode as any).rgb.mul(this.skyScale), vec3(2.5)), 1);
     envScene.add(sky);
     // A lit ground disc so the lower hemisphere bounces warm light back up,
     // the way the ground in a real HDRI does.
@@ -147,7 +149,7 @@ export class Environment {
     this.envTarget?.dispose();
     this.envTarget = pmrem.fromScene(envScene, 0.0, 0.1, 400);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = 1.0;
+    this.scene.environmentIntensity = 0.9;
     pmrem.dispose();
     sky.geometry.dispose();
     ground.geometry.dispose();
