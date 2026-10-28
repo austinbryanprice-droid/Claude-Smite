@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  color, float, mix, mx_noise_float, positionLocal, sin, smoothstep, time, uniform, uv, vec3,
+  color, float, fract, max, min, mix, mx_noise_float, positionLocal, sin, smoothstep, step, time, uniform, uv, vec3,
 } from '../render/tsl';
 import { lathe } from '../scene/Architecture';
 
@@ -55,7 +55,7 @@ export class GodModel {
     const steel = new THREE.MeshPhysicalNodeMaterial({ color: 0x9aa3ad, metalness: 1, roughness: 0.3 });
     const leather = new THREE.MeshStandardNodeMaterial({ color: 0x3b2417, roughness: 0.7 });
     const cloth = new THREE.MeshPhysicalNodeMaterial({
-      color: palette.cloth ?? 0x1d3a8a, roughness: 0.85, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color(0x7fa2ff), side: THREE.DoubleSide,
+      color: palette.cloth ?? 0x8a1218, roughness: 0.85, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color(0xff8a7a), side: THREE.DoubleSide,
     });
     const glowColor = new THREE.Color(palette.glow ?? 0x6fe3ff);
     const eyes = new THREE.MeshBasicNodeMaterial({ color: glowColor });
@@ -200,18 +200,31 @@ export class GodModel {
     spear.add(glow);
 
     // --- cape: a cloth strip whose motion runs in the vertex shader
-    this.buildCape(cloth);
+    this.buildCape(cloth, gold);
 
     this.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.frustumCulled = false;
     });
   }
 
-  private buildCape(cloth: THREE.Material): void {
-    const W = 0.82;
-    const H = 1.45;
-    const geo = new THREE.PlaneGeometry(W, H, 12, 24);
+  private buildCape(cloth: THREE.Material, gold: THREE.Material): void {
+    const H = 1.3;
+    const geo = new THREE.PlaneGeometry(1, H, 16, 26);
     geo.translate(0, -H / 2, 0);
+    // Static drape baked into the mesh so the folds get real normals: the cape
+    // flares from the shoulders to the hem, wraps around the back, and falls in
+    // vertical folds that deepen toward the hem.
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const t = -pos.getY(i) / H;
+      const width = 0.6 + 0.26 * Math.pow(t, 0.8);
+      const px = x * width;
+      const wrap = 0.2 * (x * 2) ** 2 * (1 - t * 0.6);
+      const fold = Math.sin(x * Math.PI * 7 + 0.6) * 0.035 * (0.25 + t) + Math.sin(x * Math.PI * 3.3) * 0.02 * t;
+      pos.setXYZ(i, px, pos.getY(i), wrap + fold);
+    }
+    geo.computeVertexNormals();
     const mat = (cloth as THREE.MeshPhysicalNodeMaterial).clone();
     const v = uv();
     const down = float(1).sub(v.y); // 0 at the shoulders, 1 at the hem
@@ -222,7 +235,17 @@ export class GodModel {
     const side = this.capeSway.mul(down.mul(down)).mul(0.4);
     const curl = smoothstep(0.0, 1.0, down).mul(this.capeLift).mul(0.25);
     mat.positionNode = positionLocal.add(vec3(side, curl, back.add(flap).add(ripple).negate()));
-    mat.colorNode = mix(color(0x13235a), color(0x2a4bb0), v.y.mul(0.6).add(0.2));
+    // Gold-embroidered border and a meander band above the hem.
+    const edgeX = min(v.x, float(1).sub(v.x));
+    const border = float(1).sub(smoothstep(0.035, 0.045, edgeX)).max(float(1).sub(smoothstep(0.05, 0.06, v.y)));
+    const band = smoothstep(0.1, 0.11, v.y).mul(float(1).sub(smoothstep(0.17, 0.18, v.y)));
+    const meander = step(0.5, fract(v.x.mul(14).add(step(0.5, fract(v.y.mul(28))).mul(0.5)))).mul(band);
+    const trim = max(border, meander);
+    const base = mix(color(0x5a0d12), color(0xa3151c), v.y.mul(0.7).add(0.15));
+    mat.colorNode = mix(base, color(0xe3b04b), trim);
+    mat.metalnessNode = trim;
+    mat.roughnessNode = mix(float(0.85), float(0.32), trim);
+    mat.sheenColor = new THREE.Color(0xff8a7a);
     const cape = new THREE.Mesh(geo, mat);
     cape.position.set(0, 0.42, -0.24);
     cape.castShadow = true;
@@ -230,7 +253,7 @@ export class GodModel {
     this.chest.add(cape);
     // clasp
     for (const sx of [-1, 1]) {
-      const clasp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 16).rotateX(Math.PI / 2), cloth);
+      const clasp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.035, 20).rotateX(Math.PI / 2), gold);
       clasp.position.set(sx * 0.32, 0.42, -0.22);
       this.chest.add(clasp);
     }

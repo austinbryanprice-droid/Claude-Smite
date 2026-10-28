@@ -52,7 +52,8 @@ export class ThirdPersonCamera {
     this.currentDistance += (dist - this.currentDistance) * (1 - Math.exp(-rate * dt));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     const desired = focus.clone().addScaledVector(dir, this.currentDistance).addScaledVector(right, this.shoulder);
-    if (!this.initialized) {
+    // Snap on the first frame and after teleports instead of swooping across the map.
+    if (!this.initialized || this.current.distanceToSquared(desired) > 25) {
       this.current.copy(desired);
       this.initialized = true;
     }

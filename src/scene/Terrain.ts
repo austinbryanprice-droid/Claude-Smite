@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  float, max, mix, normalWorld, positionWorld, smoothstep, texture, transformNormalToView, vec2, vec3,
+  float, max, mix, normalWorld, positionWorld, sin, smoothstep, texture, transformNormalToView, vec2, vec3,
 } from '../render/tsl';
 import { fbm2, simplex2, smoothstep as sstep } from '../core/random';
 import { Arena, laneDistance, pathDistance } from './ArenaLayout';
@@ -153,7 +153,7 @@ export class Terrain {
 
     const slope = n.y;
     // Rock on steep slopes and high up; noise breaks up the transition line.
-    const rockW = max(smoothstep(0.82, 0.62, slope.add(macro.sub(0.5).mul(0.2))), smoothstep(14, 30, positionWorld.y).mul(0.6));
+    const rockW = smoothstep(0.8, 0.6, slope.add(macro.sub(0.5).mul(0.2)));
 
     const grassCol = mix(gA.color, gB.color, 0.4).mul(mix(vec3(0.92, 1.0, 0.85), vec3(1.08, 1.0, 0.92), macro));
     // Layer stack: grass -> dirt -> paved -> rock. Pebbles poke through the
@@ -167,10 +167,18 @@ export class Terrain {
     };
     L = lerp4(L, { col: dirt.color, nrm: dirt.normal, rough: dirt.roughness, ao: dirt.ao }, dW);
     L = lerp4(L, { col: paved.color, nrm: paved.normal, rough: paved.roughness, ao: paved.ao }, pavedW);
+    // Warm sandstone cliffs with horizontal strata, and moss and grass that
+    // cling to every ledge the detail normal says faces upward.
+    const rockNrm = rock.normal.add(rockFine.normal).normalize();
+    const strata = sin(positionWorld.y.mul(1.7).add(rock.color.r.mul(6))).mul(0.5).add(0.5);
+    const rockCol = rock.color.mul(rockFine.color.mul(1.75))
+      .mul(mix(vec3(1.18, 1.0, 0.8), vec3(1.32, 1.08, 0.82), strata));
+    const ledge = smoothstep(0.55, 0.85, rockNrm.y.add(macro.sub(0.5).mul(0.5)));
+    const mossCol = grassCol.mul(vec3(0.9, 1.05, 0.8));
     L = lerp4(L, {
-      col: rock.color.mul(rockFine.color.mul(1.6)),
-      nrm: rock.normal.add(rockFine.normal).normalize(),
-      rough: rock.roughness,
+      col: mix(rockCol, mossCol, ledge.mul(0.85)),
+      nrm: rockNrm,
+      rough: mix(rock.roughness, float(0.9), ledge),
       ao: rock.ao.mul(rockFine.ao),
     }, rockW);
     // Damp patches: darker and slightly glossier.

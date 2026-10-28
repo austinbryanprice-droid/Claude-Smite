@@ -236,7 +236,9 @@ def flagstone(size, rng):
     speck = grain(size, rng, 1)
     base *= (0.9 + (speck - 0.5) * 0.5)[..., None]
     height = height + (speck - 0.5) * 0.05 * slab
-    grout = rgb('#6b5a45') * (0.7 + fine[..., None] * 0.5)
+    # Packed earth between slabs: kept fairly light so the joints read as
+    # soil rather than black voids that mirror the sky at grazing angles.
+    grout = rgb('#8a7556') * (0.75 + fine[..., None] * 0.4)
     dirt_mask = np.clip((1 - bevel) * 0.6 + smoothstep(0.55, 0.8, fbm(size, 8, 4, rng)) * 0.35, 0, 1)
     base = lerp(base, base * rgb('#8a7458') * 1.4, dirt_mask * 0.45)
     moss_noise = fbm(size, 12, 4, rng)
@@ -245,9 +247,9 @@ def flagstone(size, rng):
     albedo = lerp(albedo, rgb('#5a6033') * (0.7 + fine[..., None] * 0.6), moss * 0.6)
     albedo *= (1 - cracks * 0.45)[..., None]
 
-    normal = normal_from_height(height, size / 90)
-    ao = ao_from_height(height, max(2, size // 128), 3.0) * (1 - (1 - slab) * 0.25)
-    rough = np.clip(0.78 + fine * 0.15 - slab * bevel * 0.06 + moss * 0.1 + (1 - slab) * 0.12, 0, 1)
+    normal = normal_from_height(blur(height, 1), size / 120)
+    ao = ao_from_height(height, max(2, size // 128), 2.2) * (1 - (1 - slab) * 0.15)
+    rough = np.clip(0.78 + fine * 0.15 - slab * bevel * 0.06 + moss * 0.1 + (1 - slab) * 0.2, 0, 1)
     save('flagstone', albedo, normal, ao, rough)
 
 
