@@ -19,6 +19,11 @@ export class PlayerController implements Updatable {
   grounded = true;
 
   moveSpeed = 6.6;
+  /**
+   * Set by gameplay each step: the god's current speed (slows, buffs) and
+   * whether input may move it at all (crowd control, dashes, death).
+   */
+  movement: { speed: number; canMove: boolean } | null = null;
   readonly radius = 0.55;
   private readonly prevPosition = new THREE.Vector3();
   private readonly localDir = new THREE.Vector2();
@@ -46,14 +51,15 @@ export class PlayerController implements Updatable {
 
   update(dt: number): void {
     const i = this.input;
-    const f = (i.isDown('KeyW') ? 1 : 0) - (i.isDown('KeyS') ? 1 : 0);
-    const r = (i.isDown('KeyD') ? 1 : 0) - (i.isDown('KeyA') ? 1 : 0);
+    const free = this.movement?.canMove ?? true;
+    const f = free ? (i.isDown('KeyW') ? 1 : 0) - (i.isDown('KeyS') ? 1 : 0) : 0;
+    const r = free ? (i.isDown('KeyD') ? 1 : 0) - (i.isDown('KeyA') ? 1 : 0) : 0;
     this.localDir.set(r, f);
     if (this.localDir.lengthSq() > 1) this.localDir.normalize();
 
     // backpedal and strafe penalties, like Smite
     const penalty = f < 0 ? 0.6 : f === 0 && r !== 0 ? 0.8 : 1;
-    const speed = this.moveSpeed * penalty;
+    const speed = (this.movement?.speed ?? this.moveSpeed) * penalty;
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     // forward = (-sin, -cos), right = (cos, -sin)
@@ -64,7 +70,7 @@ export class PlayerController implements Updatable {
     this.velocity.x += (wx - this.velocity.x) * k;
     this.velocity.z += (wz - this.velocity.z) * k;
 
-    if (this.grounded && i.wasPressed('Space')) {
+    if (free && this.grounded && i.wasPressed('Space')) {
       this.verticalSpeed = 5.2;
       this.grounded = false;
     }

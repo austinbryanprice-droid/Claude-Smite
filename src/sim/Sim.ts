@@ -1,5 +1,5 @@
 import type { BasicShot, CastError, ResolvedSkill, Team } from '../game/combatant';
-import { ranked } from '../game/progression';
+import { FAVOR_REWARDS, ranked } from '../game/progression';
 import {
   nextEntityId,
   Unit,
@@ -424,7 +424,7 @@ export class Sim {
     for (const z of this.zones) if (z.owner === victim && z.follow) z.ticks = 0;
     if (!killer || killer.team === victim.team || victim.kind === 'summon') return;
     const xp = victim.kind === 'god' ? 120 + 30 * victim.combatant.level : 90;
-    const favor = victim.kind === 'god' ? 25 : 8;
+    const favor = victim.kind === 'god' ? FAVOR_REWARDS.godKill : FAVOR_REWARDS.minion;
     const before = killer.combatant.level;
     killer.combatant.gainXp(xp);
     killer.combatant.gainFavor(favor);
