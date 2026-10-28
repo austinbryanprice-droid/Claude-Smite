@@ -203,6 +203,33 @@ describe('combatant', () => {
     expect(a.shieldTotal).toBe(40);
   });
 
+  it('keeps cooldowns when a skill is swapped out and back in', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(5));
+    expect(z.cast(4).ok).toBe(true);
+    expect(z.swap(4, 'zeus.skyfall-storm')).toBeNull();
+    expect(z.canCast(4)).toBe('cooldown');
+    z.swap(4, 'zeus.olympian-spear');
+    z.swap(4, 'zeus.skyfall-storm');
+    expect(z.canCast(4)).toBe('cooldown');
+    z.update(z.cooldownOf(4) + 0.01);
+    expect(z.cooldownOf(4)).toBe(0);
+  });
+
+  it('only grants the hard-CC keystone shield for hard CC', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(20));
+    z.gainFavor(1e9);
+    const aegis = zeus.trees[2].nodes;
+    for (const n of aegis.filter((n) => n.tier < 4)) while (z.allocate(n.id) === null);
+    expect(z.allocate('aegis.throne')).toBeNull();
+    z.receiveCC('blind', 1);
+    z.receiveCC('cripple', 1);
+    expect(z.shieldTotal).toBe(0);
+    z.receiveCC('stun', 1);
+    expect(z.shieldTotal).toBeGreaterThan(0);
+  });
+
   it('heals allies but never damages them', () => {
     const a = new Combatant(anubis, 'order');
     const ally = new Combatant(thor, 'order');

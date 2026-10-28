@@ -1,4 +1,4 @@
-import { basicAttackRaw, CCState, computeDamage, type DamageResult } from './combat';
+import { basicAttackRaw, CCState, ccClass, computeDamage, type DamageResult } from './combat';
 import { skillById, swapSkill, ULTIMATE_SLOT, type Loadout, type LoadoutError } from './loadout';
 import { levelForXp, ranked, skillRank, treePointsEarned, XP_TABLE, MAX_LEVEL } from './progression';
 import { addStats, effectiveAttackSpeed, effectiveMoveSpeed, finalizeStats, statsAtLevel } from './stats';
@@ -65,8 +65,11 @@ export class Combatant {
   respawnTimer = 0;
   loadout: Loadout;
   allocation: Allocation = {};
-  /** Remaining cooldown per loadout slot. */
-  cooldowns = [0, 0, 0, 0, 0];
+  /**
+   * Remaining cooldown per skill id. Keyed by skill, not slot, so swapping a
+   * skill out and back in at the fountain never resets its cooldown.
+   */
+  private cooldowns = new Map<string, number>();
   basicCooldown = 0;
   readonly cc = new CCState();
 
@@ -150,7 +153,6 @@ export class Combatant {
     const r = swapSkill(this.god, this.loadout, slot, skillId, this.inBase);
     if (!r.ok) return r.error;
     this.loadout = r.loadout;
-    this.cooldowns[slot] = 0;
     return null;
   }
 
@@ -226,9 +228,15 @@ export class Combatant {
     const locks = this.cc.locks();
     if (locks.cast) return 'cc';
     if (locks.movementAbilities && skill.effects.some((e) => e.kind === 'movement')) return 'cc';
-    if (this.cooldowns[slot]! > 0) return 'cooldown';
+    if (this.cooldownOf(slot) > 0) return 'cooldown';
     if (this.mana < this.resolveCost(slot)) return 'mana';
     return null;
+  }
+
+  /** Seconds until the skill in a slot is ready. */
+  cooldownOf(slot: number): number {
+    const id = this.loadout[slot];
+    return id === undefined ? 0 : (this.cooldowns.get(id) ?? 0);
   }
 
   resolveCost(slot: number): number {
@@ -251,7 +259,7 @@ export class Combatant {
     const error = this.canCast(slot);
     if (error) return { ok: false, error };
     this.mana -= this.resolveCost(slot);
-    this.cooldowns[slot] = this.resolveCooldown(slot);
+    this.cooldowns.set(this.loadout[slot]!, this.resolveCooldown(slot));
     if (this.hasKeystone('empoweredBasicAfterSkill')) this.empoweredBasic = true;
     return { ok: true, cast: this.resolve(slot) };
   }
@@ -411,7 +419,7 @@ export class Combatant {
     if (!this.alive) return 0;
     const applied = this.cc.apply(kind, duration, magnitude, this.stats.ccReduction);
     const k = this.hasKeystone('shieldOnHardCC');
-    if (applied > 0 && k && kind !== 'slow' && this.hardCCShieldCooldown <= 0) {
+    if (applied > 0 && k && ccClass(kind) !== 'soft' && this.hardCCShieldCooldown <= 0) {
       this.addShield(this.stats.maxHealth * k.maxHealthPct, 4);
       this.hardCCShieldCooldown = k.cooldown;
     }
@@ -421,7 +429,10 @@ export class Combatant {
   /** Called on the killer (and by the simulation for assists). */
   onTakedown(): void {
     const refund = this.hasKeystone('ultimateRefundOnTakedown');
-    if (refund) this.cooldowns[ULTIMATE_SLOT] = this.cooldowns[ULTIMATE_SLOT]! * (1 - refund.pct);
+    const ult = this.skillInSlot(ULTIMATE_SLOT);
+    if (refund && ult?.kind === 'ultimate') {
+      this.cooldowns.set(ult.id, (this.cooldowns.get(ult.id) ?? 0) * (1 - refund.pct));
+    }
     const speed = this.hasKeystone('speedOnTakedown');
     if (speed) this.addTimedMod('bonusMoveSpeed', speed.pct, speed.duration);
   }
@@ -470,7 +481,10 @@ export class Combatant {
     }
 
     this.cc.update(dt);
-    this.cooldowns = this.cooldowns.map((c) => Math.max(0, c - dt));
+    for (const [id, c] of this.cooldowns) {
+      if (c <= dt) this.cooldowns.delete(id);
+      else this.cooldowns.set(id, c - dt);
+    }
     this.basicCooldown = Math.max(0, this.basicCooldown - dt);
     this.hardCCShieldCooldown = Math.max(0, this.hardCCShieldCooldown - dt);
 
