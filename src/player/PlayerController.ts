@@ -33,7 +33,7 @@ export class PlayerController implements Updatable {
   constructor(
     private readonly input: Input,
     private readonly collision: CollisionWorld,
-    readonly model: GodModel,
+    public model: GodModel,
   ) {}
 
   spawn(x: number, z: number, yaw: number): void {

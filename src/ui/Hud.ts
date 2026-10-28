@@ -25,7 +25,7 @@ export class Hud {
         </label>
       </div>
       <div class="hud-crosshair"></div>
-      <div class="hud-hint">Click to play &middot; WASD move &middot; Mouse aim &middot; Space jump &middot; Wheel zoom &middot; Esc release mouse</div>
+      <div class="hud-hint">Click to play &middot; WASD move &middot; Mouse aim &middot; Left click attack &middot; 1-4, R skills &middot; B recall &middot; K skills &amp; trees &middot; Esc release mouse</div>
       <div class="hud-loading"><div class="hud-title">ASCENDANT</div><div class="hud-bar"><div></div></div><div class="hud-sub">Raising the temple&hellip;</div></div>
     `;
     document.body.appendChild(this.root);

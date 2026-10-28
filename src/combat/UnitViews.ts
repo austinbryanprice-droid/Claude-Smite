@@ -70,10 +70,17 @@ export class UnitViews {
   private readonly cur = new Map<Unit, THREE.Vector3>();
 
   constructor(
-    private readonly player: Unit,
-    private readonly playerModel: GodModel,
+    private player: Unit,
+    private playerModel: GodModel,
   ) {
     this.group.name = 'units';
+  }
+
+  /** After a god switch: the old player's view is dropped (its model belongs to the controller). */
+  setPlayer(u: Unit, model: GodModel): void {
+    this.views.delete(this.player);
+    this.player = u;
+    this.playerModel = model;
   }
 
   /** Called before each fixed simulation step, so frames can interpolate between steps. */

@@ -1,0 +1,381 @@
+import * as THREE from 'three/webgpu';
+import { GodModel } from '../actors/GodModel';
+import type { Input } from '../core/Input';
+import type { Updatable } from '../core/Loop';
+import type { CastError } from '../game/combatant';
+import { GODS, godById } from '../game/gods';
+import { ULTIMATE_SLOT } from '../game/loadout';
+import { FAVOR_THRESHOLDS, XP_TABLE } from '../game/progression';
+import type { PlayerController } from '../player/PlayerController';
+import type { World } from '../scene/World';
+import { GodBot, SummonBrain } from '../sim/Bot';
+import { dummyUnit, godUnit, summonUnit } from '../sim/factory';
+import { Sim, type BaseZone } from '../sim/Sim';
+import { Unit, WORLD_SCALE, type Body } from '../sim/Unit';
+import { CombatHud } from '../ui/CombatHud';
+import { LoadoutMenu } from '../ui/LoadoutMenu';
+import { GroundDecal, type DecalShape } from './GroundDecal';
+import { paletteFor } from './palette';
+import { UnitViews } from './UnitViews';
+import { CombatVfx } from './Vfx';
+
+const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'] as const;
+
+const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
+  cooldown: 'On cooldown',
+  mana: 'Not enough mana',
+  cc: "Can't cast right now",
+  locked: 'Not unlocked yet',
+  dead: 'You are dead',
+};
+
+export interface CombatDeps {
+  world: World;
+  input: Input;
+  player: PlayerController;
+  camera: THREE.PerspectiveCamera;
+}
+
+/**
+ * The training ground: the player's god, three training posts in front of
+ * the temple, and an enemy bot holding the north side. Owns the simulation
+ * and connects it to input, the 3D views and the HUD.
+ *
+ * `update` runs on the fixed step (after the player controller); `frame`
+ * runs once per rendered frame (after the controller places the model).
+ */
+export class CombatGame implements Updatable {
+  readonly sim: Sim;
+  player!: Unit;
+  bot!: Unit;
+  private readonly views: UnitViews;
+  private readonly vfx: CombatVfx;
+  private readonly hud: CombatHud;
+  private readonly menu: LoadoutMenu;
+  private readonly body: Body;
+  private readonly bases: Record<'order' | 'chaos', BaseZone>;
+  private preview: { slot: number; code: string } | null = null;
+  private readonly shapeDecal: GroundDecal;
+  private readonly rangeDecal: GroundDecal;
+  private suppressBasic = false;
+  private readonly ray = new THREE.Vector3();
+  private readonly groundAt: (x: number, z: number) => number;
+
+  constructor(private readonly deps: CombatDeps) {
+    const { world, player } = deps;
+    this.groundAt = (x, z) => world.collision.groundAt(x, z);
+    const spawn = world.spawn;
+    this.bases = {
+      order: { x: spawn.x, z: spawn.z + 2, radius: 9 },
+      chaos: { x: 0, z: -62, radius: 9 },
+    };
+    this.sim = new Sim(world.collision, this.bases);
+    this.sim.summonFactory = (owner, kind, at, i) => {
+      const s = summonUnit(owner, kind, at, i);
+      if (kind === 'einherjar') s.brain = new SummonBrain(this.sim, s);
+      return s;
+    };
+
+    // The player's body is the controller: it keeps owning normal movement,
+    // the simulation moves it for dashes, leaps and knockbacks.
+    this.body = {
+      get x() { return player.position.x; },
+      set x(v) { player.position.x = v; },
+      get y() { return player.position.y; },
+      set y(v) { player.position.y = v; },
+      get z() { return player.position.z; },
+      set z(v) { player.position.z = v; },
+      get yaw() { return player.yaw; },
+      set yaw(v) { player.yaw = v; },
+      // keep the camera's aim through blinks; only respawns and recalls turn the god
+      teleport: (x, z, yaw) => player.spawn(x, z, yaw !== undefined && this.isHomeTeleport(x, z) ? yaw : player.yaw),
+    };
+
+    this.vfx = new CombatVfx(this.groundAt);
+    world.vfx.add(this.vfx.group);
+    this.shapeDecal = new GroundDecal(this.groundAt);
+    this.rangeDecal = new GroundDecal(this.groundAt);
+    this.shapeDecal.setStyle('telegraph');
+    this.rangeDecal.setStyle('telegraph');
+    this.shapeDecal.mesh.visible = this.rangeDecal.mesh.visible = false;
+    world.vfx.add(this.shapeDecal.mesh, this.rangeDecal.mesh);
+
+    this.player = godUnit(godById('zeus')!, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
+    this.sim.add(this.player);
+    this.views = new UnitViews(this.player, player.model);
+    world.actors.add(this.views.group);
+    this.setPlayerModel('zeus');
+
+    this.hud = new CombatHud(this.player, deps.camera, (u, out) => this.views.headOf(u, out));
+    this.menu = new LoadoutMenu({
+      combatant: () => this.player.combatant,
+      gods: GODS,
+      switchGod: (id) => this.switchGod(id),
+      practiceLevel: (lvl) => this.practiceLevel(lvl),
+      practiceFavor: () => {
+        const c = this.player.combatant;
+        c.gainFavor(Math.max(0, FAVOR_THRESHOLDS[FAVOR_THRESHOLDS.length - 1]! - c.favor));
+      },
+      onClose: () => undefined,
+    });
+
+    // Training posts on the temple plaza, facing the fountain.
+    for (const x of [-6, 0, 6]) {
+      this.sim.add(dummyUnit(godById('zeus')!, 'chaos', { x, z: 9 + Math.abs(x) * 0.25, yaw: Math.PI }));
+    }
+
+    // An enemy Thor holds the north side of the temple.
+    this.bot = godUnit(godById('thor')!, 'chaos', { x: this.bases.chaos.x, z: this.bases.chaos.z, yaw: Math.PI });
+    this.bot.brain = new GodBot(this.sim, this.bot, { anchor: { x: 0, z: -24 }, leash: 48, aggro: 24, aggression: 0.45 });
+    this.sim.add(this.bot);
+    this.sim.teleport(this.bot, 0, -24, Math.PI);
+    this.sim.drainEvents();
+  }
+
+  private isHomeTeleport(x: number, z: number): boolean {
+    return Math.hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
+  }
+
+  // -------------------------------------------------------------------------
+  // Fixed step
+
+  update(dt: number): void {
+    this.views.beforeStep(this.sim.units);
+    this.sim.step(dt);
+    this.views.afterStep(this.sim.units);
+
+    // the bot keeps pace with the player so fights stay fair
+    const pc = this.player.combatant;
+    const bc = this.bot.combatant;
+    if (bc.level < pc.level) bc.gainXp(XP_TABLE[pc.level - 1]! - bc.xp);
+
+    this.deps.player.movement = {
+      speed: this.sim.moveSpeed(this.player),
+      canMove: this.sim.canMove(this.player),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Per frame
+
+  frame(dt: number, alpha: number, time: number): void {
+    const input = this.deps.input;
+    this.updateAim();
+
+    if (input.wasPressed('KeyK')) this.toggleMenu();
+    if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
+
+    if (!this.menu.isOpen) this.handleCombatInput();
+
+    for (const e of this.sim.drainEvents()) {
+      this.vfx.onEvent(e);
+      this.views.onEvent(e);
+      this.hud.onEvent(e);
+      if ((e.type === 'levelUp' || e.type === 'reward' || e.type === 'recall') && e.unit === this.player) this.menu.refresh();
+    }
+
+    this.views.frame(this.sim.units, dt, alpha);
+    this.vfx.frame(this.sim, dt, time);
+    this.updatePreview();
+    this.hud.setPreview(this.preview?.slot ?? null);
+    this.hud.frame(this.sim.units, dt);
+    const inBase = this.player.combatant.inBase;
+    if (inBase !== this.wasInBase) {
+      this.wasInBase = inBase;
+      this.menu.refresh();
+    }
+  }
+
+  private wasInBase = true;
+
+  private toggleMenu(): void {
+    if (this.menu.isOpen) {
+      this.menu.close();
+      return;
+    }
+    this.cancelPreview();
+    this.menu.open();
+    document.exitPointerLock?.();
+  }
+
+  private handleCombatInput(): void {
+    const input = this.deps.input;
+    const u = this.player;
+
+    if (input.wasPressed('KeyB')) {
+      if (this.sim.startRecall(u)) this.cancelPreview();
+    }
+
+    SLOT_CODES.forEach((code, slot) => {
+      if (!input.wasPressed(code)) return;
+      if (this.preview?.slot === slot) {
+        this.castSlot(slot);
+        return;
+      }
+      const err = u.combatant.canCast(slot);
+      if (err) {
+        this.denied(slot, err);
+        return;
+      }
+      const t = u.combatant.resolve(slot).targeting;
+      // self casts fire at once; everything else shows where it will land first
+      if (t.type === 'self') this.castSlot(slot);
+      else this.preview = { slot, code };
+    });
+
+    if (this.preview) {
+      if (input.isMouseDown(2)) this.cancelPreview();
+      else if (input.isMouseDown(0) && input.locked) {
+        this.castSlot(this.preview.slot);
+        this.suppressBasic = true;
+      } else if (!input.isDown(this.preview.code)) this.castSlot(this.preview.slot);
+    }
+
+    if (!input.isMouseDown(0)) this.suppressBasic = false;
+    if (!this.preview && !this.suppressBasic && input.locked && input.isMouseDown(0) && u.alive) this.sim.basic(u);
+  }
+
+  private castSlot(slot: number): void {
+    this.preview = null;
+    const err = this.sim.cast(this.player, slot);
+    if (err) this.denied(slot, err);
+  }
+
+  private denied(slot: number, err: CastError | 'forced'): void {
+    this.hud.deny(slot);
+    const msg = err === 'locked' && slot === ULTIMATE_SLOT ? 'Ultimate unlocks at level 5' : CAST_MESSAGES[err];
+    if (msg) this.hud.toast(msg, 'warn');
+  }
+
+  private cancelPreview(): void {
+    this.preview = null;
+  }
+
+  /** The ground point under the crosshair, by marching the camera's center ray. */
+  private updateAim(): void {
+    const cam = this.deps.camera;
+    const u = this.player;
+    const dir = cam.getWorldDirection(this.ray);
+    const o = cam.position;
+    let hit: { x: number; z: number } | null = null;
+    for (let t = 1; t < 140; t += 0.5) {
+      const x = o.x + dir.x * t;
+      const y = o.y + dir.y * t;
+      const z = o.z + dir.z * t;
+      if (y <= this.groundAt(x, z)) {
+        hit = { x, z };
+        break;
+      }
+    }
+    const f = u.forward;
+    if (!hit) hit = { x: u.x + f.x * 60, z: u.z + f.z * 60 };
+    // never aim behind the god (steep camera angles can hit the ground between camera and god)
+    const ahead = (hit.x - u.x) * f.x + (hit.z - u.z) * f.z;
+    if (ahead < 1.5) hit = { x: u.x + f.x * 1.5, z: u.z + f.z * 1.5 };
+    u.aim.x = hit.x;
+    u.aim.z = hit.z;
+  }
+
+  private updatePreview(): void {
+    const show = (d: GroundDecal, on: boolean) => (d.mesh.visible = on);
+    if (!this.preview || !this.player.alive) {
+      show(this.shapeDecal, false);
+      show(this.rangeDecal, false);
+      return;
+    }
+    const u = this.player;
+    const cast = u.combatant.resolve(this.preview.slot);
+    const t = cast.targeting;
+    const p = paletteFor(u.combatant.god.id);
+    const S = WORLD_SCALE;
+    const range = (r: number) => r * S * cast.rangeScale;
+    const radius = (r: number) => r * S * cast.radiusScale;
+    const dir = this.sim.aimDir(u);
+    const yaw = Math.atan2(-dir.x, -dir.z);
+    this.shapeDecal.setColors(p.vfx, p.core);
+    this.rangeDecal.setColors(p.vfx, p.core);
+    this.shapeDecal.opacity.value = 0.9;
+    this.rangeDecal.opacity.value = 0.45;
+
+    let shape: DecalShape | null = null;
+    let at = { x: u.x, z: u.z };
+    let ring: number | null = null;
+    switch (t.type) {
+      case 'projectile':
+        shape = { type: 'rect', length: range(t.range), width: Math.max(1, radius(t.radius) * 2) };
+        break;
+      case 'line':
+        shape = { type: 'rect', length: range(t.range), width: radius(t.width) };
+        break;
+      case 'dash':
+        shape = { type: 'rect', length: t.distance * S * cast.rangeScale, width: radius(t.width) };
+        break;
+      case 'cone':
+        shape = { type: 'cone', range: range(t.range), angle: t.angle };
+        break;
+      case 'ground':
+      case 'leap':
+        shape = { type: 'circle', radius: radius(t.radius) };
+        at = this.sim.aimPoint(u, range(t.range));
+        ring = range(t.range);
+        break;
+      case 'ally':
+        ring = range(t.range);
+        break;
+      case 'self':
+        if (t.radius !== undefined) shape = { type: 'circle', radius: radius(t.radius) };
+        break;
+    }
+    show(this.shapeDecal, !!shape);
+    if (shape) this.shapeDecal.place(shape, at.x, at.z, shape.type === 'circle' ? 0 : yaw);
+    show(this.rangeDecal, ring !== null);
+    if (ring !== null) this.rangeDecal.place({ type: 'ring', radius: ring, width: 0.25 }, u.x, u.z, 0);
+  }
+
+  // -------------------------------------------------------------------------
+  // God switching and practice
+
+  private setPlayerModel(godId: string): void {
+    const p = paletteFor(godId);
+    const ctrl = this.deps.player;
+    const old = ctrl.model;
+    const model = new GodModel({ cloth: p.cloth, trim: p.trim, glow: p.glow });
+    old.root.parent?.add(model.root);
+    old.root.parent?.remove(old.root);
+    ctrl.model = model;
+    ctrl.render(0, 1);
+    this.views.setPlayer(this.player, model);
+  }
+
+  private switchGod(id: string): string | null {
+    const def = godById(id);
+    if (!def || def.id === this.player.combatant.god.id) return null;
+    if (!this.player.combatant.inBase) return 'notInBase';
+    const old = this.player;
+    const next = godUnit(def, 'order', old.home, this.body);
+    next.combatant.gainXp(old.combatant.xp);
+    next.combatant.gainFavor(old.combatant.favor);
+    this.sim.remove(old);
+    this.sim.add(next);
+    this.player = next;
+    this.setPlayerModel(id);
+    this.hud.setPlayer(next);
+    return null;
+  }
+
+  private practiceLevel(level: number): void {
+    const c = this.player.combatant;
+    const need = XP_TABLE[level - 1]! - c.xp;
+    if (need > 0) c.gainXp(need);
+  }
+
+  /** For automated checks and debugging from the console. */
+  debugState() {
+    return {
+      player: { god: this.player.combatant.god.id, level: this.player.combatant.level, hp: this.player.combatant.health, x: this.player.x, z: this.player.z },
+      units: this.sim.units.map((u) => ({ name: u.name, team: u.team, alive: u.alive, hp: Math.round(u.combatant.health), x: +u.x.toFixed(1), z: +u.z.toFixed(1) })),
+      projectiles: this.sim.projectiles.length,
+      zones: this.sim.zones.length,
+    };
+  }
+}

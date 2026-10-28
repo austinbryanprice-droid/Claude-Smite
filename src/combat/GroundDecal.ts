@@ -16,7 +16,7 @@ const STYLE = { telegraph: 0, zone: 1, flash: 2 } as const;
 /**
  * A glowing shape painted on the ground. The mesh is rebuilt in world space
  * and every vertex is dropped onto the terrain, so it hugs steps and slopes
- * instead of clipping into them. Additive and HDR, so it feeds bloom.
+ * instead of clipping into them. HDR color, so it feeds bloom.
  *
  * Shapes are built in local space facing -Z (yaw 0), matching the units.
  */
@@ -36,7 +36,6 @@ export class GroundDecal {
     const mat = new THREE.MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
     const edge = attribute('edge', 'float');
@@ -57,12 +56,14 @@ export class GroundDecal {
     const isFlash = smoothstep(1.5, 2.0, this.style);
     const isTele = float(1).sub(isZone).sub(isFlash);
 
-    const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(0.85))).add(isFlash.mul(float(0.55).add(edge.mul(0.45))));
+    const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(1.25))).add(isFlash.mul(float(0.55).add(edge.mul(0.45))));
     const rimStrength = isTele.mul(2.2).add(isZone.mul(3.0)).add(isFlash.mul(2.0));
     const intensity = body.add(rim.mul(rimStrength));
-    const hot = mix(this.color, this.core, smoothstep(0.6, 1.4, intensity));
-    mat.colorNode = vec4(hot.mul(intensity).mul(3.2).mul(this.opacity), 1);
-    mat.opacityNode = this.opacity;
+    // Alpha-blended, not additive: additive light vanishes on the white marble.
+    // HDR color (above 1) still feeds bloom so rims and veins glow.
+    const hot = mix(this.color, this.core, smoothstep(1.2, 2.6, intensity));
+    mat.colorNode = vec4(hot.mul(float(0.9).add(intensity.mul(1.4))), 1);
+    mat.opacityNode = intensity.mul(0.75).clamp(0, 0.95).mul(this.opacity);
 
 
     this.mesh = new THREE.Mesh(this.geometry, mat);

@@ -4,19 +4,23 @@ import {
 } from '../render/tsl';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
-import type { FlashShape, SimEvent, Unit } from '../sim/Unit';
+import type { FlashShape, SimEvent } from '../sim/Unit';
 import { GroundDecal, type DecalShape } from './GroundDecal';
 import { paletteFor, type GodPalette } from './palette';
 
 type Ground = (x: number, z: number) => number;
 
-/** A soft round additive sprite whose color and brightness come from uniforms. */
-function glowMaterial(col: any, intensity: any, softness = 2): THREE.SpriteNodeMaterial {
-  const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+/**
+ * A soft round sprite. Additive sprites are hot cores; alpha-blended ones are
+ * colored glows that stay saturated even over sunlit marble (additive light
+ * washes out to white there). Colors above 1 feed bloom either way.
+ */
+function glowMaterial(col: any, intensity: any, softness = 2, additive = true, alpha = 1): THREE.SpriteNodeMaterial {
+  const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
   const r = uv().sub(0.5).length().mul(2);
   const f = smoothstep(1, 0, r).pow(softness);
-  m.colorNode = vec4(col.mul(intensity).mul(f), 1);
-  m.opacityNode = f;
+  m.colorNode = vec4(col.mul(intensity).mul(additive ? f : 1), 1);
+  m.opacityNode = f.mul(alpha);
   return m;
 }
 
@@ -58,9 +62,9 @@ class ProjectileView {
   size = 1;
 
   constructor() {
-    this.coreSprite = new THREE.Sprite(glowMaterial(this.hot, float(9), 1.5));
-    this.halo = new THREE.Sprite(glowMaterial(this.main, float(3.2), 2.2));
-    const trailMat = glowMaterial(this.main, float(2.2), 2);
+    this.coreSprite = new THREE.Sprite(glowMaterial(this.hot, float(5), 2.5));
+    this.halo = new THREE.Sprite(glowMaterial(this.main, float(1.8), 1.6, false, 0.75));
+    const trailMat = glowMaterial(this.main, float(1.5), 1.8, false, 0.55);
     for (let i = 0; i < TRAIL; i++) {
       const s = new THREE.Sprite(trailMat);
       this.trail.push(s);
@@ -86,9 +90,9 @@ class ProjectileView {
     this.history.unshift(at.clone());
     const flicker = 1 + Math.sin(t * 40) * 0.08;
     this.coreSprite.position.copy(at);
-    this.coreSprite.scale.setScalar(this.size * 0.9 * flicker);
+    this.coreSprite.scale.setScalar(this.size * 0.7 * flicker);
     this.halo.position.copy(at);
-    this.halo.scale.setScalar(this.size * 3.2);
+    this.halo.scale.setScalar(this.size * 2.6);
     this.trail.forEach((s, i) => {
       // trail sprites sit between history samples so fast shots stay continuous
       const a = this.history[Math.min(i, this.history.length - 1)]!;
@@ -112,7 +116,7 @@ class Burst {
 
   constructor() {
     const fade = float(1).sub(this.age.div(0.6)).clamp(0, 1);
-    this.flash = new THREE.Sprite(glowMaterial(this.hot, fade.pow(2).mul(10), 1.6));
+    this.flash = new THREE.Sprite(glowMaterial(mix(this.main, this.hot, 0.3).mul(2.5), float(1), 1.8, false, fade.pow(1.5).mul(0.9)));
     this.flash.frustumCulled = false;
     this.group.add(this.flash);
 
@@ -136,7 +140,7 @@ class Burst {
     mat.scaleNode = vec2(s, s);
     const r = uv().sub(0.5).length();
     const dot = smoothstep(0.5, 0, r);
-    mat.colorNode = vec4(mix(this.main, this.hot, h3).mul(12).mul(fade), 1);
+    mat.colorNode = vec4(mix(this.main, this.hot, h3.mul(0.6)).mul(9).mul(fade), 1);
     mat.opacityNode = dot.mul(fade);
     const sparks = new THREE.Sprite(mat);
     (sparks as any).count = COUNT;
@@ -158,7 +162,7 @@ class Burst {
   update(dt: number): boolean {
     this.age.value += dt;
     const k = Math.min(1, this.age.value / 0.18);
-    this.flash.scale.setScalar((0.8 + k * 2.4) * this.power.value);
+    this.flash.scale.setScalar((1.0 + k * 1.6) * this.power.value);
     return this.age.value < this.life;
   }
 }
@@ -186,7 +190,7 @@ class ZoneView {
     const s = float(0.07).mul(float(1).sub(life)).mul(hash(id.mul(1.3)).add(0.5));
     mat.scaleNode = vec2(s, s);
     const dot = smoothstep(0.5, 0, uv().sub(0.5).length());
-    mat.colorNode = vec4(this.main.mul(10).mul(this.fade), 1);
+    mat.colorNode = vec4(this.main.mul(7).mul(this.fade), 1);
     mat.opacityNode = dot.mul(smoothstep(1, 0.5, life)).mul(this.fade);
     const motes = new THREE.Sprite(mat);
     (motes as any).count = COUNT;
@@ -382,11 +386,11 @@ export class CombatVfx {
   private placeLights(sim: Sim): void {
     const sources: { x: number; y: number; z: number; color: number; intensity: number }[] = [];
     for (const z of sim.zones) {
-      sources.push({ x: z.x, y: this.ground(z.x, z.z) + 1.2, z: z.z, color: paletteFor(z.owner.combatant.god.id).vfx, intensity: 40 });
+      sources.push({ x: z.x, y: this.ground(z.x, z.z) + 1.2, z: z.z, color: paletteFor(z.owner.combatant.god.id).vfx, intensity: 14 });
     }
     for (const p of sim.projectiles) {
       if (!p.cast) continue;
-      sources.push({ x: p.x, y: this.ground(p.x, p.z) + PROJECTILE_HEIGHT, z: p.z, color: paletteFor(p.owner.combatant.god.id).vfx, intensity: 25 });
+      sources.push({ x: p.x, y: this.ground(p.x, p.z) + PROJECTILE_HEIGHT, z: p.z, color: paletteFor(p.owner.combatant.god.id).vfx, intensity: 9 });
     }
     this.lights.forEach((l, i) => {
       const s = sources[i];
@@ -400,7 +404,4 @@ export class CombatVfx {
     });
   }
 }
-
-/** Units the view needs to know about to place unit-attached effects. */
-export type UnitLookup = (u: Unit) => THREE.Object3D | undefined;
 

@@ -82,7 +82,7 @@ export class CombatHud {
   private loadoutKey = '';
 
   constructor(
-    private readonly player: Unit,
+    private player: Unit,
     private readonly camera: THREE.Camera,
     private readonly headOf: (u: Unit, out: THREE.Vector3) => THREE.Vector3 | null,
   ) {
@@ -122,6 +122,13 @@ export class CombatHud {
     this.death = el('div', 'ch-death', this.root, '<div class="ch-death-title">Slain</div><div>Returning in <span></span></div>');
     this.deathTimer = this.death.querySelector('span')!;
     this.toastBox = el('div', 'ch-toasts', this.root);
+  }
+
+  setPlayer(u: Unit): void {
+    this.player = u;
+    this.loadoutKey = '';
+    for (const b of this.bars.values()) b.el.remove();
+    this.bars.clear();
   }
 
   toast(text: string, kind: 'info' | 'warn' | 'gold' = 'info'): void {

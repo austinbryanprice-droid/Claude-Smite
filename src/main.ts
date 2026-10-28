@@ -11,6 +11,7 @@ import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from '
 import { TextureLibrary } from './scene/Materials';
 import { World } from './scene/World';
 import { Hud } from './ui/Hud';
+import { CombatGame } from './combat/CombatGame';
 
 async function main(): Promise<void> {
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
@@ -62,6 +63,8 @@ async function main(): Promise<void> {
 
   const loop = new Loop();
   loop.addFixed(player);
+  const combat = new CombatGame({ world, input, player, camera });
+  loop.addFixed(combat);
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);
   follow.update(1 / 60);
@@ -76,6 +79,7 @@ async function main(): Promise<void> {
     if (wheel) follow.zoom(wheel);
     const dt = loop.tick(now);
     player.render(dt, loop.alpha);
+    combat.frame(dt, loop.alpha, loop.time);
     follow.update(dt);
     world.update(dt, loop.time, god.root.position);
     post.render();
@@ -108,7 +112,7 @@ async function main(): Promise<void> {
   };
 
   // Hooks for automated screenshots and for gameplay code during development.
-  const debug = { grading, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
+  const debug = { grading, combat, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
   (window as unknown as { __game: typeof debug }).__game = debug;
 }
 
