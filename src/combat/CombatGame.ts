@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { GodModel } from '../actors/GodModel';
+import { createGodModel } from './godModels';
 import type { Input } from '../core/Input';
 import type { Updatable } from '../core/Loop';
 import type { CastError } from '../game/combatant';
@@ -336,10 +336,9 @@ export class CombatGame implements Updatable {
   // God switching and practice
 
   private setPlayerModel(godId: string): void {
-    const p = paletteFor(godId);
     const ctrl = this.deps.player;
     const old = ctrl.model;
-    const model = new GodModel({ cloth: p.cloth, trim: p.trim, glow: p.glow });
+    const model = createGodModel(godId);
     old.root.parent?.add(model.root);
     old.root.parent?.remove(old.root);
     ctrl.model = model;

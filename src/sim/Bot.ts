@@ -11,6 +11,12 @@ export interface BotOptions {
   aggro: number;
   /** Chance per decision (about 3 a second) to use a ready skill. */
   aggression: number;
+  /** Replaces the default "nearest enemy near the anchor" target choice. */
+  choose?: () => Unit | null;
+  /** Next waypoint toward a goal, for maps with walls between lanes. */
+  route?: (goal: Point) => Point;
+  /** Channel a recall when low and nobody is close, instead of walking home. */
+  recall?: boolean;
 }
 
 /**
@@ -39,14 +45,18 @@ export class GodBot implements Brain {
 
     if (hp < 0.25) this.retreating = true;
     if (this.retreating) {
-      if (hp > 0.95) this.retreating = false;
+      if (hp > 0.95 || c.inBase && hp > 0.9) this.retreating = false;
       else {
+        if (u.recall > 0) return;
+        const threat = sim.enemiesOf(u).some((t) => (t.kind === 'god' || t.kind === 'minion') && Math.hypot(t.x - u.x, t.z - u.z) < 15);
+        if (this.options.recall && !threat && !c.inBase && sim.startRecall(u)) return;
         this.moveToward(u.home, 1.5);
         return;
       }
     }
+    if (u.recall > 0) return;
 
-    const target = this.pickTarget();
+    const target = this.options.choose ? this.options.choose() : this.pickTarget();
     if (!target) {
       this.moveToward(this.options.anchor, 3);
       return;
@@ -78,7 +88,9 @@ export class GodBot implements Brain {
     this.decide -= dt;
     if (this.decide <= 0) {
       this.decide = 0.3;
-      if (sim.rng() < this.options.aggression) this.tryCast(dist, target);
+      // skills are for gods; on minions only now and then, with mana to spare
+      const chance = target.kind === 'god' ? this.options.aggression : target.kind === 'minion' && c.mana > c.stats.maxMana * 0.5 ? this.options.aggression * 0.3 : 0;
+      if (sim.rng() < chance) this.tryCast(dist, target);
     }
   }
 
@@ -110,11 +122,13 @@ export class GodBot implements Brain {
     sim.cast(u, slot);
   }
 
-  private moveToward(p: Point, stopAt: number): void {
+  private moveToward(goal: Point, stopAt: number): void {
+    if (Math.hypot(goal.x - this.u.x, goal.z - this.u.z) <= stopAt) return;
+    const p = this.options.route ? this.options.route(goal) : goal;
     const dx = p.x - this.u.x;
     const dz = p.z - this.u.z;
     const d = Math.hypot(dx, dz);
-    if (d <= stopAt) return;
+    if (d < 0.05) return;
     this.u.move = { x: dx / d, z: dz / d };
     this.u.body.yaw = Math.atan2(-dx, -dz);
   }

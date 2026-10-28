@@ -13,7 +13,12 @@ export function worldSpeed(moveSpeed: number): number {
   return (moveSpeed / 100) * WORLD_SCALE;
 }
 
-export type UnitKind = 'god' | 'dummy' | 'summon';
+export type UnitKind = 'god' | 'dummy' | 'summon' | 'minion' | 'tower' | 'phoenix' | 'titan';
+
+/** Towers, Phoenixes and Titans: never move, take only basic attacks, and never respawn on their own. */
+export function isStructure(u: { kind: UnitKind }): boolean {
+  return u.kind === 'tower' || u.kind === 'phoenix' || u.kind === 'titan';
+}
 
 /**
  * Where a unit is. Bots own a plain object; the player's body is an adapter
@@ -78,6 +83,18 @@ export class Unit {
   /** Seconds since the last cast or attack, for the cast pose. */
   sinceAction = 99;
   wasAlive = true;
+  /** Gods respawn at home; minions are removed a moment after death and structures stay as rubble. */
+  respawns = true;
+  /** A structure that cannot be damaged yet (the one in front of it still stands). */
+  shielded: () => boolean = () => false;
+  /** The last time this unit damaged an enemy god, for tower aggro. */
+  lastGodHit: { victim: Unit; at: number } | null = null;
+  /** Enemy gods that damaged this unit and when, for assists. */
+  readonly damagedBy = new Map<Unit, number>();
+  /** Seconds since death, for units that do not respawn. */
+  deadFor = 0;
+  /** Free-form tag the match uses (lane, minion type). */
+  tag = '';
 
   constructor(
     readonly kind: UnitKind,
@@ -130,6 +147,8 @@ export interface Projectile {
   radius: number;
   pierce: boolean;
   bounces: number;
+  /** Structure shots home in on their target. */
+  homing: Unit | null;
   readonly hit: Set<Unit>;
   alive: boolean;
 }
@@ -173,7 +192,7 @@ export type SimEvent =
   | { type: 'cast'; unit: Unit; cast: ResolvedSkill; x: number; z: number }
   | { type: 'basic'; unit: Unit; melee: boolean }
   | { type: 'impact'; x: number; z: number; owner: Unit; big: boolean }
-  | { type: 'death'; unit: Unit; killer: Unit | null }
+  | { type: 'death'; unit: Unit; killer: Unit | null; assists: Unit[] }
   | { type: 'respawn'; unit: Unit }
   | { type: 'levelUp'; unit: Unit; level: number }
   | { type: 'reward'; unit: Unit; xp: number; favor: number }

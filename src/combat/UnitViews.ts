@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { GodModel } from '../actors/GodModel';
+import type { GodModel } from '../actors/GodModel';
+import { createGodModel } from './godModels';
 import { float, fract, length, mix, mx_noise_float, positionLocal, smoothstep, uv, vec3 } from '../render/tsl';
 import type { SimEvent, Unit } from '../sim/Unit';
-import { paletteFor } from './palette';
 
 /** A wooden training post with a straw body and a painted target shield. */
 function buildDummy(): THREE.Group {
@@ -153,9 +153,8 @@ export class UnitViews {
       height = 2.3;
       this.group.add(root);
     } else {
-      const p = paletteFor(u.combatant.god.id);
       const summoned = u.kind === 'summon' && u.name === 'Einherjar';
-      model = new GodModel(summoned ? { cloth: 0x4a4f5a, trim: 0xd8a23a, glow: 0xffd27a } : { cloth: p.cloth, trim: p.trim, glow: p.glow });
+      model = createGodModel(u.combatant.god.id, summoned ? 'einherjar' : 'god');
       root = model.root;
       if (summoned) root.scale.setScalar(0.88);
       this.group.add(root);
