@@ -5,3 +5,7 @@ dist/
 public/assets/
 assets-src/
 *.part
+
+*.log
+.DS_Store
+__pycache__/
