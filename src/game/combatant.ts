@@ -209,11 +209,13 @@ export class Combatant {
   }
 
   addTimedMod(stat: StatKey, amount: number, duration: number): void {
+    if (!this.alive) return;
     this.mods.push({ stat, amount, remaining: duration });
     this.invalidate();
   }
 
   addShield(amount: number, duration: number): void {
+    if (!this.alive) return;
     this.shields.push({ amount, remaining: duration });
   }
 
@@ -327,6 +329,7 @@ export class Combatant {
   applySkillTo(cast: ResolvedSkill, target: Combatant): void {
     const enemy = target.team !== this.team;
     for (const e of cast.hits) {
+      if (!target.alive) return; // a lethal hit carries nothing into the next life
       switch (e.kind) {
         case 'damage':
           if (enemy) this.dealDamage(target, e.amount, e.damageType, true);
@@ -449,6 +452,8 @@ export class Combatant {
 
   respawn(): void {
     this.alive = true;
+    this.mods = [];
+    this.shields = [];
     this.inBase = true;
     this.invalidate();
     this.health = this.stats.maxHealth;
@@ -459,6 +464,11 @@ export class Combatant {
   // Tick
 
   update(dt: number): void {
+    // Cooldowns keep running while dead so a respawn doesn't extend them.
+    for (const [id, c] of this.cooldowns) {
+      if (c <= dt) this.cooldowns.delete(id);
+      else this.cooldowns.set(id, c - dt);
+    }
     if (!this.alive) {
       this.respawnTimer -= dt;
       if (this.respawnTimer <= 0) this.respawn();
@@ -481,10 +491,6 @@ export class Combatant {
     }
 
     this.cc.update(dt);
-    for (const [id, c] of this.cooldowns) {
-      if (c <= dt) this.cooldowns.delete(id);
-      else this.cooldowns.set(id, c - dt);
-    }
     this.basicCooldown = Math.max(0, this.basicCooldown - dt);
     this.hardCCShieldCooldown = Math.max(0, this.hardCCShieldCooldown - dt);
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CCState, computeDamage, mitigation } from './combat';
 import { Combatant } from './combatant';
-import { anubis, loki, thor, zeus } from './gods';
+import { anubis, loki, odin, thor, zeus } from './gods';
 import { validateLoadout } from './loadout';
 import { MAX_TREE_POINTS, skillRank, treePointsEarned, XP_TABLE } from './progression';
 import { effectiveSlow, zeroStats } from './stats';
@@ -228,6 +228,30 @@ describe('combatant', () => {
     expect(z.shieldTotal).toBe(0);
     z.receiveCC('stun', 1);
     expect(z.shieldTotal).toBeGreaterThan(0);
+  });
+
+  it('keeps cooldowns ticking while dead', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(20));
+    z.cast(4);
+    const cd = z.cooldownOf(4);
+    z.takeDamage(1e6);
+    z.update(z.respawnTimer + 0.1);
+    expect(z.alive).toBe(true);
+    expect(z.cooldownOf(4)).toBeLessThan(cd - 50);
+  });
+
+  it('does not carry debuffs from a lethal hit into the next life', () => {
+    const o = new Combatant(odin, 'order');
+    const z = new Combatant(zeus, 'chaos');
+    expect(o.loadout[1]).toBe('odin.ravens');
+    const r = o.cast(1);
+    if (!r.ok) throw new Error(r.error);
+    z.health = 1;
+    o.applySkillTo(r.cast, z);
+    expect(z.alive).toBe(false);
+    z.update(z.respawnTimer + 0.1);
+    expect(z.stats.physicalProtection).toBe(zeus.base.physicalProtection);
   });
 
   it('heals allies but never damages them', () => {
