@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, color, cos, dot, float, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
-  time, uniform, uv, vec3,
+  abs, atan, color, cos, dot, float, fract, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
+  step, time, uniform, uv, vec3,
 } from '../../render/tsl';
 import { rng } from '../../core/random';
 import { ConquestLayout as L, type Camp, type CampKind } from '../../map/ConquestLayout';
@@ -106,6 +106,10 @@ export class ConquestProps {
   private readonly rocks: THREE.BufferGeometry[];
   /** Weathered grey-green stone for the lane walls, cooler than the temple sandstone. */
   private readonly wallStone: THREE.MeshStandardNodeMaterial;
+  /** Old, rain-streaked marble with moss creeping up from the ground, for the jungle ruins. */
+  private readonly ruinMarble: THREE.MeshStandardNodeMaterial;
+  /** Hoard gold that glints in scattered coins. */
+  private readonly hoardGold: THREE.MeshStandardNodeMaterial;
   /** Each buff camp's crystal brightness and light, by camp id, for `setCampActive`. */
   private readonly campGlow = new Map<string, { strength: any; light: THREE.PointLight }>();
 
@@ -118,6 +122,15 @@ export class ConquestProps {
     this.group.name = 'props';
     this.blocks = Array.from({ length: 6 }, (_, i) => chippedBlock(1.5, 0.75, 0.85, 6000 + i));
     this.rocks = Array.from({ length: 5 }, (_, i) => boulder(1, 6100 + i, 3));
+    this.ruinMarble = mats.marble.clone() as THREE.MeshStandardNodeMaterial;
+    const marble = mats.marble.colorNode as any;
+    // camp props are merged in camp space, so local y is height above the ground
+    const moss = smoothstep(2.2, 0.2, positionLocal.y.add(mx_noise_float(positionWorld.mul(1.7)).mul(0.9))).mul(0.9);
+    const streaks = mx_noise_float(vec3(positionWorld.x.mul(3), positionWorld.y.mul(0.4), positionWorld.z.mul(3))).mul(0.5).add(0.5);
+    this.ruinMarble.colorNode = mix(marble.mul(mix(float(0.42), float(0.62), streaks)).mul(vec3(0.95, 0.97, 0.9)), vec3(0.1, 0.16, 0.05), moss);
+    this.hoardGold = mats.gold.clone() as THREE.MeshStandardNodeMaterial;
+    const glint = pow(mx_noise_float(positionWorld.mul(9)).mul(0.5).add(0.5), float(18));
+    this.hoardGold.emissiveNode = color(0xffd37a).mul(glint.mul(2.5));
     this.wallStone = mats.sandstone.clone() as THREE.MeshStandardNodeMaterial;
     const sand = mats.sandstone.colorNode as any;
     this.wallStone.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.8).mul(vec3(0.78, 0.88, 0.76));
@@ -256,17 +269,27 @@ export class ConquestProps {
       const x = Math.cos(a) * ring;
       const z = Math.sin(a) * ring;
       const h = 1 + r() * 2.6;
-      add(columnBase(0.42), this.mats.marble, x, -0.05, z);
-      add(brokenShaft(0.42, h, 7000 + i + c.at[0]), this.mats.marble, x, 0.55, z);
+      add(columnBase(0.42), this.ruinMarble, x, -0.05, z);
+      add(brokenShaft(0.42, h, 7000 + i + c.at[0]), this.ruinMarble, x, 0.55, z);
       this.collision.addCircle(cx + x, cz + z, 0.65);
       if (r() < 0.4) {
         // a fallen drum beside it
-        const drum = add(flutedShaft(0.42, 0.9, 20, 40, 2), this.mats.marble, x * 1.12, 0.42, z * 1.12, r() * 3);
+        const drum = add(flutedShaft(0.42, 0.9, 20, 40, 2), this.ruinMarble, x * 1.12, 0.42, z * 1.12, r() * 3);
         drum.rotation.z = Math.PI / 2;
       }
     }
-    add(lathe([[0.001, 0], [1.5, 0], [1.5, 0.3], [1.25, 0.35], [1.1, 0.9], [1.3, 1.0], [0.001, 1.0]], 32), this.mats.sandstone, 0, -0.05, 0);
+    add(lathe([[0.001, 0], [1.5, 0], [1.5, 0.3], [1.25, 0.35], [1.1, 0.9], [1.3, 1.0], [0.001, 1.0]], 32), this.ruinMarble, 0, -0.05, 0);
     const strength = uniform(1);
+    // a glowing inlay ring in the camp's paving, and a rune band on the altar
+    const inlay = new THREE.MeshBasicNodeMaterial();
+    // broken into rune-like dashes so it reads as inlay, not a selection circle
+    const dash = step(0.35, fract(atan(positionLocal.z, positionLocal.x).mul(36 / (2 * Math.PI))));
+    inlay.colorNode = color(glow).mul(sin(time.mul(1.2).add(cx)).mul(0.2).add(1)).mul(1.3).mul(strength);
+    inlay.opacityNode = dash;
+    inlay.alphaTest = 0.5;
+    const ringGeo = new THREE.RingGeometry(L.radii.camp - 0.6, L.radii.camp - 0.48, 96).rotateX(-Math.PI / 2);
+    add(ringGeo, inlay, 0, 0.04, 0).castShadow = false;
+    add(new THREE.TorusGeometry(1.2, 0.05, 6, 48).rotateX(Math.PI / 2), inlay, 0, 0.62, 0).castShadow = false;
     const crystal = spinningCrystal(glow, strength);
     crystal.position.y = 2.0;
     camp.add(crystal);
@@ -318,8 +341,8 @@ export class ConquestProps {
       const z = Math.sin(a) * R;
       const broken = r() < 0.4;
       const h = broken ? 2 + r() * 3 : 7.5;
-      add(columnBase(0.55), this.mats.marble, x, -0.05, z);
-      add(broken ? brokenShaft(0.55, h, 7300 + i) : flutedShaft(0.55, h), this.mats.marble, x, 0.55, z);
+      add(columnBase(0.55), this.ruinMarble, x, -0.05, z);
+      add(broken ? brokenShaft(0.55, h, 7300 + i) : flutedShaft(0.55, h), this.ruinMarble, x, 0.55, z);
       if (!broken) add(new THREE.CylinderGeometry(0.75, 0.62, 0.35, 24), this.mats.gold, x, 0.55 + h + 0.17, z);
       this.collision.addCircle(cx + x, cz + z, 0.8);
     }
@@ -327,9 +350,15 @@ export class ConquestProps {
     for (let i = 0; i < 5; i++) {
       const a = Math.PI / 2 * (i % 2 ? 1 : -1) + (r() - 0.5) * 0.9;
       const d = R - 2.2 - r();
-      const heap = add(boulder(1.3 + r() * 0.8, 7400 + i, 3), this.mats.gold, Math.cos(a) * d, -0.2, Math.sin(a) * d);
+      const heap = add(boulder(1.3 + r() * 0.8, 7400 + i, 3), this.hoardGold, Math.cos(a) * d, -0.2, Math.sin(a) * d);
       heap.scale.set(1.2, 0.45, 1.2);
     }
+    const inlay = new THREE.MeshBasicNodeMaterial();
+    const dash = step(0.3, fract(atan(positionLocal.z, positionLocal.x).mul(60 / (2 * Math.PI))));
+    inlay.colorNode = color(0xffc04a).mul(sin(time.mul(0.9)).mul(0.15).add(1)).mul(1.2);
+    inlay.opacityNode = dash;
+    inlay.alphaTest = 0.5;
+    add(new THREE.RingGeometry(L.radii.boss - 1.3, L.radii.boss - 1.14, 128).rotateX(-Math.PI / 2), inlay, 0, 0.04, 0).castShadow = false;
     mergeStatic(pit);
     this.group.add(pit);
   }
