@@ -40,6 +40,8 @@ export class Showcase {
       if (view === 'side') g.root.rotation.y += Math.PI / 2;
       if (view === 'three') g.root.rotation.y += 0.6;
       if (this.pose.startsWith('clip:')) g.debugClip(this.pose.slice(5), Number(params.get('t') ?? 0));
+      const tint = params.get('tint');
+      if (tint) g.tintMetal(parseInt(tint, 16));
       const hide = (params.get('hide') ?? '').split(',').filter(Boolean);
       if (hide.length) g.root.traverse((o) => { if (hide.some((h) => o.name.startsWith(h))) o.visible = false; });
       parent.add(g.root);

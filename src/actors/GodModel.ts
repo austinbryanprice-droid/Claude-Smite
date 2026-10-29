@@ -3,6 +3,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { godAsset, type GodAsset } from './gods/assets';
 import { godMaterials } from './gods/materials';
 import { SecondaryPhysics } from './gods/Physics';
+import { color, luminance } from '../render/tsl';
 
 /** Locomotion input the model animates from. All values are per frame. */
 export interface LocomotionState {
@@ -126,6 +127,31 @@ export class GodModel {
 
     this.physics = new SecondaryPhysics(this.root, scene, this.asset.meta, this.bones, mats);
     this.mixer.update(0);
+  }
+
+  /**
+   * Recolors this instance's metal armor (gold and steel), e.g. a team color on a
+   * Titan statue. Clones the shared materials, so other gods are unaffected.
+   */
+  tintMetal(hex: number, amount = 1): void {
+    const done = new Map<THREE.Material, THREE.Material>();
+    this.root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const src = mesh.material as THREE.MeshPhysicalNodeMaterial;
+      if (!/^(gold|goldplain|steel)$/.test(src.name)) return;
+      let m = done.get(src);
+      if (!m) {
+        const c = src.clone();
+        const base = src.colorNode ?? color(src.color.getHex());
+        // keep the metal's light and dark detail, swap its hue for the tint
+        const lum = luminance(base);
+        c.colorNode = base.mix(color(hex).mul(lum.mul(2.2)), amount);
+        c.name = src.name;
+        done.set(src, (m = c));
+      }
+      mesh.material = m;
+    });
   }
 
   /** Dev: hold one clip (by name) instead of locomotion; null resumes. */
