@@ -248,7 +248,8 @@ export class GameAudio {
         this.at('god.death', u, { gain: u === me ? 1 : 0.8, ref: 10 }, 5);
         this.voice(u, 'death', 0.85, 5);
         if (killer === me) this.engine.play('kill.confirm', { gain: 0.7 }, 5);
-        if (this.conquest && killer?.kind === 'god') this.announceKill(u, killer);
+        const streak = this.endStreak(u, killer);
+        if (this.conquest && killer?.kind === 'god') this.announceKill(u, killer, streak);
         if (u === me) {
           this.streak = 0;
           this.herald.say('You have fallen.', 'bad', 2);
@@ -283,13 +284,18 @@ export class GameAudio {
     }
   }
 
-  private announceKill(victim: Unit, killer: Unit): void {
+  /** Any death ends a god's streak, whoever (or whatever) landed the blow. Returns the streak it ended. */
+  private endStreak(victim: Unit, killer: Unit | null): number {
+    const streak = this.streaks.get(victim) ?? 0;
+    this.streaks.set(victim, 0);
+    if (killer?.kind === 'god' && killer !== victim) this.streaks.set(killer, (this.streaks.get(killer) ?? 0) + 1);
+    return streak;
+  }
+
+  private announceKill(victim: Unit, killer: Unit, victimStreak: number): void {
     const me = this.me;
     const first = !this.firstBlood;
     this.firstBlood = true;
-    const victimStreak = this.streaks.get(victim) ?? 0;
-    this.streaks.set(victim, 0);
-    this.streaks.set(killer, (this.streaks.get(killer) ?? 0) + 1);
     if (killer === me && victim !== me) {
       this.streak++;
       const now = this.time;
