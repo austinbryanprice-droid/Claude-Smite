@@ -186,7 +186,7 @@ class Zeus(God):
         poly = kit.bolt_shape(L, 0.17, 5)
         bolt = extrude(poly, 0.03, 0.01)
         R = look_rotation(palm, across)  # bolt's long axis (+Y) across the fist
-        core = bolt.transformed(R=R, t=grip)
+        core = bolt.transformed(s=1.5, R=R, t=grip)  # oversized so it reads at game-camera distance
         self.add('bolt', 'glow', core, 'DEF-hand.R')
         # gold grip with flared guards
         path = np.array([grip - across * 0.07, grip, grip + across * 0.07])
