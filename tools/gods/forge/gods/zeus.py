@@ -42,7 +42,7 @@ class Zeus(God):
         waist = s1[1] - 0.1 - 0.03 * np.cos(np.clip(x / 0.2, -1, 1) * np.pi / 2)
         lower = smooth(y - waist, 0.0, 0.015)
         cuirass_f = np.minimum.reduce([torso, armhole, neckline, lower])
-        cuirass, W = shell.plate(b, cuirass_f, offset=0.016, thickness=0.009, rim=0.01, rim_width=0.026, smooth=5)
+        cuirass, W = shell.plate(b, cuirass_f, offset=0.016, thickness=0.009, rim=0.01, rim_width=0.026, smooth=5, sharpen=1.6)
         self.add('cuirass', 'gold', cuirass, W)
 
         # ---- toga sash over the left shoulder, across the chest

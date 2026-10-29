@@ -45,7 +45,7 @@ class Odin(God):
         neckline = smooth(nl - y, 0.0, 0.015)
         lower = smooth(y - (hips[1] + 0.08), 0.0, 0.015)
         plate_f = np.minimum.reduce([torso, armhole, neckline, lower])
-        plate, W = shell.plate(b, plate_f, offset=0.03, thickness=0.012, rim=0.012, rim_width=0.03, smooth=6)
+        plate, W = shell.plate(b, plate_f, offset=0.03, thickness=0.012, rim=0.012, rim_width=0.03, smooth=6, sharpen=1.6)
         self.add('cuirass', 'steel', plate, W)
         # gold raven-eye medallion
         cy = neck[1] - 0.22

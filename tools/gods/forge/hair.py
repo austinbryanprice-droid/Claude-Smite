@@ -105,8 +105,12 @@ def clumps(paths: list[np.ndarray], normals: np.ndarray, style: Style, widths=No
         K = len(path)
         t = np.linspace(0, 1, K)
         w = (widths[k] if widths is not None else style.width) * rng.uniform(0.8, 1.2)
-        prof_w = w * (np.clip(1 - t, 0, 1) ** (1 / style.taper)) * (0.7 + 0.3 * np.sin(np.clip(t * 1.3, 0, 1) * np.pi))
-        prof_w[-1] = w * 0.02
+        # stylized locks hold their width, swell a little, then taper in the last stretch
+        start = np.clip(1 - 0.45 * style.taper, 0.2, 0.75)
+        tt = np.clip((t - start) / (1 - start), 0, 1)
+        prof_w = w * (1 - (tt * tt * (3 - 2 * tt)) ** 1.2 * 0.94) * (0.78 + 0.22 * np.sin(np.clip(t * 1.6, 0, 1) * np.pi))
+        prof_w[0] *= 0.85
+        prof_w[-1] = w * 0.03
         section = np.stack([np.cos(a) * style.flatness, np.sin(a)], axis=1)
         m = sweep(path, section, prof_w, up=normals[k], cap=False)
         col = np.zeros((len(m.v), 4))

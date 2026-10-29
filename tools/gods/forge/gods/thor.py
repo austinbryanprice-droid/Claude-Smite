@@ -45,7 +45,7 @@ class Thor(God):
         waist = s1[1] - 0.07 - 0.04 * np.cos(np.clip(x / 0.2, -1, 1) * np.pi / 2)
         lower = smooth(y - waist, 0.0, 0.015)
         plate_f = np.minimum.reduce([torso, armhole, neckline, lower])
-        plate, W = shell.plate(b, plate_f, offset=0.02, thickness=0.012, rim=0.012, rim_width=0.03, smooth=5)
+        plate, W = shell.plate(b, plate_f, offset=0.02, thickness=0.012, rim=0.012, rim_width=0.03, smooth=5, sharpen=1.6)
         self.add('breastplate', 'steel', plate, W)
         # gold knotwork medallion at the sternum
         P = b.verts[b.used]

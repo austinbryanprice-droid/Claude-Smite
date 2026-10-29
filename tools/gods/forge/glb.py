@@ -73,7 +73,10 @@ class GlbWriter:
             if p.get('color') is not None:
                 attrs['COLOR_0'] = self.accessor(np.clip(p['color'] * 255 + 0.5, 0, 255).astype(np.uint8), normalized=True, target=34962)
             for k, v in p.get('extra', {}).items():
-                attrs['_' + k.upper()] = self.accessor(v.astype(np.float32), target=34962)
+                if k == 'ao':  # 0..1 occlusion fits in a normalized byte
+                    attrs['_AO'] = self.accessor(np.clip(v * 255 + 0.5, 0, 255).astype(np.uint8), normalized=True, target=34962)
+                else:
+                    attrs['_' + k.upper()] = self.accessor(v.astype(np.float32), target=34962)
             idx = p['indices'].reshape(-1)
             idx = idx.astype(np.uint16 if idx.max() < 65535 else np.uint32)
             out.append({'attributes': attrs, 'indices': self.accessor(idx, target=34963), 'material': self.material(p['material'])})

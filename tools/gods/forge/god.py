@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.sparse import coo_matrix
 
-from . import body as bodymod, export, mh, skin
+from . import ao, body as bodymod, export, mh, skin
 from .geo import Mesh, merge
 from .mathx import normalize
 from .regions import Fields
@@ -37,14 +37,35 @@ class God:
     height = 2.3
     shape = mh.Shape()
     bulk: dict = {}
+    definition: float = 0.7  # how strongly muscle forms are exaggerated (0 = MakeHuman as is)
 
     def __init__(self):
         self.body = bodymod.build(self.shape, self.height)
         if self.bulk:
             bodymod.bulk(self.body, self.bulk)
         self.F = Fields(self.body)
+        if self.definition:
+            self.define_muscles(self.definition)
         self.parts: list[export.Part] = []
         self.meta: dict = {'hipsScale': self.body.rig.hips_scale, 'height': self.height, 'chains': [], 'cloths': []}
+
+    def define_muscles(self, k: float):
+        """Unsharp-masks the body surface so muscle forms read from a game camera.
+        Leaves the face, hands and feet alone (their small features would turn lumpy)."""
+        from .shell import laplacian
+        b = self.body
+        tris = b.tris()
+        used = b.used
+        remap = -np.ones(len(b.verts), dtype=int)
+        remap[used] = np.arange(len(used))
+        P = b.verts[used]
+        T = remap[tris]
+        Ps = laplacian(P, T, 20, 0.6)
+        mask = 1 - np.clip(self.F.bones('head', 'hand', 'f_', 'thumb', 'foot', 'toe')[used] * 1.5, 0, 1)
+        P2 = P + (P - Ps) * (k * mask)[:, None]
+        b.verts[used] = P2
+        b.normals[:] = bodymod.vertex_normals(b.verts, b.faces)
+        self.F = Fields(b)
 
     # ---------------------------------------------------------------- parts
     def add(self, name: str, material: str, mesh: Mesh, weights: np.ndarray | str | None = None, transfer_only=None):
@@ -102,6 +123,7 @@ class God:
 
     def build(self, path) -> int:
         self.make()
+        ao.bake(self.parts)
         return export.write(path, self.body, self.parts, self.meta)
 
     def make(self):

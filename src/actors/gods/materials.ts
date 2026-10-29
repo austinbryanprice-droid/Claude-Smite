@@ -90,11 +90,21 @@ function studioEnv(): THREE.DataTexture {
       const y = d.y;
       let r: number, g: number, b: number;
       if (y > 0) {
-        const t = Math.pow(y, 0.5);
-        r = 1.0 + t * 1.1; g = 0.98 + t * 1.0; b = 1.0 + t * 0.8;
+        // dim zenith, bright band at the horizon: curved metal gets light-dark-light streaks
+        const t = Math.pow(y, 0.6);
+        const band = Math.exp(-y * y * 40) * 1.6;
+        r = 0.55 - t * 0.2 + band; g = 0.56 - t * 0.18 + band * 0.95; b = 0.62 - t * 0.1 + band * 0.85;
       } else {
         const t = Math.pow(-y, 0.4);
-        r = 0.55 - t * 0.42; g = 0.45 - t * 0.35; b = 0.34 - t * 0.27;
+        const band = Math.exp(-y * y * 60) * 0.9;
+        r = 0.28 - t * 0.22 + band; g = 0.2 - t * 0.16 + band * 0.85; b = 0.13 - t * 0.1 + band * 0.7;
+      }
+      // tall softboxes left and right of the key make vertical highlights
+      for (const sx of [-1, 1]) {
+        const ax = Math.abs(lon - sx * 1.15);
+        r += Math.exp(-ax * ax * 30) * Math.exp(-lat * lat * 3) * 1.4;
+        g += Math.exp(-ax * ax * 30) * Math.exp(-lat * lat * 3) * 1.35;
+        b += Math.exp(-ax * ax * 30) * Math.exp(-lat * lat * 3) * 1.3;
       }
       const k = Math.pow(Math.max(0, d.dot(key)), 60) * 14 + Math.pow(Math.max(0, d.dot(key)), 8) * 1.2;
       const rr = Math.pow(Math.max(0, d.dot(rimDir)), 40) * 7;
@@ -119,6 +129,8 @@ function studioEnv(): THREE.DataTexture {
 const edge = () => attribute('_edge', 'float');
 const side = () => attribute('_side', 'float');
 const data = () => attribute('color', 'vec4');
+/** Baked per-vertex ambient occlusion (tools/gods/forge/ao.py). */
+const ao = () => attribute('_ao', 'float');
 
 /** Fresnel-ish rim factor in view space, for the painted rim light Smite characters have. */
 const rim = () => pow(float(1).sub(saturate(normalView.dot(positionView.normalize().negate()))), 3);
@@ -268,6 +280,11 @@ function buildMaterials(id: string, variant?: string): Map<string, THREE.Materia
   m.set('eye', eyeMaterial(p.eye));
   m.set('gem', gemMaterial(p.gem));
   m.set('default', new THREE.MeshStandardNodeMaterial({ color: 0x888888 }));
-  for (const [name, mat] of m) mat.name = name;
+  for (const [name, mat] of m) {
+    mat.name = name;
+    // contact shadows on everything lit; glow and eyes stay bright
+    const nm = mat as THREE.MeshPhysicalNodeMaterial;
+    if (nm.colorNode && name !== 'glow' && name !== 'eye') nm.colorNode = nm.colorNode.mul(mix(float(1), ao(), 0.92));
+  }
   return m;
 }

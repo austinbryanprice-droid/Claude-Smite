@@ -90,6 +90,10 @@ class Sheet {
     const ones = new Float32Array(this.n).fill(1);
     this.geo.setAttribute('_edge', new THREE.BufferAttribute(ones, 1));
     this.geo.setAttribute('_side', new THREE.BufferAttribute(ones.slice(), 1));
+    // occlusion: shadowed where the sheet tucks under its belt or collar
+    const ao = new Float32Array(this.n);
+    for (let i = 0; i < this.n; i++) ao[i] = 0.55 + 0.45 * Math.min(1, Math.floor(i / cols) / Math.max(1, (rows - 1) * 0.2));
+    this.geo.setAttribute('_ao', new THREE.BufferAttribute(ao, 1));
     const index: number[] = [];
     for (let r = 0; r < rows - 1; r++) {
       for (let c = 0; c < cols - 1; c++) {
