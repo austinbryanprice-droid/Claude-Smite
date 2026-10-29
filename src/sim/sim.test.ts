@@ -5,7 +5,7 @@ import { XP_TABLE } from '../game/progression';
 import type { GodDef } from '../game/types';
 import { GodBot } from './Bot';
 import { body, dummyUnit, godUnit, summonUnit } from './factory';
-import { RECALL_TIME, Sim, type SimTerrain } from './Sim';
+import { GROUND_WARNING, RECALL_TIME, Sim, type SimTerrain } from './Sim';
 import { WORLD_SCALE, type SimEvent, type Unit } from './Unit';
 
 const flat: SimTerrain = { groundAt: () => 0, resolve: (x, z) => ({ x, z }) };
@@ -119,9 +119,22 @@ describe('skill shapes', () => {
     const atEdge = target(sim, 0, -range);
     const beyond = target(sim, 0, -range - 9);
     castAt(sim, z, 'zeus.cyclone', 0, -100);
-    const events = run(sim, 0.2);
+    const events = run(sim, 0.2 + GROUND_WARNING);
     expect(damaged(events, atEdge).length).toBeGreaterThan(0);
     expect(damaged(events, beyond)).toHaveLength(0);
+  });
+
+  it('ground blasts warn first, so a target that steps out is not hit', () => {
+    const sim = setup();
+    const l = god(sim, loki, 'order', 0, 0);
+    const stays = target(sim, 0, -6);
+    const dodges = target(sim, 1, -6);
+    castAt(sim, l, 'loki.smoke-bomb', 0, -6);
+    expect(damaged(run(sim, GROUND_WARNING / 2), stays)).toHaveLength(0);
+    sim.teleport(dodges, 20, -6);
+    const events = run(sim, GROUND_WARNING);
+    expect(damaged(events, stays).length).toBeGreaterThan(0);
+    expect(damaged(events, dodges)).toHaveLength(0);
   });
 
   it('cones hit inside the arc and miss behind the caster', () => {
