@@ -9,3 +9,4 @@ html, body { margin: 0; background: #0b0a09; color: var(--ink); font-family: 'Ci
 .sb button { background: #1a1612; color: var(--ink); border: 1px solid rgba(231, 194, 122, 0.35); border-radius: 4px; padding: 6px 10px; font: 12px Georgia, serif; cursor: pointer; }
 .sb button:hover { border-color: var(--gold); background: #2a2118; }
 .sb-music button { border-color: rgba(231, 194, 122, 0.7); font-family: 'Cinzel', Georgia, serif; }
+.sb section { display: inline-block; vertical-align: top; width: 262px; margin-right: 10px; }

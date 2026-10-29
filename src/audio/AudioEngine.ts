@@ -25,7 +25,7 @@ const STORAGE_KEY = 'ascendant.audio';
 const DEFAULTS: AudioSettings = { master: 0.8, music: 0.55, sfx: 0.85, voice: 0.9, ambience: 0.6, muted: false };
 
 /** Mixer trims so the sliders' defaults land at a good balance. */
-const BUS_TRIM: Record<Bus, number> = { music: 0.55, sfx: 0.9, ui: 0.6, voice: 1, ambience: 0.7 };
+const BUS_TRIM: Record<Bus, number> = { music: 0.55, sfx: 0.75, ui: 0.6, voice: 1, ambience: 0.7 };
 const REVERB_SEND: Record<Bus, number> = { music: 0.28, sfx: 0.16, ui: 0.05, voice: 0.12, ambience: 0.1 };
 
 export interface PlayOptions {
