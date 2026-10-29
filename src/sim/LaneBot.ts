@@ -1,9 +1,9 @@
 import type { Side as Team } from '../game/combatant';
 import { alongPolyline, baseOf, nearestOnPolyline, type LaneId, type Vec2 } from '../map/ConquestLayout';
-import { ConquestLayout as L } from '../map/ConquestLayout';
 import { GodBot } from './Bot';
-import { buffMark, isBuff, MonsterBrain, type CampState } from './Jungle';
+import { buffMark, isBoss, isBuff, MonsterBrain, type CampState } from './Jungle';
 import { LANES, marchPath, type Match } from './Match';
+import { BOSS_CALL, pitRadius } from './Objectives';
 import type { Sim } from './Sim';
 import { isStructure, WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
 
@@ -63,10 +63,12 @@ export class LaneBot implements Brain {
     this.think -= dt;
     if (this.think <= 0) {
       this.think = 0.3;
-      if (this.role === 'roam') {
+      const call = this.match.objectives.call(this.u.side);
+      if (call) this.camp = call;
+      else if (this.role === 'roam') {
         this.camp = this.pickCamp();
         if (!this.camp) this.roam(dt + 0.3);
-      }
+      } else this.camp = null;
       if (this.camp) this.campAnchor(this.camp);
       else this.placeAnchor();
     }
@@ -93,7 +95,7 @@ export class LaneBot implements Brain {
     const { u } = this;
     const c = u.combatant;
     // keep clearing the camp we're on until it is done (the bot still retreats when very low)
-    if (this.camp && this.match.jungle.alive(this.camp)) return this.camp;
+    if (this.camp && !isBoss(this.camp.camp.kind) && this.match.jungle.alive(this.camp)) return this.camp;
     // start a new camp only healthy
     if (c.health < c.stats.maxHealth * 0.5) return null;
     let best: CampState | null = null;
@@ -113,9 +115,30 @@ export class LaneBot implements Brain {
   }
 
   private campAnchor(c: CampState): void {
-    this.anchor.x = c.camp.at[0];
-    this.anchor.z = c.camp.at[1];
+    const [cx, cz] = c.camp.at;
+    if (isBoss(c.camp.kind) && !this.bossOn(c)) {
+      // gather at the pit's mouth on our side until the team is there
+      const home = this.u.home;
+      const dx = home.x - cx;
+      const dz = home.z - cz;
+      const d = Math.hypot(dx, dz) || 1;
+      const r = pitRadius(c) + 5;
+      this.anchor.x = cx + (dx / d) * r;
+      this.anchor.z = cz + (dz / d) * r;
+    } else {
+      this.anchor.x = cx;
+      this.anchor.z = cz;
+    }
     this.bot.options.anchor = this.anchor;
+  }
+
+  /** Whether the team is ready to hit a boss: it is already fighting us, or enough of us are at the pit. */
+  private bossOn(c: CampState): boolean {
+    const kind = c.camp.kind;
+    if (!isBoss(kind)) return true;
+    if (c.foe && c.foe.team === this.u.team) return true;
+    const alive = this.match.gods.filter((g) => g.team === this.u.team && g.alive).length;
+    return this.match.objectives.atPit(this.u.side, c) >= Math.min(BOSS_CALL[kind].gods, alive);
   }
 
   private along(x: number, z: number): number {
@@ -187,7 +210,7 @@ export class LaneBot implements Brain {
     }
     if (god) return god;
     const [cx, cz] = camp.camp.at;
-    if (Math.hypot(u.x - cx, u.z - cz) > L.radii.camp + 6) return null;
+    if (Math.hypot(u.x - cx, u.z - cz) > pitRadius(camp) + 6 || !this.bossOn(camp)) return null;
     let best: Unit | null = null;
     let bd = Infinity;
     for (const m of camp.members) {
@@ -253,7 +276,7 @@ export class LaneBot implements Brain {
   /** Walk along the lane instead of cutting through the jungle walls; junglers path through the jungle. */
   private route(goal: Point): Point {
     const { u } = this;
-    if (this.role === 'roam') return this.jungleRoute(goal);
+    if (this.role === 'roam' || this.camp) return this.jungleRoute(goal);
     const me = nearestOnPolyline(this.path, u.x, u.z);
     const there = nearestOnPolyline(this.path, goal.x, goal.z);
     if (me.distance > OFF_LANE) {
