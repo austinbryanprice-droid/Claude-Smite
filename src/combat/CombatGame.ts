@@ -416,7 +416,10 @@ export class CombatGame implements Updatable {
     const melee = basic.projectileSpeed === undefined;
     const range = basic.range * WORLD_SCALE;
     const dir = this.sim.aimDir(u);
+    // a shot starts just ahead of the caster and its own width counts toward the hit
+    const shotStart = u.radius * 0.8;
     let best: Unit | null = null;
+    let bestIn = false;
     let bestAlong = Infinity;
     for (const t of this.sim.enemiesOf(u)) {
       if (!t.targetable || t.stealth > 0) continue;
@@ -424,17 +427,28 @@ export class CombatGame implements Updatable {
       const rz = t.z - u.z;
       const along = rx * dir.x + rz * dir.z;
       if (along <= 0 || along > range * 2.5) continue;
-      // melee swings cover an arc; shots fly a narrow line (the projectile's own width)
-      const lined = melee
-        ? Math.hypot(rx, rz) <= t.radius || angleBetween(dir, { x: rx, z: rz }) <= MELEE_ARC / 2
-        : Math.abs(rx * dir.z - rz * dir.x) <= t.radius + 0.45;
-      if (lined && along < bestAlong) {
+      let inRange: boolean;
+      if (melee) {
+        // swings cover an arc and hit everything in it, so a reachable enemy wins over a nearer-lined one
+        const d = Math.hypot(rx, rz);
+        if (d > t.radius && angleBetween(dir, { x: rx, z: rz }) > MELEE_ARC / 2) continue;
+        inRange = d <= range + t.radius;
+      } else {
+        // shots fly a narrow line and stop at the first enemy or wall
+        const perp = Math.abs(rx * dir.z - rz * dir.x);
+        const reach = t.radius + 0.45;
+        if (perp > reach) continue;
+        const contact = along - Math.sqrt(reach * reach - perp * perp);
+        if (!this.sim.shotClear(u, dir, contact)) continue;
+        inRange = contact <= shotStart + range;
+      }
+      if (melee ? (inRange && !bestIn) || (inRange === bestIn && along < bestAlong) : along < bestAlong) {
         best = t;
+        bestIn = inRange;
         bestAlong = along;
       }
     }
-    if (!best) return { target: null, inRange: false };
-    return { target: best, inRange: Math.hypot(best.x - u.x, best.z - u.z) <= range + best.radius };
+    return { target: best, inRange: bestIn };
   }
 
   /** The ground point under the crosshair, by marching the camera's center ray. */

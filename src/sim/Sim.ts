@@ -909,6 +909,14 @@ export class Sim {
     return best;
   }
 
+  /** Whether a shot from `u` along `dir` would reach `dist` without hitting terrain. */
+  shotClear(u: Unit, dir: Point, dist: number): boolean {
+    for (let d = u.radius * 0.8; d < dist; d += 0.5) {
+      if (this.blocked(u.x + dir.x * d, u.z + dir.z * d)) return false;
+    }
+    return true;
+  }
+
   private blocked(x: number, z: number): boolean {
     const ground = this.terrain.groundAt(x, z);
     const r = this.terrain.resolve(x, z, 0.1, ground + PROJECTILE_HEIGHT - 0.55);

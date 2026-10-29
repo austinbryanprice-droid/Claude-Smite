@@ -104,6 +104,14 @@ describe('skill shapes', () => {
     expect(damaged(run(sim, 1), behindWall)).toHaveLength(0);
   });
 
+  it('shotClear sees the same walls that stop projectiles', () => {
+    const sim = setup(walled(5));
+    const z = god(sim, zeus, 'order', 0, 0);
+    expect(sim.shotClear(z, { x: 1, z: 0 }, 3)).toBe(true);
+    expect(sim.shotClear(z, { x: 1, z: 0 }, 9)).toBe(false);
+    expect(sim.shotClear(z, { x: -1, z: 0 }, 9)).toBe(true);
+  });
+
   it('ground skills land at the aim point, clamped to their range', () => {
     const sim = setup();
     const z = god(sim, zeus, 'order', 0, 0);
