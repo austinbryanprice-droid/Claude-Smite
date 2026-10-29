@@ -16,7 +16,7 @@ export const odin: GodDef = {
     physicalProtection: 25,
     magicalProtection: 32,
     attackSpeed: 0.95,
-    attackPower: 40,
+    attackPower: 42,
     moveSpeed: 375,
   },
   growth: {
@@ -27,7 +27,7 @@ export const odin: GodDef = {
     physicalProtection: 3.6,
     magicalProtection: 1.8,
     attackSpeed: 0.015,
-    attackPower: 2.3,
+    attackPower: 2.4,
   },
   basicAttack: { range: 3, damageType: 'physical' },
   passive: {
