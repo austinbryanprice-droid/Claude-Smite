@@ -81,7 +81,9 @@ export const zeus: GodDef = {
       targeting: { type: 'self', radius: 30 },
       cooldown: [12, 11.5, 11, 10.5, 10],
       cost: [70, 75, 80, 85, 90],
+      // per Charge; a target at 3 Charges takes three times this and is stunned
       effects: [dmg([35, 55, 80, 100, 125], 'intelligence', 0.3, 'magical'), cc('stun', 0.5)],
+      detonates: 'charge',
     },
     {
       id: 'zeus.aegis-of-clouds',

@@ -1,4 +1,4 @@
-import type { BasicShot, CastError, ResolvedSkill, Side, Team } from '../game/combatant';
+import type { BasicShot, CastError, ResolvedEffect, ResolvedSkill, Side, Team } from '../game/combatant';
 import { FAVOR_REWARDS, ranked } from '../game/progression';
 import type { DamageType } from '../game/types';
 import { WISDOM_XP } from './Jungle';
@@ -34,6 +34,8 @@ export const RECALL_TIME = 8;
 export const PROJECTILE_HEIGHT = 1.5;
 /** How far a bouncing projectile looks for its next target, arena meters. */
 const BOUNCE_RANGE = 9;
+/** Most stacks a mark (Charge, Wrath Mark) can hold. */
+const MARK_MAX = 3;
 /** Seconds a ground-targeted skill shows its circle before it lands. */
 export const GROUND_WARNING = 0.4;
 const LEAP_SPEED = 24;
@@ -389,7 +391,7 @@ export class Sim {
       for (const e of cast.hits) {
         if (e.kind !== 'mark') continue;
         const m = target.marks.get(e.mark) ?? { stacks: 0, remaining: 0 };
-        m.stacks = Math.min(3, m.stacks + (e.stacks ?? 1));
+        m.stacks = Math.min(MARK_MAX, m.stacks + (e.stacks ?? 1));
         m.remaining = e.duration;
         target.marks.set(e.mark, m);
       }
@@ -454,13 +456,34 @@ export class Sim {
 
   /** Everything in a circle (the engine filters effects by team), then the caster's own buffs. */
   private area(owner: Unit, cast: ResolvedSkill, at: Point, r: number): void {
+    const mark = cast.skill.detonates;
     for (const t of [...this.units]) {
       if (!t.alive || t === owner) continue;
       if (Math.hypot(t.x - at.x, t.z - at.z) > r + t.radius) continue;
       if (t.team === owner.team && !touchesAllies(cast)) continue;
+      if (mark) {
+        if (t.team !== owner.team) this.detonate(owner, cast, t, mark);
+        continue;
+      }
       this.hit(owner, cast, t);
     }
     this.applySelf(owner, cast);
+  }
+
+  /** Sets off a mark: damage per stack, crowd control only at full stacks, and the mark is spent. */
+  private detonate(owner: Unit, cast: ResolvedSkill, target: Unit, mark: string): void {
+    const m = target.marks.get(mark);
+    if (!m || m.stacks <= 0 || !target.targetable) return;
+    const full = m.stacks >= MARK_MAX;
+    const hits = cast.hits.flatMap((e): ResolvedEffect[] => {
+      if (e.kind === 'damage') return [{ ...e, amount: e.amount * m.stacks }];
+      if (e.kind === 'cc') return full ? [e] : [];
+      return [e];
+    });
+    this.hit(owner, { ...cast, hits }, target);
+    // spent after the hit, so the blast's own damage can't leave a fresh stack behind
+    target.marks.delete(mark);
+    this.flash(owner, { type: 'circle', x: target.x, z: target.z, radius: target.radius + (full ? 1.6 : 0.9) });
   }
 
   private applyMovementCC(owner: Unit, cast: ResolvedSkill, target: Unit): void {

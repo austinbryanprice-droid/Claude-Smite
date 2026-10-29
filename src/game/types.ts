@@ -113,6 +113,11 @@ export interface SkillDef {
   cooldown: Ranked;
   cost: Ranked;
   effects: readonly Effect[];
+  /**
+   * Only enemies carrying this mark are affected: damage is multiplied by its
+   * stacks, crowd control lands only at full stacks, and the mark is consumed.
+   */
+  detonates?: string;
 }
 
 export interface BasicAttackDef {

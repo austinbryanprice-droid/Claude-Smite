@@ -137,6 +137,25 @@ describe('skill shapes', () => {
     expect(damaged(events, dodges)).toHaveLength(0);
   });
 
+  it('Static Discharge sets off Charges: more per stack, a stun only at three', () => {
+    const sim = setup();
+    const z = god(sim, zeus, 'order', 0, 0);
+    const plain = target(sim, 0, -6);
+    const one = target(sim, 4, -6);
+    const full = target(sim, -4, -6);
+    one.marks.set('charge', { stacks: 1, remaining: 6 });
+    full.marks.set('charge', { stacks: 3, remaining: 6 });
+    castAt(sim, z, 'zeus.static-discharge', 0, -6);
+    const events = run(sim, 0.1);
+    const dealt = (u: Unit) => damaged(events, u).reduce((a, e) => a + (e.type === 'damage' ? e.amount : 0), 0);
+    expect(damaged(events, plain)).toHaveLength(0);
+    expect(dealt(full)).toBeGreaterThan(dealt(one) * 2);
+    expect(one.combatant.cc.has('stun')).toBe(false);
+    expect(full.combatant.cc.has('stun')).toBe(true);
+    expect(one.marks.has('charge')).toBe(false);
+    expect(full.marks.has('charge')).toBe(false);
+  });
+
   it('cones hit inside the arc and miss behind the caster', () => {
     const sim = setup();
     const l = god(sim, loki, 'order', 0, 0);
