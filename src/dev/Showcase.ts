@@ -7,7 +7,8 @@ import { GOD_IDS } from '../actors/gods/assets';
  * spawn with a fixed camera. Options (all optional):
  *   showcase=zeus,thor   which gods (default: all)
  *   pose=idle|walk|jog|sprint|cast
- *   view=front|back|side|close|three
+ *   view=front|back|side|close|three|portrait|bust
+ *   (bust frames head and shoulders for the title screen's face cards; see tools/portraits)
  */
 export class Showcase {
   readonly gods: GodModel[] = [];
@@ -68,6 +69,16 @@ export class Showcase {
       g.animate(dt, this.state);
     }
     const g = this.gods[0];
+    if (this.view === 'bust' && g) {
+      // head and shoulders with a longer lens, like a character select card
+      const head = g.head.getWorldPosition(new THREE.Vector3());
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.root.quaternion);
+      const side = new THREE.Vector3(1, 0, 0).applyQuaternion(g.root.quaternion);
+      this.camera.fov = 26;
+      this.camera.updateProjectionMatrix();
+      this.camera.position.copy(head).addScaledVector(fwd, 2.9).addScaledVector(side, 0.55).add(new THREE.Vector3(0, 0.12, 0));
+      this.camera.lookAt(head.x, head.y - 0.22, head.z);
+    }
     if (this.view === 'portrait' && g) {
       // frame the face: in front of the head bone, slightly above eye level
       const head = g.head.getWorldPosition(new THREE.Vector3());
