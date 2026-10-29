@@ -97,3 +97,11 @@
   opacity: 0;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(170, 15, 15, 0.5) 70%, rgba(130, 0, 0, 0.9) 100%);
 }
+
+/* jungle buffs: a glowing chip per buff with a draining ring and seconds left */
+.ch-buffs { display: flex; gap: 8px; min-height: 34px; align-items: flex-end; }
+.ch-buff { position: relative; width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p, 1) * 1turn), rgba(10, 8, 6, 0.6) 0); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 70%, transparent); display: grid; place-items: center; }
+.ch-buff::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--c) 55%, white), color-mix(in srgb, var(--c) 45%, #120c08) 70%); border: 1px solid rgba(255, 240, 200, 0.35); }
+.ch-buff span { position: relative; font: 700 15px/1 'Cinzel', Georgia, serif; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+.ch-buff i { position: absolute; bottom: -5px; right: -7px; font: 600 10px/1 system-ui, sans-serif; font-style: normal; color: #fff; background: rgba(10, 8, 6, 0.8); border-radius: 6px; padding: 2px 3px; }
+.ch-ob-neutral .ch-ob-name { color: #f2c46a; }

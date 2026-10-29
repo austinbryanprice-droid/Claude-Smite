@@ -1,6 +1,7 @@
-import type { Team } from '../game/combatant';
+import type { Side as Team } from '../game/combatant';
 import { alongPolyline, baseOf, nearestOnPolyline, type LaneId, type Vec2 } from '../map/ConquestLayout';
 import { GodBot } from './Bot';
+import { MonsterBrain } from './Jungle';
 import { LANES, marchPath, type Match } from './Match';
 import type { Sim } from './Sim';
 import { isStructure, WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
@@ -36,7 +37,7 @@ export class LaneBot implements Brain {
     aggression = 0.45,
   ) {
     this.lane = role === 'roam' ? 'mid' : role;
-    this.path = marchPath(u.team, this.lane);
+    this.path = marchPath(u.side, this.lane);
     this.anchor = { x: this.path[0]![0], z: this.path[0]![1] };
     this.bot = new GodBot(sim, u, {
       anchor: this.anchor,
@@ -72,7 +73,7 @@ export class LaneBot implements Brain {
     if (this.roamTimer > 0) return;
     this.roamTimer = 50 + this.sim.rng() * 30;
     this.lane = LANES[Math.floor(this.sim.rng() * LANES.length)]!;
-    this.path = marchPath(this.u.team, this.lane);
+    this.path = marchPath(this.u.side, this.lane);
   }
 
   private along(x: number, z: number): number {
@@ -95,7 +96,7 @@ export class LaneBot implements Brain {
     if (front > -Infinity) goal = Math.min(front - 4, safe);
     else {
       // no wave: hold just in front of our own first standing structure
-      const own = this.match.frontStructure(u.team, this.lane);
+      const own = this.match.frontStructure(u.side, this.lane);
       goal = Math.min(this.along(own.x, own.z) + 8, safe);
     }
     const p = alongPolyline(this.path, Math.max(0, goal));
@@ -132,6 +133,8 @@ export class LaneBot implements Brain {
     let bestScore = Infinity;
     for (const t of sim.enemiesOf(u)) {
       if (t.kind === 'dummy' || t.stealth > 0) continue;
+      // leave the jungle alone unless a monster is already fighting us
+      if (t.kind === 'monster' && !(t.brain instanceof MonsterBrain && t.brain.target === u)) continue;
       const d = Math.hypot(t.x - u.x, t.z - u.z) - t.radius;
       if (d > AGGRO) continue;
       if (Math.hypot(t.x - this.anchor.x, t.z - this.anchor.z) > LEASH) continue;

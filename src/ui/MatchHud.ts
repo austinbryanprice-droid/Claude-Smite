@@ -2,7 +2,8 @@ import type { Team } from '../game/combatant';
 import { ConquestLayout as L } from '../map/ConquestLayout';
 import { LANES, type Match } from '../sim/Match';
 import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
-import { TEAM_COLORS } from '../combat/palette';
+import { BUFF_GLOW } from '../combat/MonsterViews';
+import { hex, TEAM_COLORS } from '../combat/palette';
 import './match.css';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, html = ''): HTMLElementTagNameMap[K] => {
@@ -193,7 +194,9 @@ export class MatchHud {
       g.fillStyle = 'rgba(214, 200, 168, 0.55)';
       g.fill();
     }
+    // side camps are drawn live; the boss pits stay fixed
     for (const camp of L.camps) {
+      if (camp.team) continue;
       const [x, y] = this.toMap(camp.at[0], camp.at[1]);
       g.beginPath();
       g.arc(x, y, camp.team ? 2.5 : 4.5, 0, Math.PI * 2);
@@ -214,6 +217,22 @@ export class MatchHud {
       const [x, y] = this.toMap(u.x, u.z);
       g.fillStyle = color(u);
       g.fillRect(x - 1.2, y - 1.2, 2.4, 2.4);
+    }
+    // jungle camps: lit while they stand, a dim ring while they grow back
+    for (const c of this.match.jungle.camps) {
+      const [x, y] = this.toMap(c.camp.at[0], c.camp.at[1]);
+      const up = this.match.jungle.alive(c);
+      const glow = BUFF_GLOW[c.camp.kind];
+      const col = glow !== undefined ? hex(glow) : '#e6b25a';
+      g.beginPath();
+      g.arc(x, y, glow !== undefined ? 3.4 : 2.4, 0, Math.PI * 2);
+      if (up) {
+        g.fillStyle = col;
+        g.fill();
+        g.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+      } else g.strokeStyle = 'rgba(200, 180, 140, 0.45)';
+      g.lineWidth = 1;
+      g.stroke();
     }
     for (const s of this.match.structures.values()) {
       const [x, y] = this.toMap(s.x, s.z);

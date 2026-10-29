@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { Team } from '../game/combatant';
+import type { Side as Team } from '../game/combatant';
 import { abs, float, mix, mx_noise_float, positionLocal, smoothstep, vec3 } from '../render/tsl';
 import { lathe } from '../scene/Architecture';
 import type { MinionType } from '../sim/factory';

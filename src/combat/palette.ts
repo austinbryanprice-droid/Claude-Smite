@@ -1,3 +1,5 @@
+import type { Team } from '../game/combatant';
+
 /**
  * Per-god colors: armor and cloth for the placeholder model, and the two
  * spell colors every effect, decal and icon of that god uses. Saturated and
@@ -33,10 +35,12 @@ export function paletteFor(godId: string): GodPalette {
 const TEAM_PALETTES = {
   order: { cloth: 0x1f4fb8, trim: 0xd9a845, glow: 0x8fd0ff, vfx: 0x4fb2ff, core: 0xe6f4ff },
   chaos: { cloth: 0x8e1016, trim: 0x2a2320, glow: 0xff9a6a, vfx: 0xff3524, core: 0xffe0c8 },
-} as const satisfies Record<'order' | 'chaos', GodPalette>;
+  // jungle monsters: feral amber and moss
+  neutral: { cloth: 0x4a3a22, trim: 0x7a8a3a, glow: 0xffc24a, vfx: 0xffa83a, core: 0xfff0c0 },
+} as const satisfies Record<Team, GodPalette>;
 
 /** The palette a unit's effects use: its god's, its summoner's, or its team's. */
-export function paletteOf(u: { kind: string; team: 'order' | 'chaos'; owner: { combatant: { god: { id: string } } } | null; combatant: { god: { id: string } } }): GodPalette {
+export function paletteOf(u: { kind: string; team: Team; owner: { combatant: { god: { id: string } } } | null; combatant: { god: { id: string } } }): GodPalette {
   if (u.kind === 'god' || u.kind === 'dummy') return paletteFor(u.combatant.god.id);
   if (u.kind === 'summon' && u.owner) return paletteFor(u.owner.combatant.god.id);
   return TEAM_PALETTES[u.team];
@@ -46,6 +50,7 @@ export const TEAM_COLORS = {
   ally: '#46d7c4',
   enemy: '#ff4a3d',
   self: '#7fe36a',
+  neutral: '#f2b440',
 };
 
 export function hex(c: number): string {

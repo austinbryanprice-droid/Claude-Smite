@@ -22,6 +22,7 @@ import { GroundDecal, type DecalShape } from './GroundDecal';
 import { paletteFor } from './palette';
 import type { StructureModel } from './structures';
 import { UnitViews } from './UnitViews';
+import { BuffAuras } from './BuffAuras';
 import { CombatVfx } from './Vfx';
 
 const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'] as const;
@@ -66,6 +67,9 @@ export class CombatGame implements Updatable {
   private endTimer = 0;
   private readonly views: UnitViews;
   private readonly vfx: CombatVfx;
+  private readonly auras = new BuffAuras();
+  private setCampActive: ((id: string, active: boolean) => void) | null = null;
+  private readonly campLit = new Map<string, boolean>();
   private readonly hud: CombatHud;
   private readonly menu: LoadoutMenu;
   private readonly body: Body;
@@ -114,7 +118,7 @@ export class CombatGame implements Updatable {
 
     this.vfx = new CombatVfx(this.groundAt);
     this.vfx.targets = () => (this.match ? [...this.match.brains].map(([s, b]) => [s, b.current] as const) : []);
-    world.vfx.add(this.vfx.group);
+    world.vfx.add(this.vfx.group, this.auras.group);
     this.shapeDecal = new GroundDecal(this.groundAt);
     this.rangeDecal = new GroundDecal(this.groundAt);
     this.shapeDecal.setStyle('telegraph');
@@ -126,6 +130,9 @@ export class CombatGame implements Updatable {
     this.player = godUnit(godById('zeus')!, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
     // the Conquest map builds and places its own Tower, Phoenix and Titan models
+    // the map dims a buff altar's crystal while its Warden is down (when the map supports it)
+    const content = (world as unknown as { content?: { setCampActive?: (id: string, active: boolean) => void } }).content;
+    if (content?.setCampActive) this.setCampActive = content.setCampActive.bind(content);
     const placed = (world as unknown as { content?: { structures?: Map<string, StructureModel> } }).content?.structures;
     this.views = new UnitViews(this.player, player.model, (u) => {
       if (!placed || !this.match) return undefined;
@@ -239,6 +246,8 @@ export class CombatGame implements Updatable {
     if (this.match?.winner) this.hud.setVisible(false);
     this.vfx.player = this.player;
     this.vfx.frame(this.sim, dt, time);
+    this.syncCamps();
+    this.auras.frame(this.sim.units, time, (u) => u.stealth <= 0 || u.team === this.player.team);
     this.updatePreview();
     this.hud.setPreview(this.preview?.slot ?? null);
     this.hud.frame(this.sim.units, dt);
@@ -298,6 +307,16 @@ export class CombatGame implements Updatable {
     if (!this.preview && !this.suppressBasic && input.locked && input.isMouseDown(0) && u.alive) this.sim.basic(u);
   }
 
+  private syncCamps(): void {
+    if (!this.match || !this.setCampActive) return;
+    for (const c of this.match.jungle.camps) {
+      const lit = this.match.jungle.alive(c);
+      if (this.campLit.get(c.camp.id) === lit) continue;
+      this.campLit.set(c.camp.id, lit);
+      this.setCampActive(c.camp.id, lit);
+    }
+  }
+
   /** Camera shake for the hits the player should feel: their own pain and big blasts nearby. */
   private feel(e: SimEvent): void {
     const shake = this.deps.shake;
@@ -313,6 +332,7 @@ export class CombatGame implements Updatable {
         break;
       case 'basic':
         if (e.unit.kind === 'titan') shake(0.5 * near(e.unit.x, e.unit.z, 30));
+        else if (e.unit.tag.endsWith('warden')) shake(0.3 * near(e.unit.x, e.unit.z, 14));
         break;
       case 'cast':
         if (e.unit === me && e.cast.slot === ULTIMATE_SLOT) shake(0.25);

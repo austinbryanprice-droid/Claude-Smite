@@ -7,6 +7,7 @@ import { PROJECTILE_HEIGHT } from '../sim/Sim';
 import { isStructure, WORLD_SCALE, type Unit, type Flash, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
 import { ArcView } from './Arcs';
 import { GroundDecal, type DecalShape } from './GroundDecal';
+import { BUFF_GLOW } from './MonsterViews';
 import { paletteFor, paletteOf, type GodPalette } from './palette';
 
 type Ground = (x: number, z: number) => number;
@@ -589,6 +590,16 @@ export class CombatVfx {
         this.burst(paletteOf(e.owner), e.x, this.ground(e.x, e.z) + (e.big ? 0.4 : PROJECTILE_HEIGHT), e.z, power);
         break;
       }
+      case 'basic': {
+        // the Warden's two-fisted slam cracks the ground in front of it
+        const u = e.unit;
+        if (u.kind !== 'monster' || !u.tag.endsWith('warden')) break;
+        const f = u.forward;
+        const x = u.x + f.x * 2.4;
+        const z = u.z + f.z * 2.4;
+        this.burst(monsterPalette(u), x, this.ground(x, z) + 0.3, z, 1.5);
+        break;
+      }
       case 'cast': {
         const u = e.unit;
         const f = u.forward;
@@ -608,7 +619,7 @@ export class CombatVfx {
       case 'damage': {
         // a quick flare on gods that get hit, in the attacker's colors
         const u = e.target;
-        if ((u.kind !== 'god' && u.kind !== 'dummy') || !e.source || e.amount <= 0) break;
+        if ((u.kind !== 'god' && u.kind !== 'dummy' && u.kind !== 'monster') || !e.source || e.amount <= 0) break;
         if (this.clock - (this.lastFlare.get(u) ?? -1) < 0.12) break;
         this.lastFlare.set(u, this.clock);
         this.burst(paletteOf(e.source), u.x, u.body.y + 1.4, u.z, e.crit ? 0.7 : 0.4);
@@ -621,8 +632,13 @@ export class CombatVfx {
           p.start(paletteOf(e.unit), e.unit.x, this.ground(e.unit.x, e.unit.z), e.unit.z);
           this.pillars.push(p);
         }
-        const power = k === 'minion' ? 0.6 : isStructure(e.unit) ? 4 : 1.8;
-        this.burst(paletteOf(e.unit), e.unit.x, e.unit.body.y + (isStructure(e.unit) ? 4 : 1.2), e.unit.z, power);
+        const power = k === 'minion' ? 0.6 : isStructure(e.unit) ? 4 : k === 'monster' ? (e.unit.tag.endsWith('warden') ? 2.6 : 0.9) : 1.8;
+        this.burst(monsterPalette(e.unit), e.unit.x, e.unit.body.y + (isStructure(e.unit) ? 4 : 1.2), e.unit.z, power);
+        // a buff leaves its Warden in a flare and settles on the god who took it
+        if (k === 'monster' && e.unit.tag.endsWith('warden') && e.killer?.kind === 'god') {
+          const g = e.killer;
+          this.burst(monsterPalette(e.unit), g.x, g.body.y + 1.3, g.z, 1.6);
+        }
         break;
       }
       default:
@@ -731,6 +747,15 @@ export class CombatVfx {
       l.intensity = s.intensity;
     });
   }
+}
+
+/** Wardens burn in their buff's color; everything else uses its usual palette. */
+function monsterPalette(u: Unit): GodPalette {
+  const p = paletteOf(u);
+  if (u.kind !== 'monster' || !u.tag.endsWith('warden')) return p;
+  const kind = u.tag.split(':')[0]!.split('-')[1] as keyof typeof BUFF_GLOW;
+  const c = BUFF_GLOW[kind];
+  return c === undefined ? p : { ...p, vfx: c, core: 0xffffff };
 }
 
 /** Height of the muzzle shots leave from, per structure kind (the structure models can refine it). */

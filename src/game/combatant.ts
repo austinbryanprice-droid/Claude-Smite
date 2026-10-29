@@ -15,7 +15,10 @@ import {
 } from './trees';
 import type { CCKind, DamageType, Effect, GodDef, Keystone, SkillDef, StatKey, Stats, Targeting } from './types';
 
-export type Team = 'order' | 'chaos';
+/** The two sides of a match. */
+export type Side = 'order' | 'chaos';
+/** Jungle monsters are neutral: hostile to both sides. */
+export type Team = Side | 'neutral';
 
 interface TimedMod {
   stat: StatKey;
@@ -229,6 +232,13 @@ export class Combatant {
     if (!this.alive) return;
     this.mods.push({ stat, amount, remaining: duration });
     this.invalidate();
+  }
+
+  /** Restart the timed mod with this stat and amount (a refreshed buff), or add it. */
+  refreshTimedMod(stat: StatKey, amount: number, duration: number): void {
+    const m = this.mods.find((x) => x.stat === stat && x.amount === amount);
+    if (m) m.remaining = duration;
+    else this.addTimedMod(stat, amount, duration);
   }
 
   addShield(amount: number, duration: number): void {

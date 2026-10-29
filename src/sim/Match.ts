@@ -1,7 +1,8 @@
-import type { Team } from '../game/combatant';
+import type { Side as Team } from '../game/combatant';
 import type { GodDef } from '../game/types';
 import { baseOf, ConquestLayout as L, laneFrom, type LaneId, type Vec2 } from '../map/ConquestLayout';
 import { minionUnit, structureUnit, type MinionType } from './factory';
+import { Jungle } from './Jungle';
 import { MinionBrain, StructureBrain } from './Lanes';
 import type { BaseZone, Sim } from './Sim';
 import type { SimEvent, Unit } from './Unit';
@@ -59,6 +60,7 @@ export class Match {
   private nextWave = FIRST_WAVE;
   private queue: { at: number; team: Team; lane: LaneId; type: MinionType; slot: number }[] = [];
   private phoenixDown = new Map<Unit, number>();
+  readonly jungle: Jungle;
 
   constructor(
     readonly sim: Sim,
@@ -66,6 +68,7 @@ export class Match {
     private readonly base: GodDef,
   ) {
     this.buildStructures();
+    this.jungle = new Jungle(sim, base);
     sim.listeners.push((e) => this.onEvent(e));
   }
 
@@ -91,6 +94,7 @@ export class Match {
       this.queueWave();
       this.nextWave += WAVE_INTERVAL;
     }
+    this.jungle.step(dt);
     while (this.queue.length && this.queue[0]!.at <= this.time) this.spawn(this.queue.shift()!);
     for (const [p, at] of this.phoenixDown) {
       if (this.time - at < PHOENIX_RESPAWN) continue;

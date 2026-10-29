@@ -1,4 +1,4 @@
-import type { BasicShot, Combatant, ResolvedSkill, Team } from '../game/combatant';
+import type { BasicShot, Combatant, ResolvedSkill, Side, Team } from '../game/combatant';
 
 /**
  * Rules-engine distances are authored at roughly Smite's proportions; the
@@ -13,7 +13,7 @@ export function worldSpeed(moveSpeed: number): number {
   return (moveSpeed / 100) * WORLD_SCALE;
 }
 
-export type UnitKind = 'god' | 'dummy' | 'summon' | 'minion' | 'tower' | 'phoenix' | 'titan';
+export type UnitKind = 'god' | 'dummy' | 'summon' | 'minion' | 'tower' | 'phoenix' | 'titan' | 'monster';
 
 /** Towers, Phoenixes and Titans: never move, take only basic attacks, and never respawn on their own. */
 export function isStructure(u: { kind: UnitKind }): boolean {
@@ -95,6 +95,8 @@ export class Unit {
   windup = 0;
   /** Seconds since death, for units that do not respawn. */
   deadFor = 0;
+  /** XP and favor a jungle monster gives the god who kills it. */
+  bounty: { xp: number; favor: number } | null = null;
   /** Free-form tag the match uses (lane, minion type). */
   tag = '';
 
@@ -109,6 +111,11 @@ export class Unit {
 
   get team(): Team {
     return this.combatant.team;
+  }
+
+  /** The side of a god, minion or structure; never call it on a jungle monster. */
+  get side(): Side {
+    return this.combatant.team as Side;
   }
 
   get alive(): boolean {
