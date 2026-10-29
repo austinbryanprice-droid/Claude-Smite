@@ -100,6 +100,7 @@ export class CombatHud {
   /** The big bar under the scoreboard for a boss or Warden the player is near. */
   private readonly objective: { root: HTMLDivElement; name: HTMLDivElement; hp: HTMLDivElement; lag: HTMLDivElement; pct: HTMLSpanElement; cast: HTMLDivElement; castFill: HTMLDivElement };
   private objectiveUnit: Unit | null = null;
+  private target: Unit | null = null;
   private objectiveLag = 1;
   private readonly floaters: Floater[] = [];
   private readonly v = new THREE.Vector3();
@@ -177,6 +178,14 @@ export class CombatHud {
     const t = el('div', `ch-toast ch-toast-${kind}`, this.toastBox, text);
     setTimeout(() => t.classList.add('out'), 1400);
     setTimeout(() => t.remove(), 2000);
+  }
+
+  /** Outline the health bar of the enemy the player's basic attack is lined up on. */
+  setTarget(u: Unit | null): void {
+    if (u === this.target) return;
+    if (this.target) this.bars.get(this.target)?.el.classList.remove('ch-ob-target');
+    this.target = u;
+    if (u) this.bars.get(u)?.el.classList.add('ch-ob-target');
   }
 
   /** Brief red flash on a slot that could not be cast. */
@@ -432,6 +441,7 @@ export class CombatHud {
     hp.style.setProperty('--c', TEAM_COLORS[side]);
     const shield = el('div', 'ch-ob-shield', bar);
     el('div', 'ch-ob-ticks', bar);
+    if (u === this.target) root.classList.add('ch-ob-target');
     const b = { el: root, hp, lag, lagPct: 1, shield, level, name, marks };
     this.bars.set(u, b);
     return b;
