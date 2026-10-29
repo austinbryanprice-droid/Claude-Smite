@@ -118,6 +118,12 @@ export interface SkillDef {
    * stacks, crowd control lands only at full stacks, and the mark is consumed.
    */
   detonates?: string;
+  /**
+   * The skill's effects wait on each enemy god it reaches, under a mark of
+   * this name, and land on the caster's next hit on that god. Marked gods
+   * can't hide in stealth while it lasts.
+   */
+  primes?: { mark: string; duration: number };
 }
 
 export interface BasicAttackDef {

@@ -166,6 +166,7 @@ export const odin: GodDef = {
       cooldown: [120, 115, 110, 105, 100],
       cost: 100,
       effects: [dmg([110, 150, 195, 240, 280], 'strength', 0.5, 'true')],
+      primes: { mark: 'all-seeing', duration: 6 },
     },
   ],
   trees: [

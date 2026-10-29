@@ -156,6 +156,55 @@ describe('skill shapes', () => {
     expect(full.marks.has('charge')).toBe(false);
   });
 
+  it('All-Seeing Eye waits on each enemy god for Odin\'s next hit', () => {
+    const sim = setup();
+    const o = god(sim, odin, 'order', 0, 0, 5);
+    const far = target(sim, 0, -60);
+    far.stealth = 5;
+    castAt(sim, o, 'odin.all-seeing-eye', 0, -10);
+    const cast = run(sim, 0.1);
+    expect(damaged(cast, far)).toHaveLength(0);
+    expect(far.marks.has('all-seeing')).toBe(true);
+    expect(far.stealth).toBe(0);
+    // Odin's next hit lands the waiting true damage too, once
+    const hp = far.combatant.health;
+    sim.strike(o, far, 10, 'physical');
+    const first = hp - far.combatant.health;
+    expect(first).toBeGreaterThan(50);
+    expect(far.marks.has('all-seeing')).toBe(false);
+    const hp2 = far.combatant.health;
+    sim.strike(o, far, 10, 'physical');
+    expect(hp2 - far.combatant.health).toBeLessThan(20);
+  });
+
+  it('a primed hit that kills counts the death once', () => {
+    const sim = setup();
+    const o = god(sim, odin, 'order', 0, 0, 5);
+    const far = target(sim, 0, -60);
+    castAt(sim, o, 'odin.all-seeing-eye', 0, -10);
+    run(sim, 0.1);
+    far.combatant.health = 100;
+    sim.strike(o, far, 10, 'physical');
+    expect(far.alive).toBe(false);
+    expect(sim.drainEvents().filter((e) => e.type === 'death')).toHaveLength(1);
+  });
+
+  it('All-Seeing Eye keeps revealing after the primed hit lands', () => {
+    const sim = setup();
+    const o = god(sim, odin, 'order', 0, 0, 5);
+    const far = target(sim, 0, -60);
+    castAt(sim, o, 'odin.all-seeing-eye', 0, -10);
+    run(sim, 0.1);
+    sim.strike(o, far, 10, 'physical');
+    far.stealth = 3;
+    run(sim, 0.1);
+    expect(far.stealth).toBe(0);
+    run(sim, 6);
+    far.stealth = 3;
+    run(sim, 0.1);
+    expect(far.stealth).toBeGreaterThan(0);
+  });
+
   it('cones hit inside the arc and miss behind the caster', () => {
     const sim = setup();
     const l = god(sim, loki, 'order', 0, 0);

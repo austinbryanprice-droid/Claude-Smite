@@ -72,6 +72,10 @@ export class Sim {
   private pending: { at: number; owner: Unit; cast: ResolvedSkill; target: Unit }[] = [];
   /** Ground blasts waiting out their warning circle. */
   private landing: { at: number; owner: Unit; cast: ResolvedSkill; x: number; z: number; r: number }[] = [];
+  /** Skill effects waiting on a marked god for the caster's next hit (see SkillDef.primes). */
+  private readonly primed = new Map<Unit, { owner: Unit; cast: ResolvedSkill; mark: string }>();
+  /** Gods a priming skill revealed, and until when; outlasts the primed hit itself. */
+  private readonly revealed = new Map<Unit, number>();
   private events: SimEvent[] = [];
   time = 0;
 
@@ -97,6 +101,7 @@ export class Sim {
   /** Called with every event as it happens, before the view drains them. */
   readonly listeners: ((e: SimEvent) => void)[] = [];
   readonly passives: Passives = new Passives(this);
+
 
   private emit(e: SimEvent): void {
     this.events.push(e);
@@ -445,6 +450,8 @@ export class Sim {
       this.emit({ type: 'heal', target, amount: -delta });
     }
     if (wasAlive && !c.alive) this.onDeath(target, source);
+    // after the death check, so a primed hit that kills is reported once
+    if (delta > 0.05) this.releasePrimed(source, target);
   }
 
   private applySelf(u: Unit, cast: ResolvedSkill): void {
@@ -457,10 +464,19 @@ export class Sim {
   /** Everything in a circle (the engine filters effects by team), then the caster's own buffs. */
   private area(owner: Unit, cast: ResolvedSkill, at: Point, r: number): void {
     const mark = cast.skill.detonates;
+    const primes = cast.skill.primes;
     for (const t of [...this.units]) {
       if (!t.alive || t === owner) continue;
       if (Math.hypot(t.x - at.x, t.z - at.z) > r + t.radius) continue;
       if (t.team === owner.team && !touchesAllies(cast)) continue;
+      if (primes) {
+        if (t.team !== owner.team && t.kind === 'god') {
+          t.marks.set(primes.mark, { stacks: 1, remaining: primes.duration });
+          this.primed.set(t, { owner, cast, mark: primes.mark });
+          this.revealed.set(t, Math.max(this.revealed.get(t) ?? 0, this.time + primes.duration));
+        }
+        continue;
+      }
       if (mark) {
         if (t.team !== owner.team) this.detonate(owner, cast, t, mark);
         continue;
@@ -468,6 +484,16 @@ export class Sim {
       this.hit(owner, cast, t);
     }
     this.applySelf(owner, cast);
+  }
+
+  /** A primed god takes the waiting effects on the caster's next hit, if the mark still holds. */
+  private releasePrimed(source: Unit, target: Unit): void {
+    if (!this.primed.size) return;
+    const p = this.primed.get(target);
+    if (!p || p.owner !== source) return;
+    this.primed.delete(target);
+    if (!target.alive || !target.marks.delete(p.mark)) return;
+    this.applyOnce(p.owner, p.cast, target);
   }
 
   /** Sets off a mark: damage per stack, crowd control only at full stacks, and the mark is spent. */
@@ -735,6 +761,12 @@ export class Sim {
     this.stepZones(dt);
     this.stepPending();
     this.stepLanding();
+    for (const [t, p] of this.primed) if (!t.marks.has(p.mark)) this.primed.delete(t);
+    // a revealed god can't hide for the full duration, even after the primed hit lands
+    for (const [t, until] of this.revealed) {
+      if (this.time < until) t.stealth = 0;
+      else this.revealed.delete(t);
+    }
     this.passives.step();
     for (const f of this.flashes) f.age += dt;
     removeWhere(this.flashes, (f) => f.age >= f.life);
