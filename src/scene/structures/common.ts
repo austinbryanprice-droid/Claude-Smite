@@ -145,6 +145,24 @@ export class Rubble {
   }
 }
 
+const aged = new WeakMap<MaterialLibrary, THREE.MeshStandardNodeMaterial>();
+
+/**
+ * The library marble toned down to a warm, slightly aged cream with faint
+ * grime in the crevices, so big marble masses don't blow out to white in sun.
+ */
+export function agedMarble(lib: MaterialLibrary): THREE.MeshStandardNodeMaterial {
+  let m = aged.get(lib);
+  if (!m) {
+    m = lib.marble.clone() as THREE.MeshStandardNodeMaterial;
+    const base = lib.marble.colorNode as any;
+    const grime = mx_noise_float(positionWorld.mul(0.9)).mul(0.5).add(0.5);
+    m.colorNode = base.mul(vec3(0.8, 0.76, 0.68)).mul(mix(float(0.82), float(1.0), grime));
+    aged.set(lib, m);
+  }
+  return m;
+}
+
 /** Smooth 0..1 easing. */
 export const ease = (t: number) => {
   const x = Math.min(1, Math.max(0, t));
