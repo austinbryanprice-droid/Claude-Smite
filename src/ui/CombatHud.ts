@@ -287,7 +287,8 @@ export class CombatHud {
         this.hitDirs.delete(src);
         continue;
       }
-      this.v.set(src.x, p.body.y, src.z).applyMatrix4(this.camera.matrixWorldInverse);
+      // bearing from the player, not the camera, which trails a few units behind
+      this.v.set(src.x - p.x, 0, src.z - p.z).transformDirection(this.camera.matrixWorldInverse);
       const angle = Math.atan2(this.v.x, -this.v.z);
       d.el.style.transform = `rotate(${angle}rad)`;
       d.el.style.opacity = `${d.strength * (1 - d.age / life)}`;
