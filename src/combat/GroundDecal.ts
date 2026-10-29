@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, attribute, float, fract, mix, mx_noise_float, positionWorld, smoothstep, time, uniform, vec3, vec4,
+  abs, atan, attribute, float, floor, fract, hash, max, mix, mx_noise_float, positionWorld, sign, smoothstep, step, time, uniform, vec3, vec4,
 } from '../render/tsl';
 
 export type DecalShape =
@@ -29,6 +29,9 @@ export class GroundDecal {
   readonly fill = uniform(0);
   /** 0..1 shockwave front for flashes, sweeping out from the caster. */
   readonly wave = uniform(1);
+  /** 1 draws a ring of slowly turning runes inside a circle's rim (Odin). */
+  readonly glyphs = uniform(0);
+  private readonly center = uniform(new THREE.Vector2());
   private readonly style = uniform(0);
   private local: Float32Array = new Float32Array(0);
   private shapeKey = '';
@@ -63,13 +66,31 @@ export class GroundDecal {
     const flashBody = front.add(behind.mul(float(0.3).add(crackle).mul(float(1.15).sub(this.wave))));
     const flashRim = behind.mul(rim);
 
+    // Runes: a band of procedural glyphs (staves, branches, ticks) framed by two thin circles.
+    const local = wp.sub(this.center);
+    const turn = atan(local.x, local.y).div(6.2832).add(0.5).add(t.mul(0.02));
+    const cells = turn.mul(22);
+    const cell = floor(cells);
+    const u = fract(cells);
+    const rr = edge.sub(0.7).div(0.16);
+    const inBand = step(0, rr).mul(step(rr, 1));
+    const h1 = hash(cell);
+    const h2 = hash(cell.add(31.7));
+    const stroke = (d: any) => smoothstep(0.1, 0.04, abs(d));
+    const stave = stroke(u.sub(0.5)).mul(step(0.12, rr)).mul(step(rr, 0.88));
+    const branch = stroke(u.sub(0.5).sub(rr.sub(0.5).mul(sign(h1.sub(0.5))).mul(0.7))).mul(step(0.35, h2));
+    const tick = stroke(rr.sub(h1.mul(0.5).add(0.25)).mul(1.4)).mul(step(abs(u.sub(0.5)), 0.28)).mul(step(h2, 0.6));
+    const frame = stroke(edge.sub(0.68).mul(4)).add(stroke(edge.sub(0.88).mul(4)));
+    const runes = max(max(stave, branch), tick).mul(inBand).add(frame.mul(0.6)).mul(this.glyphs).mul(2.4);
+
     const isZone = smoothstep(0.5, 1.0, this.style).mul(smoothstep(1.5, 1.0, this.style));
     const isFlash = smoothstep(1.5, 2.0, this.style);
     const isTele = float(1).sub(isZone).sub(isFlash);
 
     const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(1.25))).add(isFlash.mul(flashBody));
     const rimStrength = isTele.mul(2.2).add(isZone.mul(3.0)).add(isFlash.mul(2.0));
-    const intensity = body.add(rim.mul(rimStrength).mul(float(1).sub(isFlash).add(isFlash.mul(flashRim))));
+    const glyphBody = runes.mul(mix(float(1), behind, isFlash));
+    const intensity = glyphBody.add(body).add(rim.mul(rimStrength).mul(float(1).sub(isFlash).add(isFlash.mul(flashRim))));
     // Alpha-blended, not additive: additive light vanishes on the white marble.
     // HDR color (above 1) still feeds bloom so rims and veins glow.
     const hot = mix(this.color, this.core, smoothstep(1.2, 2.6, intensity));
@@ -95,6 +116,7 @@ export class GroundDecal {
   /** Place the shape at (x, z) facing `yaw` and conform it to the ground. */
   place(shape: DecalShape, x: number, z: number, yaw: number, lift = 0.07): void {
     this.ensureShape(shape);
+    this.center.value.set(x, z);
     const pos = this.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     const cos = Math.cos(yaw);

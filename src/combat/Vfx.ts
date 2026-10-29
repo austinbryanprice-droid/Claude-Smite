@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  cos, float, fract, hash, instanceIndex, mix, sin, smoothstep, time, uniform, uv, vec2, vec3, vec4,
+  cos, float, fract, hash, instanceIndex, mix, mx_noise_float, sin, smoothstep, time, uniform, uv, vec2, vec3, vec4,
 } from '../render/tsl';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
@@ -128,6 +128,62 @@ class ProjectileView {
   }
 }
 
+/** Elements whose hits and areas raise billowing puffs, and the puff color for each. */
+const PUFF_COLORS: Partial<Record<string, number>> = { smoke: 0x4f9466, sand: 0xe0b77e };
+
+/**
+ * Soft, alpha-blended clouds: Loki's smoke and Anubis's sand. One instanced
+ * sprite set; a burst throws puffs out once, a zone keeps them rolling.
+ */
+class Puffs {
+  readonly sprite: THREE.Sprite;
+  readonly age = uniform(0);
+  readonly seed = uniform(0);
+  readonly power = uniform(1);
+  readonly radius = uniform(1);
+  readonly fade = uniform(1);
+  /** 0 for a one-shot burst, 1 for a looping area. */
+  readonly loop = uniform(0);
+  /** Swirl speed: sand spirals, smoke drifts. */
+  readonly swirl = uniform(0);
+  readonly tint = uniform(new THREE.Color());
+
+  constructor(count: number) {
+    const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false });
+    const id = instanceIndex.toFloat();
+    const h1 = hash(id.add(this.seed));
+    const h2 = hash(id.mul(2.9).add(this.seed));
+    const h3 = hash(id.mul(6.1).add(this.seed));
+    // burst: life is the burst's age; loop: each puff cycles on its own clock
+    const cycle = fract(time.mul(h2.mul(0.25).add(0.3)).add(h3));
+    const life = mix(this.age.div(1.2).clamp(0, 1), cycle, this.loop);
+    const out = float(1).sub(float(1).sub(life).pow(3));
+    const ang = h1.mul(6.283).add(life.mul(this.swirl).mul(3)).add(time.mul(this.swirl).mul(this.loop));
+    const dist = mix(out.mul(h2.mul(1.6).add(0.6)).mul(this.power), h2.sqrt().mul(this.radius), this.loop);
+    mat.positionNode = vec3(cos(ang).mul(dist), life.mul(mix(float(1.1), float(2.2), this.loop)).add(h3.mul(0.5)).add(0.3), sin(ang).mul(dist));
+    const size = mix(float(0.6), float(1.6), out).mul(h3.mul(0.6).add(0.7)).mul(mix(this.power, this.radius.mul(0.3).add(0.8).min(2.6), this.loop));
+    mat.scaleNode = vec2(size, size);
+    const p = uv().sub(0.5);
+    const billow = mx_noise_float(vec3(p.x.mul(3), p.y.mul(3), h1.mul(40).add(time.mul(0.4)))).mul(0.5).add(0.5);
+    const soft = smoothstep(0.5, 0.2, p.length()).pow(0.6).mul(billow.mul(0.5).add(0.5));
+    const fadeLife = smoothstep(0, 0.08, life).mul(float(1).sub(life).pow(0.8));
+    // lit from above: tops a little lighter than undersides
+    const shade = mix(float(0.75), float(1.25), uv().y);
+    mat.colorNode = vec4(this.tint.mul(shade), 1);
+    mat.opacityNode = soft.mul(fadeLife).mul(this.fade).mul(0.9);
+    this.sprite = new THREE.Sprite(mat);
+    (this.sprite as any).count = count;
+    this.sprite.frustumCulled = false;
+    this.sprite.renderOrder = 11;
+    this.sprite.visible = false;
+  }
+
+  set(color: number | undefined): void {
+    this.sprite.visible = color !== undefined;
+    if (color !== undefined) this.tint.value.setHex(color);
+  }
+}
+
 /** A short burst: a flash plus sparks thrown outward, all animated on the GPU from `age`. */
 class Burst {
   readonly group = new THREE.Group();
@@ -140,6 +196,7 @@ class Burst {
   private readonly flash: THREE.Sprite;
   /** Flat shockwave ring rolling out over the ground. */
   private readonly ring: THREE.Mesh;
+  private readonly puffs = new Puffs(10);
 
   constructor() {
     const fade = float(1).sub(this.age.div(0.6)).clamp(0, 1);
@@ -156,7 +213,7 @@ class Burst {
     this.ring = new THREE.Mesh(rg, rm);
     this.ring.frustumCulled = false;
     this.ring.renderOrder = 6;
-    this.group.add(this.ring);
+    this.group.add(this.ring, this.puffs.sprite);
     this.flash = new THREE.Sprite(glowMaterial(mix(this.main, this.hot, 0.3).mul(2.5), float(1), 1.8, false, fade.pow(1.5).mul(0.9)));
     this.flash.frustumCulled = false;
     this.group.add(this.flash);
@@ -195,6 +252,14 @@ class Burst {
     // the ring only for hits near the ground and strong enough to shake it
     this.ring.visible = power >= 0.75 && at.y - groundY < 2.5;
     this.ring.position.y = groundY - at.y + 0.12;
+    const puff = p.element ? PUFF_COLORS[p.element] : undefined;
+    this.puffs.set(power >= 0.5 ? puff : undefined);
+    this.puffs.age.value = 0;
+    this.puffs.seed.value = this.seed.value;
+    this.puffs.power.value = power;
+    this.puffs.sprite.position.y = groundY - at.y;
+    this.puffs.swirl.value = p.element === 'sand' ? 1 : 0.15;
+    this.life = this.puffs.sprite.visible ? 1.2 : 0.6;
     this.main.value.setHex(p.vfx);
     this.hot.value.setHex(p.core);
     this.seed.value = Math.random() * 100;
@@ -205,6 +270,7 @@ class Burst {
 
   update(dt: number): boolean {
     this.age.value += dt;
+    this.puffs.age.value = this.age.value;
     const k = Math.min(1, this.age.value / 0.18);
     this.flash.scale.setScalar((1.0 + k * 1.6) * this.power.value);
     const r = 1 - (1 - Math.min(1, this.age.value / 0.45)) ** 3;
@@ -249,9 +315,17 @@ class ZoneView {
   private readonly motes: THREE.Sprite;
   private readonly arc = new ArcView();
   private strikeAt = 0;
+  private readonly puffs = new Puffs(40);
 
   set(p: GodPalette, x: number, z: number, radius: number, fade: number, ground: Ground, t: number): void {
-    if (this.arc.group.parent !== this.group) this.group.add(this.arc.group);
+    if (this.arc.group.parent !== this.group) this.group.add(this.arc.group, this.puffs.sprite);
+    this.decal.glyphs.value = p.element === 'runes' ? 1 : 0;
+    this.puffs.set(p.element ? PUFF_COLORS[p.element] : undefined);
+    this.puffs.loop.value = 1;
+    this.puffs.radius.value = radius;
+    this.puffs.fade.value = fade;
+    this.puffs.swirl.value = p.element === 'sand' ? 1.4 : 0.1;
+    this.puffs.sprite.position.set(x, ground(x, z), z);
     this.arc.fade.value = fade * Math.max(0, 1 - (t - this.strikeAt) / 0.14);
     // a lightning god's storm keeps striking somewhere inside it
     if (p.element === 'lightning' && t - this.strikeAt > 0.22) {
@@ -266,7 +340,8 @@ class ZoneView {
       this.arc.strike(top, new THREE.Vector3(sx, ground(sx, sz) + 0.1, sz), 0.4, 2, 0.12);
     } else if (p.element !== 'lightning') this.arc.clear();
     this.decal.setColors(p.vfx, p.core);
-    this.decal.opacity.value = fade;
+    // clouds carry smoke and sand areas, so their ground glow steps back
+    this.decal.opacity.value = fade * (p.element === 'smoke' || p.element === 'sand' ? 0.55 : 1);
     this.decal.place({ type: 'circle', radius }, x, z, 0);
     this.radius.value = radius;
     this.main.value.setHex(p.vfx);
@@ -287,9 +362,10 @@ class FlashView {
     this.group.add(this.decal.mesh, this.arc.group);
   }
 
-  reset(p: GodPalette): void {
+  reset(p: GodPalette, circle: boolean): void {
     this.decal.setColors(p.vfx, p.core);
     this.lightning = p.element === 'lightning';
+    this.decal.glyphs.value = p.element === 'runes' && circle ? 1 : 0;
     this.arc.setColors(p.vfx, p.core);
     this.arc.clear();
     this.struck = -1;
@@ -497,7 +573,18 @@ export class CombatVfx {
       let v = this.flashes.get(f.id);
       if (!v) {
         v = this.flashPool.take();
-        v.reset(paletteOf(f.owner));
+        const p = paletteOf(f.owner);
+        v.reset(p, f.shape.type === 'circle');
+        // smoke and sand gods kick up a cloud where the shape lands
+        if (p.element === 'smoke' || p.element === 'sand') {
+          const s = f.shape;
+          const reach = s.type === 'circle' ? s.radius : s.type === 'line' ? s.length * 0.5 : s.range * 0.6;
+          const yaw = s.type === 'circle' ? 0 : s.yaw;
+          const d = s.type === 'circle' ? 0 : reach;
+          const cx = s.x - Math.sin(yaw) * d;
+          const cz = s.z - Math.cos(yaw) * d;
+          this.burst(p, cx, this.ground(cx, cz) + 0.6, cz, Math.min(2.5, 0.6 + reach * 0.35));
+        }
         const d = flashDecal(f.shape);
         v.decal.place(d.shape, d.x, d.z, d.yaw);
         this.flashes.set(f.id, v);
