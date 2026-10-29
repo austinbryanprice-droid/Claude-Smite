@@ -44,6 +44,11 @@ export const SOUNDS: Record<string, Recipe> = {
   'step.grass': { variants: 6, peak: 0.45, make: (r) => step(r, 1000, 0.85, 0.8) },
   'step.dirt': { variants: 6, peak: 0.45, make: (r) => step(r, 1250, 0.5, 0.9) },
   'step.minion': { variants: 4, peak: 0.35, make: (r) => layer([step(r, 1300, 0.5, 0.6), 1], [clang(r, 0.12, 1900 + r() * 400, { decay: 0.08 }), 0.15]) },
+  // the Wyrm's pit is strewn with its hoard; the Colossus stands on cooled lava and ash
+  'step.coins': { variants: 4, peak: 0.45, make: (r) => layer([step(r, 1500, 0.2, 0.7), 1], [clang(r, 0.25, 2600 + r() * 1400, { decay: 0.12, gain: 0.35 }), 0.8, 0.01], [clang(r, 0.2, 3400 + r() * 1600, { decay: 0.08, gain: 0.25 }), 0.6, 0.04]) },
+  'step.ash': { variants: 4, peak: 0.45, make: (r) => layer([step(r, 900, 0.6, 0.9), 1], [debris(r, 0.18, { density: 60, gain: 0.3, tone: 2200 }), 0.7]) },
+  // landing from a leap, a jump or a knock-up: a thud and a little dust
+  'land': { variants: 3, peak: 0.7, make: (r) => layer([thump(r, 0.35, 120, 45, { click: 0.3, noise: 0.5, drive: 1.6 }), 1], [debris(r, 0.35, { density: 18, gain: 0.3, tone: 900 }), 0.6, 0.02], [puff(r, 0.4, { tone: 700, gain: 0.5 }), 0.4]) },
   'step.heavy': { variants: 3, peak: 0.9, make: (r) => layer([thump(r, 0.6, 70, 28, { click: 0.3, noise: 0.6, drive: 2 }), 1], [debris(r, 0.5, { density: 10, gain: 0.4, tone: 500 }), 0.6]) },
 
   // -- god basic attacks (cast side)

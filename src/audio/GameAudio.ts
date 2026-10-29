@@ -20,7 +20,7 @@ const PHASES: SongName[] = ['dawn', 'battle', 'siege'];
 
 const SLOT_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'];
 
-type Surface = 'stone' | 'grass' | 'dirt';
+type Surface = 'stone' | 'grass' | 'dirt' | 'coins' | 'ash';
 
 interface Tracked {
   loop: LoopHandle;
@@ -36,7 +36,7 @@ export class GameAudio {
   private readonly projectiles = new Map<Projectile, Tracked>();
   private readonly zones = new Map<Zone, Tracked>();
   private readonly recalls = new Map<Unit, LoopHandle>();
-  private readonly strides = new Map<Unit, { x: number; z: number; acc: number; foot: number }>();
+  private readonly strides = new Map<Unit, { x: number; z: number; acc: number; foot: number; air: boolean }>();
   private readonly windups = new Map<Unit, boolean>();
   private readonly leaps = new Map<Unit, string>();
   private readonly seenBoss = new Set<Unit>();
@@ -454,12 +454,19 @@ export class GameAudio {
       const range = u.kind === 'minion' ? 22 : u.radius > 2 ? 60 : 38;
       let s = this.strides.get(u);
       if (!s) {
-        s = { x: u.x, z: u.z, acc: 0, foot: 0 };
+        s = { x: u.x, z: u.z, acc: 0, foot: 0, air: false };
         this.strides.set(u, s);
       }
       const moved = Math.hypot(u.x - s.x, u.z - s.z);
       s.x = u.x;
       s.z = u.z;
+      // coming down from a leap, a jump or a knock-up
+      const air = !!u.forced && u.forced.arc > 0;
+      if (s.air && !air && u.alive && d < range && u.kind !== 'minion') {
+        const big = u.radius > 2;
+        this.engine.play('land', { at: { x: u.x, y: u.body.y, z: u.z }, gain: (u === this.me ? 0.75 : 0.55) * (u === this.me ? 1 : this.crowd), vary: 0.06, ref: big ? 12 : 6, rate: big ? 0.7 : 1 }, u === this.me ? 4 : 2);
+      }
+      s.air = air;
       // leaps, blinks and recalls are not walking
       if (!u.alive || u.forced || moved > 3 || d > range || (u.stealth > 0 && u.team !== this.me.team)) {
         s.acc = 0;
@@ -481,6 +488,10 @@ export class GameAudio {
 
   private surface(x: number, z: number): Surface {
     if (!this.conquest) return 'stone';
+    for (const c of L.camps) {
+      if (c.team !== null || Math.hypot(x - c.at[0], z - c.at[1]) > L.radii.boss) continue;
+      return c.kind === 'treasureWyrm' ? 'coins' : 'ash';
+    }
     for (const p of L.plazas) if (Math.hypot(x - p.at[0], z - p.at[1]) < p.radius) return 'stone';
     for (const lane of L.lanes) if (nearestOnPolyline(lane.points, x, z).distance < lane.width * 0.55) return 'stone';
     for (const path of L.paths) if (nearestOnPolyline(path.points, x, z).distance < path.width * 0.6) return 'dirt';
