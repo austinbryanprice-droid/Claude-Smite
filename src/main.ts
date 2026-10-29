@@ -27,7 +27,11 @@ import { installUiSounds, mountAudioPanel } from './ui/AudioPanel';
 async function main(): Promise<void> {
   installErrorHandlers();
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
-  const hud = new Hud((q) => void applyQuality(q));
+  let sensitivity = 1;
+  let applySensitivity = (v: number): void => {
+    sensitivity = v;
+  };
+  const hud = new Hud((q) => void applyQuality(q), (v) => applySensitivity(v));
   hud.progress(0.05, 'Starting renderer…');
 
   const params = new URLSearchParams(location.search);
@@ -65,6 +69,11 @@ async function main(): Promise<void> {
   const god = new GodModel();
   world.actors.add(god.root);
   const player = new PlayerController(input, world.collision, god);
+  const baseSensitivity = player.mouseSensitivity;
+  applySensitivity = (v) => {
+    player.mouseSensitivity = baseSensitivity * v;
+  };
+  applySensitivity(sensitivity);
   player.spawn(world.spawn.x, world.spawn.z, world.spawn.yaw);
   const follow = new ThirdPersonCamera(camera, player, world.collision);
   const showcase = params.has('showcase')
@@ -111,6 +120,7 @@ async function main(): Promise<void> {
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);
   follow.update(1 / 60);
+  hud.progress(0.9, 'Preparing shaders (the first load can take a minute)…');
   await renderer.compileAsync(world.scene, camera);
   hud.ready();
 

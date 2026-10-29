@@ -13,7 +13,9 @@ canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
 .hud-stats { opacity: 0.75; }
 .hud-crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid rgba(255, 240, 210, 0.75); border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.5); }
 .hud-crosshair::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px; background: rgba(255,240,210,0.9); border-radius: 50%; }
-.hud-hint { position: absolute; bottom: 22px; width: 100%; text-align: center; font-size: 14px; letter-spacing: 0.06em; text-shadow: 0 1px 4px #000; transition: opacity 0.4s; }
+.hud-hint { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 26px; background: rgba(8, 6, 4, 0.62); border: 1px solid rgba(231, 194, 122, 0.4); border-radius: 6px; text-align: center; font-size: 13px; letter-spacing: 0.05em; text-shadow: 0 1px 4px #000; transition: opacity 0.4s; max-width: 92vw; }
+.hud-hint b { font-size: 24px; letter-spacing: 0.14em; color: var(--gold); font-weight: 500; }
+.hud-hint span { opacity: 0.85; }
 .hud-hint.hidden { opacity: 0; }
 .hud-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(ellipse at center, #2a2118 0%, #0b0a09 70%); transition: opacity 1s; }
 .hud-loading.done { opacity: 0; }
