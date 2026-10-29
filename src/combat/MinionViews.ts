@@ -13,7 +13,8 @@ import type { Unit } from '../sim/Unit';
  * per instance: a walk cycle, attack swings, a hit flinch and a fall on death.
  *
  * Minions are mortal soldiers, about 1.75 m (gods are 2.45 m); brutes are
- * hulking at about 2.6 m. Order wears blue and gold, Chaos crimson and black.
+ * hulking at about 2.6 m. Order wears blue and gold, Chaos crimson and black
+ * (the map's TEAM_STYLE colors).
  */
 
 type Mat = 'cloth' | 'trim' | 'metal' | 'leather' | 'skin' | 'wood';
@@ -23,8 +24,8 @@ const TYPES: readonly MinionType[] = ['melee', 'archer', 'brute'];
 const CAPACITY: Record<MinionType, number> = { melee: 72, archer: 72, brute: 16 };
 
 const TEAM_LOOK: Record<Team, { cloth: number; trim: number; metal: number; skin: number }> = {
-  order: { cloth: 0x2457c9, trim: 0xd9a845, metal: 0xb8c2cc, skin: 0xc49272 },
-  chaos: { cloth: 0xa3201c, trim: 0x2a2320, metal: 0x6f6a66, skin: 0x9a6d55 },
+  order: { cloth: 0x1f4fb8, trim: 0xd9a845, metal: 0xb8c2cc, skin: 0xc49272 },
+  chaos: { cloth: 0x8e1016, trim: 0x2a2320, metal: 0x6f6a66, skin: 0x9a6d55 },
 };
 
 /** Pivots of the animated parts, in the model's frame (front is +Z). */

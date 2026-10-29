@@ -20,6 +20,7 @@ import { LoadoutMenu } from '../ui/LoadoutMenu';
 import { MatchHud } from '../ui/MatchHud';
 import { GroundDecal, type DecalShape } from './GroundDecal';
 import { paletteFor } from './palette';
+import type { StructureModel } from './structures';
 import { UnitViews } from './UnitViews';
 import { CombatVfx } from './Vfx';
 
@@ -121,7 +122,13 @@ export class CombatGame implements Updatable {
     if (conquest) player.spawn(spawn.x, spawn.z, spawn.yaw);
     this.player = godUnit(godById('zeus')!, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
-    this.views = new UnitViews(this.player, player.model);
+    // the Conquest map builds and places its own Tower, Phoenix and Titan models
+    const placed = (world as unknown as { content?: { structures?: Map<string, StructureModel> } }).content?.structures;
+    this.views = new UnitViews(this.player, player.model, (u) => {
+      if (!placed || !this.match) return undefined;
+      for (const [id, s] of this.match.structures) if (s === u) return placed.get(id);
+      return undefined;
+    });
     world.actors.add(this.views.group);
     this.setPlayerModel('zeus');
 

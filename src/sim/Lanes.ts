@@ -9,6 +9,8 @@ export const GOD_AGGRO_WINDOW = 1.6;
 /** Towers hit a god harder with every consecutive shot, up to this multiplier. */
 const TOWER_MAX_RAMP = 2.2;
 const TOWER_RAMP_STEP = 0.3;
+/** The Titan raises its weapon this long before the slam lands, so the view can animate it and gods can dodge. */
+export const TITAN_WINDUP = 0.35;
 
 /** Reach of a unit's basic attack against a target, arena meters. */
 export function attackReach(u: Unit, t: Unit): number {
@@ -166,6 +168,15 @@ export class StructureBrain implements Brain {
     u.move = null;
     if (!u.alive) {
       this.target = null;
+      u.windup = 0;
+      return;
+    }
+    if (u.windup > 0) {
+      u.windup -= dt;
+      if (u.windup <= 0) {
+        u.windup = 0;
+        sim.basic(u);
+      }
       return;
     }
     // look around ten times a second; between looks only shoot when ready
@@ -180,6 +191,14 @@ export class StructureBrain implements Brain {
     if (!t) return;
     u.aim.x = t.x;
     u.aim.z = t.z;
+    if (u.kind === 'titan') {
+      // the slam: wind up now, land in TITAN_WINDUP seconds on whatever is still in front
+      if (u.combatant.basicReady) {
+        u.windup = TITAN_WINDUP;
+        u.body.yaw = Math.atan2(-(t.x - u.x), -(t.z - u.z));
+      }
+      return;
+    }
     const fired = sim.basic(u, { homing: t, scale: t.kind === 'god' ? this.ramp : 1 });
     if (fired && t.kind === 'god') this.ramp = Math.min(TOWER_MAX_RAMP, this.ramp + TOWER_RAMP_STEP);
   }

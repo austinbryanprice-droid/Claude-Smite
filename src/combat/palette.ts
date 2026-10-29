@@ -29,8 +29,8 @@ export function paletteFor(godId: string): GodPalette {
 
 /** Spell colors for minions and structures: their team's colors. */
 const TEAM_PALETTES = {
-  order: { cloth: 0x2457c9, trim: 0xd9a845, glow: 0x8fd0ff, vfx: 0x4aa8ff, core: 0xe6f4ff },
-  chaos: { cloth: 0xa3201c, trim: 0x2a2320, glow: 0xff9a6a, vfx: 0xff5a3a, core: 0xffe0c8 },
+  order: { cloth: 0x1f4fb8, trim: 0xd9a845, glow: 0x8fd0ff, vfx: 0x4fb2ff, core: 0xe6f4ff },
+  chaos: { cloth: 0x8e1016, trim: 0x2a2320, glow: 0xff9a6a, vfx: 0xff3524, core: 0xffe0c8 },
 } as const satisfies Record<'order' | 'chaos', GodPalette>;
 
 /** The palette a unit's effects use: its god's, its summoner's, or its team's. */

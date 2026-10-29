@@ -6,6 +6,7 @@ import type { StructureKind } from '../sim/factory';
 import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
 import { MinionViews } from './MinionViews';
 import { createStructureModel, type StructureModel } from './structures';
+import { MUZZLE_HEIGHT } from './Vfx';
 
 /** A wooden training post with a straw body and a painted target shield. */
 function buildDummy(): THREE.Group {
@@ -60,6 +61,10 @@ interface UnitView {
   localDir: THREE.Vector2;
   lift: number;
   structure: StructureModel | null;
+  /** The map owns and updates this structure model; combat only drives its state. */
+  external: boolean;
+  /** Last frame's windup, to start the slam animation once. */
+  windup: number;
   /** Seconds since a destroyed structure began to rise again, or -1. */
   rebirth: number;
 }
@@ -79,6 +84,8 @@ export class UnitViews {
   constructor(
     private player: Unit,
     private playerModel: GodModel,
+    /** Structure models the map already built and placed, by unit. */
+    private readonly mapStructure: (u: Unit) => StructureModel | undefined = () => undefined,
   ) {
     this.group.name = 'units';
     this.group.add(this.minions.group);
@@ -118,7 +125,7 @@ export class UnitViews {
       const v = this.views.get(u) ?? this.create(u);
       this.animate(u, v, dt, alpha);
       if (u.kind === 'minion') minions.push(u);
-      v.structure?.update(dt, time);
+      if (v.structure && !v.external) v.structure.update(dt, time);
     }
     this.minions.frame(
       minions,
@@ -169,6 +176,7 @@ export class UnitViews {
     let root: THREE.Group;
     let model: GodModel | null = null;
     let structure: StructureModel | null = null;
+    let external = false;
     let height = 2.45;
     if (u === this.player) {
       model = this.playerModel;
@@ -182,12 +190,21 @@ export class UnitViews {
       root = new THREE.Group();
       height = u.tag.endsWith('brute') ? 2.7 : 1.85;
     } else if (isStructure(u)) {
-      structure = createStructureModel(u.kind as StructureKind, u.team);
+      const placed = this.mapStructure(u);
+      external = !!placed;
+      structure = placed ?? createStructureModel(u.kind as StructureKind, u.team);
       root = structure.root as THREE.Group;
       height = structure.height;
-      root.position.set(u.x, u.body.y, u.z);
-      root.rotation.y = u.body.yaw + Math.PI;
-      this.group.add(root);
+      if (!placed) {
+        root.position.set(u.x, u.body.y, u.z);
+        root.rotation.y = u.body.yaw + Math.PI;
+        this.group.add(root);
+      }
+      if (structure.muzzle) {
+        // shots leave from the model's muzzle
+        root.updateMatrixWorld(true);
+        MUZZLE_HEIGHT[u.kind] = structure.muzzle.getWorldPosition(new THREE.Vector3()).y - root.position.y;
+      }
     } else {
       const summoned = u.kind === 'summon' && u.name === 'Einherjar';
       model = createGodModel(u.combatant.god.id, summoned ? 'einherjar' : 'god');
@@ -195,7 +212,7 @@ export class UnitViews {
       if (summoned) root.scale.setScalar(0.88);
       this.group.add(root);
     }
-    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1 };
+    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1, external, windup: 0 };
     this.views.set(u, v);
     return v;
   }
@@ -225,7 +242,12 @@ export class UnitViews {
     }
 
     if (v.structure) {
-      v.structure.setShielded(u.alive && u.shielded());
+      const s = v.structure;
+      s.setShielded(u.alive && u.shielded());
+      const c = u.combatant;
+      s.setDamage?.(u.alive ? 1 - c.health / c.stats.maxHealth : 1);
+      if (u.windup > 0 && v.windup <= 0) s.attack?.();
+      v.windup = u.windup;
       if (v.rebirth >= 0) {
         v.rebirth += dt;
         v.structure.setRebirth?.(Math.min(1, v.rebirth / 2.5));

@@ -22,12 +22,18 @@ export interface StructureModel {
   setDestroyed(t: number): void;
   /** Phoenix rising from its rubble, 0..1. */
   setRebirth?(t: number): void;
+  /** Wear from damage taken, 0..1. */
+  setDamage?(d: number): void;
+  /** The Titan's slam; its hit lands TITAN_WINDUP seconds later. */
+  attack?(): void;
+  /** Where shots leave from. */
+  readonly muzzle?: THREE.Object3D;
   update(dt: number, time: number): void;
 }
 
 const TEAM: Record<Team, { trim: number; glow: number; cloth: number }> = {
-  order: { trim: 0xd9a845, glow: 0x6fc4ff, cloth: 0x2457c9 },
-  chaos: { trim: 0x3a2a22, glow: 0xff5a2a, cloth: 0xa3201c },
+  order: { trim: 0xd9a845, glow: 0x4fb2ff, cloth: 0x1f4fb8 },
+  chaos: { trim: 0x3a2a22, glow: 0xff3524, cloth: 0x8e1016 },
 };
 
 function stoneMaterial(): THREE.MeshStandardNodeMaterial {

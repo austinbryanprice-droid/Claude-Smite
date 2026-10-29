@@ -91,6 +91,8 @@ export class Unit {
   lastGodHit: { victim: Unit; at: number } | null = null;
   /** Enemy gods that damaged this unit and when, for assists. */
   readonly damagedBy = new Map<Unit, number>();
+  /** Seconds until a wound-up attack lands (the Titan's slam), 0 when idle. */
+  windup = 0;
   /** Seconds since death, for units that do not respawn. */
   deadFor = 0;
   /** Free-form tag the match uses (lane, minion type). */
