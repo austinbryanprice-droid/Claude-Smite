@@ -16,7 +16,7 @@ export const zeus: GodDef = {
     physicalProtection: 19,
     magicalProtection: 27.5,
     attackSpeed: 1.0,
-    attackPower: 44,
+    attackPower: 40,
     moveSpeed: 375,
   },
   growth: {
@@ -44,7 +44,7 @@ export const zeus: GodDef = {
       targeting: { type: 'projectile', range: 8.8, radius: 0.55, speed: 45, bounces: [5, 5, 5, 6, 6] },
       cooldown: [12, 11.5, 11, 10.5, 10],
       cost: [50, 55, 60, 65, 70],
-      effects: [dmg([70, 115, 160, 205, 250], 'intelligence', 0.6, 'magical'), slow(0.2, 2), mark('charge', 5, 1)],
+      effects: [dmg([60, 100, 140, 180, 220], 'intelligence', 0.6, 'magical'), slow(0.2, 2), mark('charge', 5, 1)],
     },
     {
       id: 'zeus.storm-step',
@@ -55,7 +55,7 @@ export const zeus: GodDef = {
       targeting: { type: 'dash', distance: 7, width: 1.6 },
       cooldown: [16, 15, 14, 13, 12],
       cost: 60,
-      effects: [move('blink', 7), dmg([50, 80, 110, 140, 170], 'intelligence', 0.4, 'magical')],
+      effects: [move('blink', 7), dmg([45, 70, 95, 125, 150], 'intelligence', 0.4, 'magical')],
     },
     {
       id: 'zeus.thundering-presence',
@@ -67,7 +67,7 @@ export const zeus: GodDef = {
       cooldown: 12,
       cost: [60, 65, 70, 75, 80],
       effects: [
-        dmg([70, 120, 170, 220, 270], 'intelligence', 0.75, 'magical'),
+        dmg([60, 105, 150, 195, 240], 'intelligence', 0.75, 'magical'),
         buff('bonusAttackSpeed', 0.3, 4),
         buff('bonusMoveSpeed', [0.2, 0.225, 0.25, 0.275, 0.3], 4),
       ],
@@ -81,7 +81,7 @@ export const zeus: GodDef = {
       targeting: { type: 'self', radius: 30 },
       cooldown: [12, 11.5, 11, 10.5, 10],
       cost: [70, 75, 80, 85, 90],
-      effects: [dmg([40, 65, 90, 115, 140], 'intelligence', 0.3, 'magical'), cc('stun', 0.5)],
+      effects: [dmg([35, 55, 80, 100, 125], 'intelligence', 0.3, 'magical'), cc('stun', 0.5)],
     },
     {
       id: 'zeus.aegis-of-clouds',
@@ -107,7 +107,7 @@ export const zeus: GodDef = {
       targeting: { type: 'projectile', range: 12, radius: 2.4, speed: 6, pierce: true },
       cooldown: [14, 13.5, 13, 12.5, 12],
       cost: [60, 65, 70, 75, 80],
-      effects: [dmg([20, 30, 40, 50, 60], 'intelligence', 0.12, 'magical', 6, 0.5)],
+      effects: [dmg([20, 25, 35, 45, 55], 'intelligence', 0.12, 'magical', 6, 0.5)],
     },
     {
       id: 'zeus.wrath-mark',
@@ -119,7 +119,7 @@ export const zeus: GodDef = {
       cooldown: 15,
       cost: 55,
       effects: [
-        dmg([30, 50, 70, 90, 110], 'intelligence', 0.3, 'magical'),
+        dmg([25, 45, 60, 80, 95], 'intelligence', 0.3, 'magical'),
         debuff('magicalProtection', [8, 11, 14, 17, 20], 5),
         mark('charge', 5, 3),
       ],
@@ -133,7 +133,7 @@ export const zeus: GodDef = {
       targeting: { type: 'ground', range: 9, radius: 3 },
       cooldown: [16, 15.5, 15, 14.5, 14],
       cost: 70,
-      effects: [dmg([25, 40, 55, 70, 85], 'intelligence', 0.15, 'magical', 4, 0.5), cc('pull', 0.3), slow(0.25, 2)],
+      effects: [dmg([20, 35, 50, 60, 75], 'intelligence', 0.15, 'magical', 4, 0.5), cc('pull', 0.3), slow(0.25, 2)],
     },
     {
       id: 'zeus.skyfall-storm',
@@ -144,7 +144,7 @@ export const zeus: GodDef = {
       targeting: { type: 'ground', range: 8.8, radius: 4.8 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [dmg([120, 150, 180, 210, 240], 'intelligence', 0.75, 'magical', 5, 0.9)],
+      effects: [dmg([105, 130, 160, 185, 210], 'intelligence', 0.75, 'magical', 5, 0.9)],
     },
     {
       id: 'zeus.olympian-spear',
@@ -155,7 +155,7 @@ export const zeus: GodDef = {
       targeting: { type: 'line', range: 40, width: 1.8 },
       cooldown: [100, 95, 90, 85, 80],
       cost: 100,
-      effects: [dmg([300, 400, 500, 600, 700], 'intelligence', 1.2, 'magical'), mark('charge', 5, 3)],
+      effects: [dmg([265, 350, 440, 530, 615], 'intelligence', 1.2, 'magical'), mark('charge', 5, 3)],
     },
     {
       id: 'zeus.ascension',
@@ -166,7 +166,7 @@ export const zeus: GodDef = {
       targeting: { type: 'ground', range: 14, radius: 2.2 },
       cooldown: [110, 105, 100, 95, 90],
       cost: 100,
-      effects: [move('leap', 0), dmg([60, 80, 100, 120, 140], 'intelligence', 0.3, 'magical', 8, 0.5)],
+      effects: [move('leap', 0), dmg([55, 70, 90, 105, 125], 'intelligence', 0.3, 'magical', 8, 0.5)],
     },
   ],
   trees: [

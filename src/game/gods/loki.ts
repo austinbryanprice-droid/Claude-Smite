@@ -9,14 +9,14 @@ export const loki: GodDef = {
   role: 'carry',
   attackRange: 'ranged',
   base: {
-    maxHealth: 560,
+    maxHealth: 640,
     healthRegen: 1.9,
     maxMana: 270,
     manaRegen: 1.3,
     physicalProtection: 18,
     magicalProtection: 27,
     attackSpeed: 1.05,
-    attackPower: 43,
+    attackPower: 49,
     moveSpeed: 375,
   },
   growth: {
@@ -44,7 +44,7 @@ export const loki: GodDef = {
       targeting: { type: 'cone', range: 8, angle: 40 },
       cooldown: [10, 9.5, 9, 8.5, 8],
       cost: [45, 50, 55, 60, 65],
-      effects: [dmg([25, 38, 51, 64, 77], 'strength', 0.18, 'physical', 5)],
+      effects: [dmg([30, 45, 60, 75, 90], 'strength', 0.18, 'physical', 5)],
     },
     {
       id: 'loki.vanish',
@@ -66,7 +66,7 @@ export const loki: GodDef = {
       targeting: { type: 'ground', range: 6, radius: 3 },
       cooldown: [16, 15, 14, 13, 12],
       cost: 65,
-      effects: [summon('decoy', 3), cc('taunt', 1), dmg([60, 95, 130, 165, 200], 'strength', 0.5, 'physical')],
+      effects: [summon('decoy', 3), cc('taunt', 1), dmg([70, 110, 150, 190, 230], 'strength', 0.5, 'physical')],
     },
     {
       id: 'loki.poison-blade',
@@ -77,7 +77,7 @@ export const loki: GodDef = {
       targeting: { type: 'self' },
       cooldown: [14, 13.5, 13, 12.5, 12],
       cost: 50,
-      effects: [buff('bonusAttackSpeed', 0.15, 6), dmg([10, 15, 20, 25, 30], 'strength', 0.08, 'physical', 4, 1), slow(0.15, 1)],
+      effects: [buff('bonusAttackSpeed', 0.15, 6), dmg([10, 15, 25, 30, 35], 'strength', 0.08, 'physical', 4, 1), slow(0.15, 1)],
     },
     {
       id: 'loki.backstab',
@@ -88,7 +88,7 @@ export const loki: GodDef = {
       targeting: { type: 'projectile', range: 7, radius: 0.6, speed: 80 },
       cooldown: [15, 14, 13, 12, 11],
       cost: 60,
-      effects: [move('blink', 7), dmg([70, 110, 150, 190, 230], 'strength', 0.6, 'physical')],
+      effects: [move('blink', 7), dmg([80, 125, 170, 220, 265], 'strength', 0.6, 'physical')],
     },
     {
       id: 'loki.tricksters-mark',
@@ -100,7 +100,7 @@ export const loki: GodDef = {
       cooldown: 14,
       cost: 50,
       effects: [
-        dmg([30, 50, 70, 90, 110], 'strength', 0.3, 'physical'),
+        dmg([35, 55, 80, 105, 125], 'strength', 0.3, 'physical'),
         debuff('physicalProtection', [10, 13, 16, 19, 22], 6),
       ],
     },
@@ -113,7 +113,7 @@ export const loki: GodDef = {
       targeting: { type: 'ground', range: 8, radius: 3 },
       cooldown: [16, 15.5, 15, 14.5, 14],
       cost: 60,
-      effects: [dmg([40, 65, 90, 115, 140], 'strength', 0.35, 'physical'), cc('blind', 2), slow(0.25, 2)],
+      effects: [dmg([45, 75, 105, 130, 160], 'strength', 0.35, 'physical'), cc('blind', 2), slow(0.25, 2)],
     },
     {
       id: 'loki.shapeshift',
@@ -135,7 +135,7 @@ export const loki: GodDef = {
       targeting: { type: 'projectile', range: 9, radius: 0.8, speed: 90 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [move('blink', 9), dmg([250, 330, 410, 490, 570], 'strength', 1.2, 'physical'), cc('stun', 0.8)],
+      effects: [move('blink', 9), dmg([290, 380, 470, 565, 655], 'strength', 1.2, 'physical'), cc('stun', 0.8)],
     },
     {
       id: 'loki.mirror-legion',
@@ -146,7 +146,7 @@ export const loki: GodDef = {
       targeting: { type: 'self', radius: 8 },
       cooldown: [100, 95, 90, 85, 80],
       cost: 100,
-      effects: [summon('mirror-copy', 6), stealth(0.5), dmg([40, 55, 70, 85, 100], 'strength', 0.25, 'physical', 6, 1)],
+      effects: [summon('mirror-copy', 6), stealth(0.5), dmg([45, 65, 80, 100, 115], 'strength', 0.25, 'physical', 6, 1)],
     },
     {
       id: 'loki.ragnarok-rift',
@@ -157,7 +157,7 @@ export const loki: GodDef = {
       targeting: { type: 'ground', range: 10, radius: 4.5 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [dmg([70, 95, 120, 145, 170], 'strength', 0.4, 'physical', 4, 1), cc('intoxicate', 2), slow(0.3, 2)],
+      effects: [dmg([80, 110, 140, 165, 195], 'strength', 0.4, 'physical', 4, 1), cc('intoxicate', 2), slow(0.3, 2)],
     },
   ],
   trees: [
