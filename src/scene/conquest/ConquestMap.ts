@@ -9,6 +9,7 @@ import { TitanModel } from '../structures/TitanModel';
 import { TowerModel, type StructureModel } from '../structures/TowerModel';
 import { TEAM_STYLE, TeamMaterials } from '../structures/common';
 import type { Fire } from '../Effects';
+import { Flowers, type FlowerInstance } from '../Flowers';
 import { Foliage, type FoliageInstance, type SpeciesName } from '../Foliage';
 import type { MaterialLibrary } from '../Materials';
 import type { Terrain } from '../Terrain';
@@ -78,6 +79,7 @@ export class ConquestMap implements MapContent {
     this.buildStructures();
     this.props = new ConquestProps(materials, terrain, collision, def);
     this.group.add(this.props.group);
+    this.group.add(new Flowers(this.placeFlowers()).mesh);
     this.fires.push(...this.props.fires);
     for (const g of [this.dynamic, this.group]) g.traverse((o) => {
       if ((o as THREE.PointLight).isPointLight) this.lights.push(o as THREE.PointLight);
@@ -124,6 +126,31 @@ export class ConquestMap implements MapContent {
     const density = q.name === 'low' ? 0.45 : q.name === 'medium' ? 0.7 : 1;
     this.foliage.drawDistance = q.name === 'low' ? 110 : q.name === 'medium' ? 150 : q.name === 'high' ? 200 : 260;
     this.foliage.setInstances(this.placeFoliage(density));
+  }
+
+  /** Patches of flowering spikes along the lane and path verges, kept off pads and camp clearings. */
+  private placeFlowers(): FlowerInstance[] {
+    const out: FlowerInstance[] = [];
+    const rand = rng(5151);
+    const E = L.halfExtent;
+    const normal = new THREE.Vector3();
+    for (let i = 0; i < 140000; i++) {
+      const x = (rand() * 2 - 1) * E;
+      const z = (rand() * 2 - 1) * E;
+      const lane = this.def.laneDistance(x, z);
+      const path = this.def.pathDistance(x, z);
+      // off every paved surface, and close to at least one of them
+      if (lane < 0.6 || path < 0.4 || (lane > 4.5 && path > 3.5)) continue;
+      if (this.def.plazaDistance(x, z) < 2) continue;
+      if (L.camps.some((c) => Math.hypot(x - c.at[0], z - c.at[1]) < (c.team === null ? L.radii.boss : L.radii.camp) + 1)) continue;
+      // drifts of flowers rather than an even sprinkle
+      const patch = Math.sin(x * 0.13 + Math.sin(z * 0.11) * 2) * Math.sin(z * 0.17 + x * 0.07);
+      if (patch < 0.12 || rand() > (patch - 0.12) * 2.2) continue;
+      this.terrain.normalAt(x, z, normal);
+      if (normal.y < 0.85) continue;
+      out.push({ x, y: this.terrain.heightAt(x, z) - 0.02, z, yaw: rand() * Math.PI * 2, scale: 0.95 + rand() * 0.55 });
+    }
+    return out;
   }
 
   /** Scatters trees on the jungle walls, undergrowth along their feet and ferns in the corridors. */
