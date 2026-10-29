@@ -108,6 +108,11 @@ export class MatchHud {
         this.firstBlood = true;
         this.announce('First Blood', this.rel(k.team));
       } else if (v === this.player) this.announce('You have been slain', 'enemy');
+    } else if (v.kind === 'monster' && (v.name === 'Treasure Wyrm' || v.name === 'Molten Colossus') && k && k.team !== 'neutral') {
+      const ours = k.team === this.player.team;
+      const reward = v.name === 'Treasure Wyrm' ? 'XP and favor' : "Colossus's Fury";
+      this.announce(ours ? `Your team slew the ${v.name}` : `The enemy slew the ${v.name}`, ours ? 'ally' : 'enemy');
+      this.pushFeed(`<b class="mh-${this.rel(k.team)}">${k.name}</b> <span>slew the</span> ${v.name} <span>(${reward})</span>`);
     } else if (isStructure(v)) {
       const ours = v.team === this.player.team;
       const name = v.kind === 'titan' ? 'Titan' : v.kind === 'phoenix' ? 'Phoenix' : 'tower';
@@ -222,10 +227,11 @@ export class MatchHud {
     for (const c of this.match.jungle.camps) {
       const [x, y] = this.toMap(c.camp.at[0], c.camp.at[1]);
       const up = this.match.jungle.alive(c);
-      const glow = BUFF_GLOW[c.camp.kind];
+      const boss = c.camp.team === null;
+      const glow = boss ? (c.camp.kind === 'treasureWyrm' ? 0xffc83a : 0xff5a1a) : BUFF_GLOW[c.camp.kind];
       const col = glow !== undefined ? hex(glow) : '#e6b25a';
       g.beginPath();
-      g.arc(x, y, glow !== undefined ? 3.4 : 2.4, 0, Math.PI * 2);
+      g.arc(x, y, boss ? 4.6 : glow !== undefined ? 3.4 : 2.4, 0, Math.PI * 2);
       if (up) {
         g.fillStyle = col;
         g.fill();
