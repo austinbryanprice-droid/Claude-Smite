@@ -4,7 +4,7 @@ import {
 } from '../render/tsl';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
-import { isStructure, WORLD_SCALE, type Flash, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
+import { isStructure, WORLD_SCALE, type Unit, type Flash, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
 import { ArcView } from './Arcs';
 import { GroundDecal, type DecalShape } from './GroundDecal';
 import { paletteFor, paletteOf, type GodPalette } from './palette';
@@ -81,11 +81,11 @@ class ProjectileView {
     }
   }
 
-  reset(p: GodPalette, size: number, at: THREE.Vector3): void {
+  reset(p: GodPalette, size: number, at: THREE.Vector3, crackle = false): void {
     this.main.value.setHex(p.vfx);
     this.hot.value.setHex(p.core);
     this.size = size;
-    this.lightning = p.element === 'lightning';
+    this.lightning = crackle || p.element === 'lightning';
     this.arc.setColors(p.vfx, p.core);
     this.arc.clear();
     this.crackle = 0;
@@ -498,6 +498,11 @@ export class CombatVfx {
   /** Last time each unit flared from a hit, so damage over time doesn't spam sparks. */
   private readonly lastFlare = new WeakMap<object, number>();
   private clock = 0;
+  private readonly tethers = new Map<object, { arc: ArcView; at: number }>();
+  /** Structure → the god it is shooting, set by the game each frame. */
+  targets: () => Iterable<readonly [Unit, Unit | null]> = () => [];
+  /** The local player, whose tethers are drawn brighter. */
+  player: Unit | null = null;
   private readonly lights: THREE.PointLight[] = [];
   private readonly tmp = new THREE.Vector3();
 
@@ -536,6 +541,38 @@ export class CombatVfx {
       }
     }
     this.placeLights(sim);
+    this.syncTethers(t);
+  }
+
+  /** A crackling line from each structure to the god it is targeting, so you see when a tower is on you. */
+  private syncTethers(t: number): void {
+    const live = new Set<object>();
+    for (const [s, target] of this.targets()) {
+      if (!s.alive || !target || target.kind !== 'god' || !target.alive) continue;
+      live.add(s);
+      let v = this.tethers.get(s);
+      if (!v) {
+        v = { arc: new ArcView(), at: -1 };
+        this.group.add(v.arc.group);
+        this.tethers.set(s, v);
+      }
+      v.arc.group.visible = true;
+      const p = paletteOf(s);
+      v.arc.setColors(p.vfx, p.core);
+      v.arc.fade.value = (target === this.player ? 0.9 : 0.4) * (0.8 + Math.sin(t * 14) * 0.2);
+      if (t - v.at < 0.08) continue;
+      v.at = t;
+      v.arc.clear();
+      const top = MUZZLE_HEIGHT[s.kind] ?? 4;
+      const a = new THREE.Vector3(s.x, s.body.y + top, s.z);
+      const b = new THREE.Vector3(target.x, target.body.y + 1.3, target.z);
+      v.arc.bolt(a, b, target === this.player ? 0.16 : 0.08, 0.03, target === this.player ? 0.7 : 0.4, 4);
+    }
+    for (const [s, v] of this.tethers) {
+      if (live.has(s)) continue;
+      v.arc.group.visible = false;
+      v.arc.clear();
+    }
   }
 
   burst(p: GodPalette, x: number, y: number, z: number, power = 1): void {
@@ -602,7 +639,8 @@ export class CombatVfx {
       if (!v) {
         v = this.projectilePool.take();
         const size = p.cast ? Math.min(1.3, 0.35 + p.radius * 0.45) : isStructure(p.owner) ? 0.75 : p.owner.kind === 'minion' ? 0.16 : 0.28;
-        v.reset(paletteOf(p.owner), size, at);
+        // structure shots crackle like lightning so they read as heavy
+        v.reset(paletteOf(p.owner), size, at, isStructure(p.owner));
         this.projectiles.set(p.id, v);
       }
       v.update(at, t);
