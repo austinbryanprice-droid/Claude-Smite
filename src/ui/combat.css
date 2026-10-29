@@ -74,9 +74,15 @@
 .ch-ob-level:empty { display: none; }
 .ch-ob-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .ch-ob-marks { color: #8fd8ff; letter-spacing: -1px; text-shadow: 0 0 4px #3fb6ff; }
-.ch-ob-bar { position: relative; height: 7px; background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(0, 0, 0, 0.9); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12); overflow: hidden; }
-.ch-ob-hp, .ch-ob-shield { position: absolute; top: 0; bottom: 0; }
-.ch-ob-hp { left: 0; transition: width 0.1s; }
+.ch-ob-bar { position: relative; height: 8px; background: linear-gradient(180deg, rgba(0, 0, 0, 0.85), rgba(20, 14, 10, 0.8)); border: 1px solid rgba(0, 0, 0, 0.95); border-radius: 2px; box-shadow: 0 0 0 1px rgba(231, 194, 122, 0.28), 0 2px 4px rgba(0, 0, 0, 0.6); overflow: hidden; }
+.ch-ob-god .ch-ob-bar { height: 9px; }
+.ch-ob-hp, .ch-ob-shield, .ch-ob-lag, .ch-ob-ticks { position: absolute; top: 0; bottom: 0; }
+.ch-ob-hp { left: 0; transition: width 0.1s; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 55%, white) 0%, var(--c) 45%, color-mix(in srgb, var(--c) 70%, black) 100%); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35); }
+.ch-ob-lag { left: 0; background: linear-gradient(180deg, #fff1d6, #ffb46a); opacity: 0.85; }
+.ch-ob-ticks { inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(var(--tick, 200%) - 1px), rgba(0, 0, 0, 0.55) calc(var(--tick, 200%) - 1px) var(--tick, 200%)); }
+.ch-ob-god .ch-ob-level { display: grid; place-items: center; min-width: 17px; height: 15px; padding: 0 2px; font-size: 10px; background: linear-gradient(180deg, #3a2a14, #120c06); border: 1px solid rgba(231, 194, 122, 0.8); border-radius: 3px; }
+.ch-ob-god .ch-ob-name { font-size: 12px; letter-spacing: 0.03em; }
+.ch-ob-ally .ch-ob-name { color: #c9f1ff; }
 .ch-ob-shield { background: #f4f7ff; }
 .ch-ob-enemy .ch-ob-name { color: #ffb0a6; }
 
@@ -105,3 +111,24 @@
 .ch-buff span { position: relative; font: 700 15px/1 'Cinzel', Georgia, serif; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 .ch-buff i { position: absolute; bottom: -5px; right: -7px; font: 600 10px/1 system-ui, sans-serif; font-style: normal; color: #fff; background: rgba(10, 8, 6, 0.8); border-radius: 6px; padding: 2px 3px; }
 .ch-ob-neutral .ch-ob-name { color: #f2c46a; }
+
+/* Objective bar: a boss or Warden the player is near, under the scoreboard */
+.ch-boss { position: absolute; left: 50%; top: 86px; width: min(460px, 70vw); transform: translateX(-50%) translateY(-6px); display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; transition: opacity 0.35s, transform 0.35s; }
+.ch-boss.show { opacity: 1; transform: translateX(-50%); }
+.ch-boss-name { padding: 2px 48px 3px; background: radial-gradient(ellipse at center, rgba(8, 6, 4, 0.82) 30%, rgba(8, 6, 4, 0) 72%); font-size: 17px; letter-spacing: 0.16em; text-transform: uppercase; color: #fff4dc; text-shadow: 0 0 12px color-mix(in srgb, var(--c) 80%, transparent), 0 2px 4px #000; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.ch-boss-name small { margin-top: 2px; font-size: 10px; letter-spacing: 0.22em; color: color-mix(in srgb, var(--c) 40%, #fff4dc); text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.ch-boss-bar { position: relative; width: 100%; height: 14px; background: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(24, 16, 10, 0.88)); border: 1px solid rgba(0, 0, 0, 0.95); border-radius: 3px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 60%, #e7c27a), 0 0 14px color-mix(in srgb, var(--c) 35%, transparent), 0 3px 10px rgba(0, 0, 0, 0.7); overflow: hidden; }
+.ch-boss:not(.ch-boss-major) { width: min(300px, 56vw); }
+.ch-boss:not(.ch-boss-major) .ch-boss-name { font-size: 14px; }
+.ch-boss:not(.ch-boss-major) .ch-boss-bar { height: 10px; }
+.ch-boss-hp, .ch-boss-lag, .ch-boss-ticks { position: absolute; top: 0; bottom: 0; left: 0; }
+.ch-boss-hp { transition: width 0.1s; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 45%, white) 0%, var(--c) 40%, color-mix(in srgb, var(--c) 55%, #3a0a00) 100%); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3), 2px 0 8px color-mix(in srgb, var(--c) 80%, white); }
+.ch-boss-lag { background: linear-gradient(180deg, #fff6e2, #ffd08a); opacity: 0.8; }
+.ch-boss-ticks { right: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(var(--tick, 200%) - 1px), rgba(0, 0, 0, 0.5) calc(var(--tick, 200%) - 1px) var(--tick, 200%)); }
+.ch-boss-pct { position: absolute; inset: 0; display: grid; place-items: center; font: 600 10px/1 system-ui, sans-serif; letter-spacing: 0.06em; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.ch-boss.engaged .ch-boss-bar { animation: ch-boss-throb 1.4s ease-in-out infinite; }
+@keyframes ch-boss-throb { 50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 80%, white), 0 0 22px color-mix(in srgb, var(--c) 60%, transparent), 0 3px 10px rgba(0, 0, 0, 0.7); } }
+.ch-boss-cast { position: relative; width: 52%; height: 16px; margin-top: 2px; border: 1px solid rgba(255, 120, 80, 0.75); border-radius: 2px; background: rgba(40, 6, 0, 0.75); overflow: hidden; opacity: 0; transition: opacity 0.15s; }
+.ch-boss-cast.show { opacity: 1; }
+.ch-boss-cast-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #ff4a1a, #ffb347); box-shadow: 0 0 10px #ff6a1a; }
+.ch-boss-cast span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 2px #000; }
