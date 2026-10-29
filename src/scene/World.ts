@@ -6,6 +6,7 @@ import { ConquestMap } from './conquest/ConquestMap';
 import { conquestTerrain } from './conquest/ConquestTerrain';
 import { DustMotes, type Fire } from './Effects';
 import { Environment } from './Environment';
+import { occlusionFocus } from './Foliage';
 import { Grass } from './Grass';
 import { MaterialLibrary, TextureLibrary } from './Materials';
 import { Temple } from './Temple';
@@ -121,6 +122,7 @@ export class World {
   }
 
   update(dt: number, t: number, focus: THREE.Vector3): void {
+    occlusionFocus.value.copy(focus);
     this.environment.update();
     this.content.update(dt, t, this.camera);
     this.grass.update(this.camera, focus);
