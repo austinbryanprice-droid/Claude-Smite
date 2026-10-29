@@ -3,7 +3,7 @@ import { SLOT_KEYS, ULTIMATE_SLOT } from '../game/loadout';
 import { MAX_LEVEL } from '../game/progression';
 import type { CCKind } from '../game/types';
 import { RECALL_TIME } from '../sim/Sim';
-import type { SimEvent, Unit } from '../sim/Unit';
+import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
 import { TEAM_COLORS } from '../combat/palette';
 import { skillIcon } from './icons';
 import './combat.css';
@@ -167,10 +167,10 @@ export class CombatHud {
         if (e.unit === this.player) this.toast(`Level ${e.level}${e.level === 5 ? ' &middot; Ultimate unlocked' : ''}`, 'gold');
         break;
       case 'reward':
-        if (e.unit === this.player) this.floater(e.unit, `+${e.xp} XP &middot; +${e.favor} Favor`, 'ch-num ch-num-reward');
+        if (e.unit === this.player && e.favor > 0) this.floater(e.unit, `+${e.xp} XP &middot; +${e.favor} Favor`, 'ch-num ch-num-reward');
         break;
       case 'death':
-        if (e.killer === this.player) this.toast(`You slew ${e.unit.name}`, 'gold');
+        if (e.killer === this.player && e.unit.kind === 'god') this.toast(`You slew ${e.unit.name}`, 'gold');
         break;
       case 'recall':
         if (e.unit === this.player && e.state === 'cancel') this.toast('Recall interrupted', 'warn');
@@ -270,6 +270,12 @@ export class CombatHud {
       }
       const c = u.combatant;
       const dist = this.camera.position.distanceTo(head!);
+      // keep the screen readable in a big fight: minion bars only up close
+      const maxDist = u.kind === 'minion' ? 45 : isStructure(u) ? 45 : 80;
+      if (dist > maxDist) {
+        b.el.style.display = 'none';
+        continue;
+      }
       b.el.style.display = '';
       b.el.style.transform = `translate(${at.x}px, ${at.y}px) translate(-50%, -100%) scale(${Math.max(0.6, Math.min(1, 22 / dist))})`;
       const max = c.stats.maxHealth;

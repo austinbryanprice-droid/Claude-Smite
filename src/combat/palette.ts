@@ -27,6 +27,19 @@ export function paletteFor(godId: string): GodPalette {
   return PALETTES[godId] ?? FALLBACK;
 }
 
+/** Spell colors for minions and structures: their team's colors. */
+const TEAM_PALETTES = {
+  order: { cloth: 0x1f4fb8, trim: 0xd9a845, glow: 0x8fd0ff, vfx: 0x4fb2ff, core: 0xe6f4ff },
+  chaos: { cloth: 0x8e1016, trim: 0x2a2320, glow: 0xff9a6a, vfx: 0xff3524, core: 0xffe0c8 },
+} as const satisfies Record<'order' | 'chaos', GodPalette>;
+
+/** The palette a unit's effects use: its god's, its summoner's, or its team's. */
+export function paletteOf(u: { kind: string; team: 'order' | 'chaos'; owner: { combatant: { god: { id: string } } } | null; combatant: { god: { id: string } } }): GodPalette {
+  if (u.kind === 'god' || u.kind === 'dummy') return paletteFor(u.combatant.god.id);
+  if (u.kind === 'summon' && u.owner) return paletteFor(u.owner.combatant.god.id);
+  return TEAM_PALETTES[u.team];
+}
+
 export const TEAM_COLORS = {
   ally: '#46d7c4',
   enemy: '#ff4a3d',

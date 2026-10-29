@@ -1,6 +1,7 @@
 import type { BasicShot, CastError, ResolvedSkill, Team } from '../game/combatant';
 import { FAVOR_REWARDS, ranked } from '../game/progression';
 import {
+  isStructure,
   nextEntityId,
   Unit,
   WORLD_SCALE,
@@ -34,6 +35,17 @@ const LEAP_SPEED = 24;
 const DASH_SPEED = 28;
 /** Melee basic attacks hit everything in this arc (degrees). */
 const MELEE_ARC = 100;
+/** Gods this close to a dying minion or structure share its XP. */
+export const XP_SHARE_RANGE = 22;
+/** Damage within this window before a god dies counts as an assist. */
+const ASSIST_WINDOW = 10;
+/** Seconds a dead minion lies on the ground before it is removed. */
+const CORPSE_TIME = 1.4;
+/**
+ * Structures take this share of damage when no minion of the attacker's team
+ * is near them (Smite's backdoor protection).
+ */
+export const BACKDOOR_SCALE = 0.3;
 
 export type CastResult = CastError | 'forced' | null;
 
@@ -69,6 +81,14 @@ export class Sim {
     if (i >= 0) this.units.splice(i, 1);
   }
 
+  /** Called with every event as it happens, before the view drains them. */
+  readonly listeners: ((e: SimEvent) => void)[] = [];
+
+  private emit(e: SimEvent): void {
+    this.events.push(e);
+    for (const l of this.listeners) l(e);
+  }
+
   drainEvents(): SimEvent[] {
     const e = this.events;
     this.events = [];
@@ -99,11 +119,16 @@ export class Sim {
   // -------------------------------------------------------------------------
   // Actions
 
-  /** Fire a basic attack along the unit's aim. Returns false if it was not ready. */
-  basic(u: Unit): boolean {
+  /**
+   * Fire a basic attack along the unit's aim. Returns false if it was not
+   * ready. `homing` makes a ranged shot follow that unit (structure shots);
+   * `scale` multiplies its damage (tower escalation, empowered minions).
+   */
+  basic(u: Unit, opts: { homing?: Unit; scale?: number } = {}): boolean {
     if (u.forced) return false;
     const shot = u.combatant.startBasic(this.rng);
     if (!shot) return false;
+    if (opts.scale !== undefined) shot.raw *= opts.scale;
     this.interruptRecall(u);
     u.stealth = 0;
     u.sinceAction = 0;
@@ -111,7 +136,7 @@ export class Sim {
     const dir = this.aimDir(u);
     const range = def.range * WORLD_SCALE;
     if (def.projectileSpeed === undefined) {
-      this.events.push({ type: 'basic', unit: u, melee: true });
+      this.emit({ type: 'basic', unit: u, melee: true });
       for (const t of this.enemiesOf(u)) {
         const d = Math.hypot(t.x - u.x, t.z - u.z);
         if (d > range + t.radius) continue;
@@ -119,8 +144,8 @@ export class Sim {
         this.landBasic(u, t, shot);
       }
     } else {
-      this.events.push({ type: 'basic', unit: u, melee: false });
-      this.spawnProjectile(u, dir, null, shot, def.projectileSpeed * WORLD_SCALE, range, 0.45, false, 0);
+      this.emit({ type: 'basic', unit: u, melee: false });
+      this.spawnProjectile(u, dir, null, shot, def.projectileSpeed * WORLD_SCALE, range, 0.45, false, 0, opts.homing ?? null);
     }
     return true;
   }
@@ -141,14 +166,14 @@ export class Sim {
   startRecall(u: Unit): boolean {
     if (!u.alive || u.recall > 0 || this.inBase(u)) return false;
     u.recall = RECALL_TIME;
-    this.events.push({ type: 'recall', unit: u, state: 'start' });
+    this.emit({ type: 'recall', unit: u, state: 'start' });
     return true;
   }
 
   interruptRecall(u: Unit): void {
     if (u.recall <= 0) return;
     u.recall = 0;
-    this.events.push({ type: 'recall', unit: u, state: 'cancel' });
+    this.emit({ type: 'recall', unit: u, state: 'cancel' });
   }
 
   /** Where a cast aimed at the unit's aim point would land, clamped to `range`. */
@@ -280,7 +305,7 @@ export class Sim {
           land: () => {
             this.area(u, cast, { x: u.x, z: u.z }, r);
             this.flash(u, { type: 'circle', x: u.x, z: u.z, radius: r });
-            this.events.push({ type: 'impact', x: u.x, z: u.z, owner: u, big: true });
+            this.emit({ type: 'impact', x: u.x, z: u.z, owner: u, big: true });
           },
         };
         break;
@@ -312,7 +337,7 @@ export class Sim {
       const where = t.type === 'ground' ? at : { x: u.x, z: u.z };
       this.summon(u, e.unit, e.duration, where);
     }
-    this.events.push({ type: 'cast', unit: u, cast, x: at.x, z: at.z });
+    this.emit({ type: 'cast', unit: u, cast, x: at.x, z: at.z });
   }
 
   // -------------------------------------------------------------------------
@@ -321,6 +346,8 @@ export class Sim {
   /** Apply a skill to one unit, schedule its extra hits, and report what happened. */
   hit(owner: Unit, cast: ResolvedSkill, target: Unit): void {
     if (target !== owner && !target.targetable) return;
+    // abilities never damage structures, as in Smite
+    if (isStructure(target)) return;
     this.applyOnce(owner, cast, target);
     // Multi-hit skills that are not areas strike the same target again over time.
     for (const e of cast.hits) {
@@ -331,6 +358,7 @@ export class Sim {
   }
 
   private applyOnce(owner: Unit, cast: ResolvedSkill, target: Unit): void {
+    if (isStructure(target)) return;
     const c = target.combatant;
     const before = c.health + c.shieldTotal;
     const wasAlive = c.alive;
@@ -357,6 +385,13 @@ export class Sim {
     const wasAlive = c.alive;
     const credit = u.owner ?? u;
     const levelBefore = credit.combatant.level;
+    if (isStructure(target)) {
+      if (target.shielded()) {
+        this.emit({ type: 'impact', x: target.x, z: target.z, owner: u, big: false });
+        return;
+      }
+      if (!this.minionNear(u.team, target)) shot = { ...shot, raw: shot.raw * BACKDOOR_SCALE };
+    }
     const r = u.combatant.landBasic(c, shot);
     if (!r) return;
     this.report(u, target, before, wasAlive, r.crit, false);
@@ -367,10 +402,15 @@ export class Sim {
     const c = target.combatant;
     const delta = before - (c.health + c.shieldTotal);
     if (delta > 0.05) {
-      this.events.push({ type: 'damage', target, source, amount: delta, crit, ability });
+      this.emit({ type: 'damage', target, source, amount: delta, crit, ability });
       this.interruptRecall(target);
+      const credit = source.owner ?? source;
+      if (target.kind === 'god' && credit.team !== target.team) {
+        source.lastGodHit = { victim: target, at: this.time };
+        if (credit.kind === 'god') target.damagedBy.set(credit, this.time);
+      }
     } else if (delta < -0.05) {
-      this.events.push({ type: 'heal', target, amount: -delta });
+      this.emit({ type: 'heal', target, amount: -delta });
     }
     if (wasAlive && !c.alive) this.onDeath(target, source);
   }
@@ -417,24 +457,65 @@ export class Sim {
 
   private onDeath(victim: Unit, source: Unit | null): void {
     const killer = source?.owner ?? source;
-    this.events.push({ type: 'death', unit: victim, killer });
+    const assists =
+      victim.kind === 'god'
+        ? [...victim.damagedBy].filter(([g, at]) => g !== killer && this.time - at <= ASSIST_WINDOW && g.team !== victim.team).map(([g]) => g)
+        : [];
+    victim.damagedBy.clear();
+    victim.wasAlive = false;
+    victim.deadFor = 0;
+    this.emit({ type: 'death', unit: victim, killer, assists });
     victim.forced = null;
     victim.recall = 0;
     victim.marks.clear();
+    if (!victim.respawns) victim.combatant.respawnTimer = Infinity;
     for (const z of this.zones) if (z.owner === victim && z.follow) z.ticks = 0;
     if (!killer || killer.team === victim.team || victim.kind === 'summon') return;
-    const xp = victim.kind === 'god' ? 120 + 30 * victim.combatant.level : 90;
-    const favor = victim.kind === 'god' ? FAVOR_REWARDS.godKill : FAVOR_REWARDS.minion;
-    const before = killer.combatant.level;
-    killer.combatant.gainXp(xp);
-    killer.combatant.gainFavor(favor);
-    this.events.push({ type: 'reward', unit: killer, xp, favor });
-    this.checkLevel(killer, before);
+
+    const enemyGods = this.units.filter((g) => g.kind === 'god' && g.alive && g.team === killer.team);
+    const near = (g: Unit) => Math.hypot(g.x - victim.x, g.z - victim.z) <= XP_SHARE_RANGE;
+    switch (victim.kind) {
+      case 'god': {
+        if (killer.kind === 'god') this.reward(killer, 120 + 30 * victim.combatant.level, FAVOR_REWARDS.godKill);
+        for (const a of assists) this.reward(a, 60 + 15 * victim.combatant.level, FAVOR_REWARDS.assist);
+        break;
+      }
+      case 'minion': {
+        const brute = victim.tag.endsWith('brute');
+        const xp = brute ? 140 : 55;
+        for (const g of enemyGods) {
+          if (g === killer || !near(g)) continue;
+          this.reward(g, xp, 0);
+        }
+        if (killer.kind === 'god') this.reward(killer, xp, brute ? FAVOR_REWARDS.brute : FAVOR_REWARDS.minion);
+        break;
+      }
+      case 'tower':
+      case 'phoenix': {
+        const favor = victim.kind === 'tower' ? FAVOR_REWARDS.tower : FAVOR_REWARDS.phoenix;
+        for (const g of enemyGods) this.reward(g, near(g) ? 200 : 0, favor);
+        break;
+      }
+      case 'titan':
+        break;
+      default:
+        // training dummies
+        this.reward(killer, 90, FAVOR_REWARDS.minion);
+    }
+  }
+
+  private reward(u: Unit, xp: number, favor: number): void {
+    if (u.kind !== 'god' && u.kind !== 'dummy') return;
+    const before = u.combatant.level;
+    u.combatant.gainXp(xp);
+    u.combatant.gainFavor(favor);
+    this.emit({ type: 'reward', unit: u, xp, favor });
+    this.checkLevel(u, before);
   }
 
   private checkLevel(u: Unit, before: number): void {
     const now = u.combatant.level;
-    if (now > before) this.events.push({ type: 'levelUp', unit: u, level: now });
+    if (now > before) this.emit({ type: 'levelUp', unit: u, level: now });
   }
 
   // -------------------------------------------------------------------------
@@ -450,6 +531,7 @@ export class Sim {
     radius: number,
     pierce: boolean,
     bounces: number,
+    homing: Unit | null = null,
   ): void {
     const start = owner.radius * 0.8;
     this.projectiles.push({
@@ -467,6 +549,7 @@ export class Sim {
       radius,
       pierce,
       bounces,
+      homing,
       hit: new Set(),
       alive: true,
     });
@@ -527,7 +610,7 @@ export class Sim {
       if (yaw !== undefined) u.body.yaw = yaw;
     }
     u.body.y = this.terrain.groundAt(x, z);
-    this.events.push({ type: 'teleport', unit: u, fromX, fromZ });
+    this.emit({ type: 'teleport', unit: u, fromX, fromZ });
   }
 
   // -------------------------------------------------------------------------
@@ -535,6 +618,12 @@ export class Sim {
 
   enemiesOf(u: Unit): Unit[] {
     return this.units.filter((t) => t.team !== u.team && t.targetable);
+  }
+
+  /** Whether a minion of `team` stands near a structure (lifts backdoor protection). */
+  minionNear(team: Team, structure: Unit): boolean {
+    const reach = structure.radius + 14;
+    return this.units.some((m) => m.kind === 'minion' && m.alive && m.team === team && Math.hypot(m.x - structure.x, m.z - structure.z) <= reach);
   }
 
   /** Enemies whose circle touches the segment from (x, z) along dir. */
@@ -586,6 +675,14 @@ export class Sim {
     c.update(dt);
     u.sinceAction += dt;
 
+    // deaths the rules engine caused on its own (or a test did) still count
+    if (u.wasAlive && !u.alive) this.onDeath(u, null);
+    if (!u.alive && !u.respawns) {
+      u.vx = u.vz = 0;
+      u.deadFor += dt;
+      if (u.kind === 'minion' && u.deadFor >= CORPSE_TIME) this.remove(u);
+      return;
+    }
     if (u.lifetime !== Infinity) {
       u.lifetime -= dt;
       if (u.lifetime <= 0 || !u.alive) {
@@ -595,7 +692,7 @@ export class Sim {
     }
     if (!u.wasAlive && u.alive) {
       this.teleport(u, u.home.x, u.home.z, u.home.yaw);
-      this.events.push({ type: 'respawn', unit: u });
+      this.emit({ type: 'respawn', unit: u });
     }
     u.wasAlive = u.alive;
     if (!u.alive) {
@@ -626,7 +723,7 @@ export class Sim {
         if (u.recall <= 0) {
           u.recall = 0;
           this.teleport(u, u.home.x, u.home.z, u.home.yaw);
-          this.events.push({ type: 'recall', unit: u, state: 'done' });
+          this.emit({ type: 'recall', unit: u, state: 'done' });
         }
       }
     }
@@ -691,6 +788,19 @@ export class Sim {
   private stepProjectiles(dt: number): void {
     for (const p of this.projectiles) {
       if (!p.alive) continue;
+      if (p.homing) {
+        const h = p.homing;
+        if (!h.targetable) {
+          p.alive = false;
+          continue;
+        }
+        const dx = h.x - p.x;
+        const dz = h.z - p.z;
+        const d = Math.hypot(dx, dz) || 1;
+        p.dx = dx / d;
+        p.dz = dz / d;
+        p.traveled = 0;
+      }
       const step = p.speed * dt;
       const sub = Math.max(1, Math.ceil(step / 0.6));
       for (let i = 0; i < sub && p.alive; i++) {
@@ -702,7 +812,7 @@ export class Sim {
         if (p.traveled >= p.range) p.alive = false;
         else if (this.blocked(p.x, p.z)) {
           p.alive = false;
-          this.events.push({ type: 'impact', x: p.x, z: p.z, owner: p.owner, big: false });
+          this.emit({ type: 'impact', x: p.x, z: p.z, owner: p.owner, big: false });
         }
       }
     }
@@ -713,9 +823,12 @@ export class Sim {
     for (const t of this.units) {
       if (!p.alive) return;
       if (t.team === p.owner.team || !t.targetable || p.hit.has(t)) continue;
+      if (p.homing && t !== p.homing) continue;
+      // skill shots pass by structures
+      if (p.cast && isStructure(t)) continue;
       if (Math.hypot(t.x - p.x, t.z - p.z) > p.radius + t.radius) continue;
       p.hit.add(t);
-      this.events.push({ type: 'impact', x: p.x, z: p.z, owner: p.owner, big: !!p.cast });
+      this.emit({ type: 'impact', x: p.x, z: p.z, owner: p.owner, big: !!p.cast });
       if (p.shot) this.landBasic(p.owner, t, p.shot);
       if (p.cast) {
         this.hit(p.owner, p.cast, t);
@@ -795,7 +908,7 @@ export class Sim {
           if (t !== o && !t.targetable) continue;
           this.applyOnce(o, zn.cast, t);
         }
-        this.events.push({ type: 'impact', x: zn.x, z: zn.z, owner: o, big: false });
+        this.emit({ type: 'impact', x: zn.x, z: zn.z, owner: o, big: false });
       }
     }
     removeWhere(this.zones, (z) => z.ticks <= 0 && z.timer <= -0.4);

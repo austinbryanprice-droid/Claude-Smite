@@ -63,6 +63,12 @@
 /* Overhead bars */
 .ch-ob { position: absolute; left: 0; top: 0; width: 112px; will-change: transform; }
 .ch-ob-dummy { width: 84px; }
+.ch-ob-minion { width: 46px; }
+.ch-ob-minion .ch-ob-head { display: none; }
+.ch-ob-minion .ch-ob-bar { height: 4px; }
+.ch-ob-tower, .ch-ob-phoenix { width: 150px; }
+.ch-ob-titan { width: 220px; }
+.ch-ob-tower .ch-ob-bar, .ch-ob-phoenix .ch-ob-bar, .ch-ob-titan .ch-ob-bar { height: 10px; }
 .ch-ob-head { display: flex; align-items: center; gap: 4px; font-size: 11px; height: 14px; text-shadow: 0 1px 2px #000, 0 0 3px #000; white-space: nowrap; }
 .ch-ob-level { min-width: 14px; font-weight: 700; color: #ffe3a3; }
 .ch-ob-level:empty { display: none; }

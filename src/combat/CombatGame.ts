@@ -1,21 +1,26 @@
 import * as THREE from 'three/webgpu';
-import { GodModel } from '../actors/GodModel';
+import { createGodModel } from './godModels';
 import type { Input } from '../core/Input';
 import type { Updatable } from '../core/Loop';
 import type { CastError } from '../game/combatant';
 import { GODS, godById } from '../game/gods';
+import type { GodDef } from '../game/types';
 import { ULTIMATE_SLOT } from '../game/loadout';
 import { FAVOR_THRESHOLDS, XP_TABLE } from '../game/progression';
 import type { PlayerController } from '../player/PlayerController';
 import type { World } from '../scene/World';
 import { GodBot, SummonBrain } from '../sim/Bot';
 import { dummyUnit, godUnit, summonUnit } from '../sim/factory';
-import { Sim, type BaseZone } from '../sim/Sim';
+import { LaneBot, ROLES, spawnPoint, type BotRole } from '../sim/LaneBot';
+import { conquestBases, Match } from '../sim/Match';
+import { Sim, type BaseZone, type SimTerrain } from '../sim/Sim';
 import { Unit, WORLD_SCALE, type Body } from '../sim/Unit';
 import { CombatHud } from '../ui/CombatHud';
 import { LoadoutMenu } from '../ui/LoadoutMenu';
+import { MatchHud } from '../ui/MatchHud';
 import { GroundDecal, type DecalShape } from './GroundDecal';
 import { paletteFor } from './palette';
+import type { StructureModel } from './structures';
 import { UnitViews } from './UnitViews';
 import { CombatVfx } from './Vfx';
 
@@ -31,15 +36,21 @@ const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
 
 export interface CombatDeps {
   world: World;
+  /** 'conquest' plays a full match against bots; 'arena' is the training ground. */
+  mode?: 'arena' | 'conquest';
   input: Input;
   player: PlayerController;
   camera: THREE.PerspectiveCamera;
 }
 
+/** Until the Conquest scene lands, a match on another map follows its ground but ignores its walls. */
+const openGround = (c: SimTerrain): SimTerrain => ({ groundAt: (x, z) => c.groundAt(x, z), resolve: (x, z) => ({ x, z }) });
+
 /**
- * The training ground: the player's god, three training posts in front of
- * the temple, and an enemy bot holding the north side. Owns the simulation
- * and connects it to input, the 3D views and the HUD.
+ * Owns the simulation and connects it to input, the 3D views and the HUD.
+ * Two modes: the training ground (three training posts in front of the
+ * temple and an enemy bot holding the north side) and a Conquest match (the
+ * player in mid with four allied bots against five enemy bots).
  *
  * `update` runs on the fixed step (after the player controller); `frame`
  * runs once per rendered frame (after the controller places the model).
@@ -47,7 +58,10 @@ export interface CombatDeps {
 export class CombatGame implements Updatable {
   readonly sim: Sim;
   player!: Unit;
-  bot!: Unit;
+  bot: Unit | null = null;
+  readonly match: Match | null = null;
+  private readonly matchHud: MatchHud | null = null;
+  private endTimer = 0;
   private readonly views: UnitViews;
   private readonly vfx: CombatVfx;
   private readonly hud: CombatHud;
@@ -63,13 +77,18 @@ export class CombatGame implements Updatable {
 
   constructor(private readonly deps: CombatDeps) {
     const { world, player } = deps;
-    this.groundAt = (x, z) => world.collision.groundAt(x, z);
-    const spawn = world.spawn;
-    this.bases = {
-      order: { x: spawn.x, z: spawn.z + 2, radius: 9 },
-      chaos: { x: 0, z: -62, radius: 9 },
-    };
-    this.sim = new Sim(world.collision, this.bases);
+    const conquest = deps.mode === 'conquest';
+    const onConquestMap = (world as unknown as { map?: string }).map === 'conquest';
+    const terrain: SimTerrain = conquest && !onConquestMap ? openGround(world.collision) : world.collision;
+    this.groundAt = (x, z) => terrain.groundAt(x, z);
+    const spawn = conquest ? spawnPoint('order', 1) : world.spawn;
+    this.bases = conquest
+      ? conquestBases()
+      : {
+          order: { x: spawn.x, z: spawn.z + 2, radius: 9 },
+          chaos: { x: 0, z: -62, radius: 9 },
+        };
+    this.sim = new Sim(terrain, this.bases);
     this.sim.summonFactory = (owner, kind, at, i) => {
       const s = summonUnit(owner, kind, at, i);
       if (kind === 'einherjar') s.brain = new SummonBrain(this.sim, s);
@@ -100,24 +119,45 @@ export class CombatGame implements Updatable {
     this.shapeDecal.mesh.visible = this.rangeDecal.mesh.visible = false;
     world.vfx.add(this.shapeDecal.mesh, this.rangeDecal.mesh);
 
+    if (conquest) player.spawn(spawn.x, spawn.z, spawn.yaw);
     this.player = godUnit(godById('zeus')!, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
-    this.views = new UnitViews(this.player, player.model);
+    // the Conquest map builds and places its own Tower, Phoenix and Titan models
+    const placed = (world as unknown as { content?: { structures?: Map<string, StructureModel> } }).content?.structures;
+    this.views = new UnitViews(this.player, player.model, (u) => {
+      if (!placed || !this.match) return undefined;
+      for (const [id, s] of this.match.structures) if (s === u) return placed.get(id);
+      return undefined;
+    });
     world.actors.add(this.views.group);
     this.setPlayerModel('zeus');
 
     this.hud = new CombatHud(this.player, deps.camera, (u, out) => this.views.headOf(u, out));
-    this.menu = new LoadoutMenu({
-      combatant: () => this.player.combatant,
-      gods: GODS,
-      switchGod: (id) => this.switchGod(id),
-      practiceLevel: (lvl) => this.practiceLevel(lvl),
-      practiceFavor: () => {
-        const c = this.player.combatant;
-        c.gainFavor(Math.max(0, FAVOR_THRESHOLDS[FAVOR_THRESHOLDS.length - 1]! - c.favor));
-      },
-      onClose: () => undefined,
-    });
+    this.menu = new LoadoutMenu(
+      conquest
+        ? { combatant: () => this.player.combatant, gods: GODS, onClose: () => undefined }
+        : {
+            combatant: () => this.player.combatant,
+            gods: GODS,
+            switchGod: (id) => this.switchGod(id),
+            practiceLevel: (lvl) => this.practiceLevel(lvl),
+            practiceFavor: () => {
+              const c = this.player.combatant;
+              c.gainFavor(Math.max(0, FAVOR_THRESHOLDS[FAVOR_THRESHOLDS.length - 1]! - c.favor));
+            },
+            onClose: () => undefined,
+          },
+    );
+
+    if (conquest) {
+      this.match = new Match(this.sim, godById('zeus')!);
+      this.match.addGod(this.player);
+      this.addTeam('order', GODS.filter((g) => g.id !== 'zeus'), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
+      this.addTeam('chaos', GODS, ROLES, [0, 1, 2, 3, 4]);
+      this.matchHud = new MatchHud(this.match, this.player);
+      this.sim.drainEvents();
+      return;
+    }
 
     // Training posts on the temple plaza, facing the fountain.
     for (const x of [-6, 0, 6]) {
@@ -132,6 +172,14 @@ export class CombatGame implements Updatable {
     this.sim.drainEvents();
   }
 
+  private addTeam(team: 'order' | 'chaos', gods: readonly GodDef[], roles: readonly BotRole[], spots: readonly number[]): void {
+    gods.forEach((def, i) => {
+      const u = godUnit(def, team, spawnPoint(team, spots[i]!));
+      u.brain = new LaneBot(this.sim, this.match!, u, roles[i]!);
+      this.match!.addGod(u);
+    });
+  }
+
   private isHomeTeleport(x: number, z: number): boolean {
     return Math.hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
   }
@@ -140,14 +188,21 @@ export class CombatGame implements Updatable {
   // Fixed step
 
   update(dt: number): void {
-    this.views.beforeStep(this.sim.units);
-    this.sim.step(dt);
-    this.views.afterStep(this.sim.units);
+    // after a Titan falls the world keeps moving a few seconds, then freezes behind the end screen
+    if (this.match?.winner) this.endTimer += dt;
+    if (this.endTimer < 4) {
+      this.views.beforeStep(this.sim.units);
+      this.match?.step(dt);
+      this.sim.step(dt);
+      this.views.afterStep(this.sim.units);
+    }
 
-    // the bot keeps pace with the player so fights stay fair
-    const pc = this.player.combatant;
-    const bc = this.bot.combatant;
-    if (bc.level < pc.level) bc.gainXp(XP_TABLE[pc.level - 1]! - bc.xp);
+    // the training bot keeps pace with the player so fights stay fair
+    if (this.bot) {
+      const pc = this.player.combatant;
+      const bc = this.bot.combatant;
+      if (bc.level < pc.level) bc.gainXp(XP_TABLE[pc.level - 1]! - bc.xp);
+    }
 
     this.deps.player.movement = {
       speed: this.sim.moveSpeed(this.player),
@@ -165,16 +220,19 @@ export class CombatGame implements Updatable {
     if (input.wasPressed('KeyK')) this.toggleMenu();
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
 
-    if (!this.menu.isOpen) this.handleCombatInput();
+    if (!this.menu.isOpen && !this.match?.winner) this.handleCombatInput();
 
     for (const e of this.sim.drainEvents()) {
       this.vfx.onEvent(e);
       this.views.onEvent(e);
       this.hud.onEvent(e);
+      this.matchHud?.onEvent(e);
       if ((e.type === 'levelUp' || e.type === 'reward' || e.type === 'recall') && e.unit === this.player) this.menu.refresh();
     }
 
-    this.views.frame(this.sim.units, dt, alpha);
+    this.views.frame(this.sim.units, dt, alpha, time);
+    this.matchHud?.frame(dt, this.sim.units, input.isDown('Tab'));
+    if (this.match?.winner) this.hud.setVisible(false);
     this.vfx.frame(this.sim, dt, time);
     this.updatePreview();
     this.hud.setPreview(this.preview?.slot ?? null);
@@ -336,10 +394,9 @@ export class CombatGame implements Updatable {
   // God switching and practice
 
   private setPlayerModel(godId: string): void {
-    const p = paletteFor(godId);
     const ctrl = this.deps.player;
     const old = ctrl.model;
-    const model = new GodModel({ cloth: p.cloth, trim: p.trim, glow: p.glow });
+    const model = createGodModel(godId);
     old.root.parent?.add(model.root);
     old.root.parent?.remove(old.root);
     ctrl.model = model;

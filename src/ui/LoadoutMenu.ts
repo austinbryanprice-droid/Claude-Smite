@@ -24,9 +24,11 @@ export interface LoadoutMenuHooks {
   /** The combatant the menu edits (changes when the god is switched). */
   combatant(): Combatant;
   gods: readonly GodDef[];
-  switchGod(id: string): string | null;
-  practiceLevel(level: number): void;
-  practiceFavor(): void;
+  /** Absent in a match: the god is locked in once it starts. */
+  switchGod?(id: string): string | null;
+  /** Practice shortcuts, only on the training ground. */
+  practiceLevel?(level: number): void;
+  practiceFavor?(): void;
   onClose(): void;
 }
 
@@ -90,7 +92,7 @@ export class LoadoutMenu {
             <div class="lm-sub">${g.title} &middot; ${g.pantheon} &middot; ${g.role}</div>
           </div>
           <div class="lm-gods">${this.hooks.gods
-            .map((d) => `<button class="lm-god${d.id === g.id ? ' on' : ''}" data-god="${d.id}" ${base ? '' : 'disabled'}>${d.name}</button>`)
+            .map((d) => `<button class="lm-god${d.id === g.id ? ' on' : ''}" data-god="${d.id}" ${base && this.hooks.switchGod ? '' : 'disabled'}>${d.name}</button>`)
             .join('')}</div>
           <button class="lm-close" data-close>Close &middot; K</button>
         </header>
@@ -99,11 +101,11 @@ export class LoadoutMenu {
           <span>Skill points <b>${spent}</b> / ${budget} earned (max ${MAX_TREE_POINTS})</span>
           <span class="${c.unspentPoints ? 'lm-glow' : ''}">${c.unspentPoints} to spend</span>
           <span class="lm-base ${base ? 'yes' : 'no'}">${base ? 'In base: swaps and refunds allowed' : 'In the field: you can only spend points'}</span>
-          <span class="lm-practice">Practice:
+          ${this.hooks.practiceLevel ? `<span class="lm-practice">Practice:
             <button data-level="${Math.min(MAX_LEVEL, c.level + 1)}">+1 level</button>
             <button data-level="${MAX_LEVEL}">Level 20</button>
             <button data-favor>Max Favor</button>
-          </span>
+          </span>` : ''}
         </div>
         <div class="lm-msg">${this.message}</div>
         <div class="lm-body">
@@ -191,16 +193,16 @@ export class LoadoutMenu {
       b.addEventListener('click', () => this.say(c.allocate(b.dataset.node!)));
       b.addEventListener('contextmenu', () => this.say(c.deallocate(b.dataset.node!)));
     });
-    q('[data-god]').forEach((b) => b.addEventListener('click', () => this.say(this.hooks.switchGod(b.dataset.god!))));
+    q('[data-god]').forEach((b) => b.addEventListener('click', () => this.say(this.hooks.switchGod?.(b.dataset.god!) ?? null)));
     q('[data-level]').forEach((b) =>
       b.addEventListener('click', () => {
-        this.hooks.practiceLevel(Number(b.dataset.level));
+        this.hooks.practiceLevel?.(Number(b.dataset.level));
         this.say(null);
       }),
     );
     q('[data-favor]').forEach((b) =>
       b.addEventListener('click', () => {
-        this.hooks.practiceFavor();
+        this.hooks.practiceFavor?.();
         this.say(null);
       }),
     );

@@ -4,9 +4,9 @@ import {
 } from '../render/tsl';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
-import type { FlashShape, SimEvent } from '../sim/Unit';
+import { isStructure, WORLD_SCALE, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
 import { GroundDecal, type DecalShape } from './GroundDecal';
-import { paletteFor, type GodPalette } from './palette';
+import { paletteFor, paletteOf, type GodPalette } from './palette';
 
 type Ground = (x: number, z: number) => number;
 
@@ -291,18 +291,21 @@ export class CombatVfx {
 
   onEvent(e: SimEvent): void {
     switch (e.type) {
-      case 'impact':
-        this.burst(paletteFor(e.owner.combatant.god.id), e.x, this.ground(e.x, e.z) + (e.big ? 0.4 : PROJECTILE_HEIGHT), e.z, e.big ? 1.6 : 0.8);
+      case 'impact': {
+        const k = e.owner.kind;
+        const power = e.big ? 1.6 : k === 'minion' ? 0.35 : isStructure(e.owner) ? 1.1 : 0.8;
+        this.burst(paletteOf(e.owner), e.x, this.ground(e.x, e.z) + (e.big ? 0.4 : PROJECTILE_HEIGHT), e.z, power);
         break;
+      }
       case 'cast': {
         const u = e.unit;
         const f = u.forward;
-        this.burst(paletteFor(u.combatant.god.id), u.x + f.x * 0.7, u.body.y + 1.9, u.z + f.z * 0.7, 0.7);
+        this.burst(paletteOf(u), u.x + f.x * 0.7, u.body.y + 1.9, u.z + f.z * 0.7, 0.7);
         break;
       }
       case 'teleport':
         if (e.unit.alive) {
-          const p = paletteFor(e.unit.combatant.god.id);
+          const p = paletteOf(e.unit);
           this.burst(p, e.fromX, this.ground(e.fromX, e.fromZ) + 1.2, e.fromZ, 1.2);
           this.burst(p, e.unit.x, e.unit.body.y + 1.2, e.unit.z, 1.2);
         }
@@ -310,9 +313,12 @@ export class CombatVfx {
       case 'levelUp':
         this.burst({ ...paletteFor(''), vfx: 0xffc24a, core: 0xfff3c8 }, e.unit.x, e.unit.body.y + 0.3, e.unit.z, 2.2);
         break;
-      case 'death':
-        this.burst(paletteFor(e.unit.combatant.god.id), e.unit.x, e.unit.body.y + 1.2, e.unit.z, 1.8);
+      case 'death': {
+        const k = e.unit.kind;
+        const power = k === 'minion' ? 0.6 : isStructure(e.unit) ? 4 : 1.8;
+        this.burst(paletteOf(e.unit), e.unit.x, e.unit.body.y + (isStructure(e.unit) ? 4 : 1.2), e.unit.z, power);
         break;
+      }
       default:
         break;
     }
@@ -322,12 +328,12 @@ export class CombatVfx {
     const live = new Set<number>();
     for (const p of sim.projectiles) {
       live.add(p.id);
-      const at = this.tmp.set(p.x, this.ground(p.x, p.z) + PROJECTILE_HEIGHT, p.z);
+      const at = this.tmp.set(p.x, this.ground(p.x, p.z) + projectileHeight(p), p.z);
       let v = this.projectiles.get(p.id);
       if (!v) {
         v = this.projectilePool.take();
-        const size = p.cast ? Math.min(1.3, 0.35 + p.radius * 0.45) : 0.28;
-        v.reset(paletteFor(p.owner.combatant.god.id), size, at);
+        const size = p.cast ? Math.min(1.3, 0.35 + p.radius * 0.45) : isStructure(p.owner) ? 0.75 : p.owner.kind === 'minion' ? 0.16 : 0.28;
+        v.reset(paletteOf(p.owner), size, at);
         this.projectiles.set(p.id, v);
       }
       v.update(at, t);
@@ -350,7 +356,7 @@ export class CombatVfx {
       }
       const fadeIn = Math.min(1, z.age / 0.25);
       const fadeOut = Math.min(1, Math.max(0, (z.duration + 0.4 - z.age) / 0.6));
-      v.set(paletteFor(z.owner.combatant.god.id), z.x, z.z, z.radius, fadeIn * fadeOut, this.ground);
+      v.set(paletteOf(z.owner), z.x, z.z, z.radius, fadeIn * fadeOut, this.ground);
     }
     for (const [id, v] of this.zones) {
       if (live.has(id)) continue;
@@ -366,7 +372,7 @@ export class CombatVfx {
       let v = this.flashes.get(f.id);
       if (!v) {
         v = this.flashPool.take();
-        const p = paletteFor(f.owner.combatant.god.id);
+        const p = paletteOf(f.owner);
         v.decal.setColors(p.vfx, p.core);
         const d = flashDecal(f.shape);
         v.decal.place(d.shape, d.x, d.z, d.yaw);
@@ -386,11 +392,11 @@ export class CombatVfx {
   private placeLights(sim: Sim): void {
     const sources: { x: number; y: number; z: number; color: number; intensity: number }[] = [];
     for (const z of sim.zones) {
-      sources.push({ x: z.x, y: this.ground(z.x, z.z) + 1.2, z: z.z, color: paletteFor(z.owner.combatant.god.id).vfx, intensity: 14 });
+      sources.push({ x: z.x, y: this.ground(z.x, z.z) + 1.2, z: z.z, color: paletteOf(z.owner).vfx, intensity: 14 });
     }
     for (const p of sim.projectiles) {
-      if (!p.cast) continue;
-      sources.push({ x: p.x, y: this.ground(p.x, p.z) + PROJECTILE_HEIGHT, z: p.z, color: paletteFor(p.owner.combatant.god.id).vfx, intensity: 9 });
+      if (!p.cast && !isStructure(p.owner)) continue;
+      sources.push({ x: p.x, y: this.ground(p.x, p.z) + projectileHeight(p), z: p.z, color: paletteOf(p.owner).vfx, intensity: 9 });
     }
     this.lights.forEach((l, i) => {
       const s = sources[i];
@@ -405,3 +411,15 @@ export class CombatVfx {
   }
 }
 
+/** Height of the muzzle shots leave from, per structure kind (the structure models can refine it). */
+export const MUZZLE_HEIGHT: Partial<Record<string, number>> = { tower: 8.5, phoenix: 6 };
+
+/** Structure shots fall from the muzzle onto their target; everything else flies level. */
+function projectileHeight(p: Projectile): number {
+  const top = MUZZLE_HEIGHT[p.owner.kind];
+  if (top === undefined || !p.homing) return PROJECTILE_HEIGHT;
+  const range = p.owner.combatant.god.basicAttack.range * WORLD_SCALE + p.owner.radius;
+  const d = Math.hypot(p.homing.x - p.x, p.homing.z - p.z);
+  const k = Math.min(1, d / range);
+  return 1.3 + (top - 1.3) * k;
+}

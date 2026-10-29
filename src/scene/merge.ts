@@ -42,20 +42,3 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
     group.add(mesh);
   }
 }
-
-/**
- * Merges the meshes of a rigged hierarchy bone by bone: each Group keeps its
- * own transform (so animation still works) but its rigid meshes collapse to
- * one mesh per material.
- */
-export function mergeRig(root: THREE.Object3D): void {
-  const groups: THREE.Object3D[] = [];
-  root.traverse((o) => {
-    if (!(o as THREE.Mesh).isMesh) groups.push(o);
-  });
-  // deepest first, so a parent never bakes a child bone's meshes
-  for (const g of groups.reverse()) {
-    const bones = g.children.filter((c) => !(c as THREE.Mesh).isMesh);
-    mergeStatic(g, bones);
-  }
-}

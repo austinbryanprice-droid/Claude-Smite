@@ -54,14 +54,15 @@ export class TitanModel implements StructureModel {
       this.root.add(glyph);
     }
 
-    // The statue reuses the god rig with stone, trim and team cloth.
-    this.statue = new GodModel({ glow: style.glow }, {
-      skin: marble,
-      beard: marble,
-      gold: tm.trim,
-      steel: tm.trim,
-      leather: lib.bronze,
-      cloth: tm.banner,
+    // The statue reuses a god rig, re-dressed in stone, team trim and team cloth.
+    this.statue = new GodModel('zeus');
+    const dress: Record<string, THREE.Material> = {
+      gold: tm.trim, goldplain: tm.trim, steel: tm.trim, leather: lib.bronze,
+      cloth: tm.banner, clothplain: tm.banner, gem: tm.crystal, glow: tm.crystal,
+    };
+    this.statue.root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) mesh.material = dress[(mesh.material as THREE.Material).name] ?? marble;
     });
     this.statue.root.scale.setScalar(SCALE);
     this.body.position.y = DAIS_TOP;
