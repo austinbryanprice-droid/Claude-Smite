@@ -8,6 +8,7 @@ import { ahr, Biquad, buf, crackle, dcBlock, declick, fill, glide, loopable, nor
 import {
   chime, chirp, choir, clang, debris, filter, fire, knock, layer, puff, roar, rumble, sand, shape, shimmer, thump, twang, vowel, VOWELS, whoosh, zap,
 } from './gestures';
+import { VOICE_SOUNDS } from './voices';
 
 export interface Recipe {
   make: (r: Rand, variant: number) => Float32Array;
@@ -71,8 +72,8 @@ export const SOUNDS: Record<string, Recipe> = {
   'hit.blunt': { variants: 4, peak: 0.85, make: (r) => layer([thump(r, 0.35, 120, 45, { click: 0.9, noise: 0.6, drive: 3 }), 1], [clang(r, 0.3, 700 + r() * 200, { decay: 0.2, gain: 0.3, bright: 0.4 }), 1]) },
   'hit.zap': { variants: 4, peak: 0.7, make: (r) => layer([zap(r, 0.16, 520 + r() * 200, { chaos: 0.7, hiss: 1 }), 1], [thump(r, 0.16, 140, 60, { click: 0.4 }), 0.6]) },
   'hit.sand': { variants: 3, peak: 0.65, make: (r) => layer([sand(r, 0.25, { tone: 3000, peak: 0.1 }), 1], [thump(r, 0.18, 130, 50, { click: 0.3, noise: 0.4 }), 0.7]) },
-  'hit.structure': { variants: 4, peak: 0.6, make: (r) => layer([knock(r, 0.2, 500 + r() * 300), 1], [knock(r, 0.12, 1400), 0.5, 0.01], [debris(r, 0.4, { density: 15, gain: 0.25, tone: 1300 }), 1]) },
-  'hit.crit': { variants: 2, peak: 0.6, make: (r) => layer([clang(r, 0.6, 1500, { decay: 0.4, gain: 0.6 }), 1], [whoosh(r, 0.15, 6000, 3000, { q: 0.8 }), 0.8]) },
+  'hit.structure': { variants: 4, peak: 0.6, make: (r) => layer([knock(r, 0.2, 500 + r() * 300), 1], [knock(r, 0.12, 1400), 0.5, 0.01], [debris(r, 0.4, { density: 15, gain: 0.25, tone: 1300 }), 1], [thump(r, 0.3, 90, 45, { click: 0.3, noise: 0.4 }), 0.7]) },
+  'hit.crit': { variants: 2, peak: 0.6, make: (r) => layer([clang(r, 0.6, 1500, { decay: 0.4, gain: 0.6 }), 1], [whoosh(r, 0.15, 6000, 3000, { q: 0.8 }), 0.8], [thump(r, 0.25, 130, 50, { click: 0.8, drive: 2.5 }), 1]) },
   'hit.monster': { variants: 3, peak: 0.7, make: (r) => layer([hitFlesh(r, 1.2), 1], [vowel(r, 0.2, (t) => glide(300, 200, t, 0.2), VOWELS.eh, { breath: 0.5, growl: 0.2, gain: 0.3 }), 1]) },
 
   // -- minions
@@ -136,6 +137,9 @@ export const SOUNDS: Record<string, Recipe> = {
   'amb.fountain': { loop: true, peak: 0.5, make: (r) => water(r, 6) },
   'amb.fire': { loop: true, peak: 0.45, make: (r) => fire(r, 5) },
   'amb.jungle': { loop: true, peak: 0.3, make: (r) => insects(r, 8) },
+
+  // -- the gods' own voices (voices.ts)
+  ...VOICE_SOUNDS,
 };
 
 // ---------------------------------------------------------------------------

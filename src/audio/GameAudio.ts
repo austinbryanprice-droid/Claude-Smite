@@ -41,6 +41,7 @@ export class GameAudio {
   private ambience: LoopHandle[] = [];
   private heartbeat: LoopHandle | null = null;
   private heat = 0;
+  private muffle = 0;
   private birdIn = 4;
   private crowIn = 30;
   private lastWave = 0;
@@ -90,6 +91,7 @@ export class GameAudio {
         const near = e.target === me || e.source === me;
         if (near) this.heat = Math.min(1.5, this.heat + 0.12 + (e.target === me ? 0.1 : 0));
         else if (e.target.kind === 'god' && this.dist(e.target) < 30) this.heat = Math.min(1.5, this.heat + 0.05);
+        if (e.target.kind === 'god' && e.target.alive && e.amount >= e.target.combatant.stats.maxHealth * 0.07) this.voice(e.target, 'hurt', 0.75, 3, 0.9);
         if (!e.ability && e.source) this.onBasicHit(e.source, e.target, e.crit);
         else if (e.ability && e.target === me) this.engine.play('hit.flesh', { gain: 0.35, vary: 0.1 }, 2, 0.15);
         if (e.target.kind === 'titan' && e.target.team === me.team && this.time - this.titanWarnAt > 40) {
@@ -136,6 +138,8 @@ export class GameAudio {
     const ult = slot === ULTIMATE_SLOT;
     const gain = (mine ? 1 : 0.85) * (ult ? 1.15 : 1);
     this.at(skillPart(id, 'cast'), u, { gain, ref: ult ? 12 : 8, vary: 0.02, wet: ult ? 0.2 : 0.05 }, mine ? 6 : 4);
+    if (ult) this.voice(u, 'cry', 0.9, 5);
+    else if (Math.random() < 0.5) this.voice(u, 'effort', 0.6, 3, 0.6);
     if (!ss.impact) return;
     if (targeting === 'leap') {
       this.leaps.set(u, id);
@@ -157,6 +161,7 @@ export class GameAudio {
       case 'god':
       case 'dummy':
         name = `basic.${u.combatant.god.id}`;
+        if (Math.random() < 0.18) this.voice(u, 'effort', 0.4, 2, 1.5);
         break;
       case 'minion':
         name = `basic.minion.${u.tag.split(':').pop()}`;
@@ -233,6 +238,7 @@ export class GameAudio {
     switch (u.kind) {
       case 'god':
         this.at('god.death', u, { gain: u === me ? 1 : 0.8, ref: 10 }, 5);
+        this.voice(u, 'death', 0.85, 5);
         if (killer === me) this.engine.play('kill.confirm', { gain: 0.7 }, 5);
         if (this.conquest && killer?.kind === 'god') this.announceKill(u, killer);
         if (u === me) {
@@ -334,6 +340,9 @@ export class GameAudio {
     this.watchMonsters();
     this.watchMatch();
     this.updateMood(dt);
+    // while dead, the world is heard as if from far away
+    this.muffle += ((me.alive ? 0 : 1) - this.muffle) * Math.min(1, dt * (me.alive ? 6 : 2.5));
+    this.engine.setMuffle(this.muffle);
     this.ambientLife(dt);
   }
 
@@ -567,6 +576,15 @@ export class GameAudio {
 
   private dist(u: Unit): number {
     return Math.hypot(u.x - this.engine.listenerPos.x, u.z - this.engine.listenerPos.z);
+  }
+
+  /** A god's own voice (voices.ts): an effort, pain, a battle cry or a death cry. */
+  private voice(u: Unit, kind: 'effort' | 'hurt' | 'cry' | 'death', gain: number, priority: number, gap = 0): void {
+    if (u.kind !== 'god' && u.kind !== 'dummy') return;
+    // a stealthed enemy stays silent
+    if (u.stealth > 0 && u.team !== this.me.team) return;
+    const name = `voice.${u.combatant.god.id}.${kind}`;
+    if (this.engine.has(name)) this.at(name, u, { gain: u === this.me ? gain : gain * 0.85, vary: 0.04, ref: 7, wet: 0.05 }, priority, gap);
   }
 
   /** Play a sound at a unit. */
