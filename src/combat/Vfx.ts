@@ -279,6 +279,46 @@ class Burst {
   }
 }
 
+/** A column of light where a god falls, rising and thinning out. */
+class Pillar {
+  readonly group = new THREE.Group();
+  readonly age = uniform(0);
+  readonly main = uniform(new THREE.Color());
+  readonly hot = uniform(new THREE.Color());
+  readonly life = 1.6;
+  private readonly beam: THREE.Mesh;
+
+  constructor() {
+    const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const v = uv().y;
+    const fade = float(1).sub(this.age.div(this.life)).clamp(0, 1);
+    // bright at the foot, streaked as it climbs
+    const streak = sin(uv().x.mul(6.283 * 7).add(this.age.mul(3))).mul(0.25).add(0.75);
+    const body = float(1).sub(v).pow(1.6).mul(streak);
+    m.colorNode = vec4(mix(this.main, this.hot, float(1).sub(v).pow(10)).mul(body).mul(3).mul(fade.pow(1.5)), 1);
+    m.opacityNode = body.mul(fade);
+    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), m);
+    this.beam.frustumCulled = false;
+    this.beam.renderOrder = 12;
+    this.group.add(this.beam);
+  }
+
+  start(p: GodPalette, x: number, y: number, z: number): void {
+    this.group.position.set(x, y, z);
+    this.main.value.setHex(p.vfx);
+    this.hot.value.setHex(p.core);
+    this.age.value = 0;
+  }
+
+  update(dt: number): boolean {
+    this.age.value += dt;
+    const k = this.age.value;
+    const rise = 1 - Math.exp(-k * 5);
+    this.beam.scale.set(0.5 + 0.9 * (1 - rise) + 0.3, 2 + rise * 30, 0.5 + 0.9 * (1 - rise) + 0.3);
+    return k < this.life;
+  }
+}
+
 /** A lingering area: a churning ground decal with motes rising through it. */
 class ZoneView {
   readonly group = new THREE.Group();
@@ -453,6 +493,11 @@ export class CombatVfx {
   private readonly zonePool: Pool<ZoneView>;
   private readonly flashPool: Pool<FlashView>;
   private readonly burstPool: Pool<Burst>;
+  private readonly pillarPool: Pool<Pillar>;
+  private readonly pillars: Pillar[] = [];
+  /** Last time each unit flared from a hit, so damage over time doesn't spam sparks. */
+  private readonly lastFlare = new WeakMap<object, number>();
+  private clock = 0;
   private readonly lights: THREE.PointLight[] = [];
   private readonly tmp = new THREE.Vector3();
 
@@ -462,6 +507,7 @@ export class CombatVfx {
     this.zonePool = new Pool(this.group, () => new ZoneView(ground), 4);
     this.flashPool = new Pool(this.group, () => new FlashView(ground), 6);
     this.burstPool = new Pool(this.group, () => new Burst(), 16);
+    this.pillarPool = new Pool(this.group, () => new Pillar(), 2);
     for (let i = 0; i < SPELL_LIGHTS; i++) {
       const l = new THREE.PointLight(0xffffff, 0, 14, 2);
       l.castShadow = false;
@@ -471,6 +517,14 @@ export class CombatVfx {
   }
 
   frame(sim: Sim, dt: number, t: number): void {
+    this.clock = t;
+    for (let i = this.pillars.length - 1; i >= 0; i--) {
+      const p = this.pillars[i]!;
+      if (!p.update(dt)) {
+        this.pillars.splice(i, 1);
+        this.pillarPool.release(p);
+      }
+    }
     this.syncProjectiles(sim, t);
     this.syncZones(sim);
     this.syncFlashes(sim);
@@ -514,8 +568,22 @@ export class CombatVfx {
       case 'levelUp':
         this.burst({ ...paletteFor(''), vfx: 0xffc24a, core: 0xfff3c8 }, e.unit.x, e.unit.body.y + 0.3, e.unit.z, 2.2);
         break;
+      case 'damage': {
+        // a quick flare on gods that get hit, in the attacker's colors
+        const u = e.target;
+        if ((u.kind !== 'god' && u.kind !== 'dummy') || !e.source || e.amount <= 0) break;
+        if (this.clock - (this.lastFlare.get(u) ?? -1) < 0.12) break;
+        this.lastFlare.set(u, this.clock);
+        this.burst(paletteOf(e.source), u.x, u.body.y + 1.4, u.z, e.crit ? 0.7 : 0.4);
+        break;
+      }
       case 'death': {
         const k = e.unit.kind;
+        if (k === 'god') {
+          const p = this.pillarPool.take();
+          p.start(paletteOf(e.unit), e.unit.x, this.ground(e.unit.x, e.unit.z), e.unit.z);
+          this.pillars.push(p);
+        }
         const power = k === 'minion' ? 0.6 : isStructure(e.unit) ? 4 : 1.8;
         this.burst(paletteOf(e.unit), e.unit.x, e.unit.body.y + (isStructure(e.unit) ? 4 : 1.2), e.unit.z, power);
         break;

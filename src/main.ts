@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   loop.addFixed(player);
   // ?map=conquest plays a full match against bots; the default is the training ground
   const mode = new URLSearchParams(location.search).get('map') === 'conquest' ? 'conquest' : 'arena';
-  const combat = new CombatGame({ world, input, player, camera, mode });
+  const combat = new CombatGame({ world, input, player, camera, mode, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);

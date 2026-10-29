@@ -16,6 +16,7 @@ export class ThirdPersonCamera {
   private currentDistance = 7.2;
   private initialized = false;
   private shake = 0;
+  private shakeTime = 0;
 
   constructor(
     readonly camera: THREE.PerspectiveCamera,
@@ -64,10 +65,17 @@ export class ThirdPersonCamera {
     aim.y = focus.y - 0.4 - Math.sin(pitch) * 4;
     this.camera.lookAt(aim);
     if (this.shake > 0) {
-      const s = this.shake * this.shake * 0.08;
-      this.camera.rotation.x += (Math.random() - 0.5) * s;
-      this.camera.rotation.y += (Math.random() - 0.5) * s;
-      this.shake = Math.max(0, this.shake - dt * 2.5);
+      // trauma-style shake: squared so small knocks stay subtle, smooth
+      // layered sines instead of per-frame noise so it rumbles, not jitters
+      this.shakeTime += dt;
+      const t = this.shakeTime * 32;
+      const s = this.shake * this.shake;
+      const n = (a: number, b: number) => Math.sin(t * a + b) * 0.6 + Math.sin(t * a * 2.3 + b * 1.7) * 0.4;
+      this.camera.rotation.x += n(1.0, 0.0) * s * 0.03;
+      this.camera.rotation.y += n(0.9, 2.1) * s * 0.03;
+      this.camera.rotation.z += n(0.7, 4.3) * s * 0.025;
+      this.camera.position.y += n(1.2, 1.3) * s * 0.12;
+      this.shake = Math.max(0, this.shake - dt * 1.8);
     }
   }
 }
