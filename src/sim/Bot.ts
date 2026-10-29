@@ -174,6 +174,9 @@ export class GodBot implements Brain {
       const role = skillRole(c.resolve(s).skill);
       if (role === 'escape') return false;
       if (role === 'sustain') return hp < 0.65;
+      // a detonator is wasted on a target that carries nothing to set off
+      const mark = c.resolve(s).skill.detonates;
+      if (mark && !target.marks.get(mark)?.stacks) return false;
       return reachOf(u, s) + target.radius >= dist;
     });
     if (!slots.length) return;
