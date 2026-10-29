@@ -132,7 +132,8 @@ export class ConquestProps {
     private readonly def: ConquestTerrainDef,
   ) {
     this.group.name = 'props';
-    this.blocks = Array.from({ length: 6 }, (_, i) => chippedBlock(1.5, 0.75, 0.85, 6000 + i));
+    // lane walls hold hundreds of these, so they get a lighter mesh (188 triangles, not 472)
+    this.blocks = Array.from({ length: 6 }, (_, i) => chippedBlock(1.5, 0.75, 0.85, 6000 + i, 0.035, [5, 3, 4]));
     this.rocks = Array.from({ length: 5 }, (_, i) => boulder(1, 6100 + i, 3));
     this.ruinMarble = mats.marble.clone() as THREE.MeshStandardNodeMaterial;
     const marble = mats.marble.colorNode as any;
@@ -359,7 +360,7 @@ export class ConquestProps {
       const broken = r() < 0.4;
       const h = broken ? 2 + r() * 3 : 7.5;
       add(columnBase(0.55), this.ruinMarble, x, -0.05, z);
-      add(broken ? brokenShaft(0.55, h, 7300 + i) : flutedShaft(0.55, h), this.ruinMarble, x, 0.55, z);
+      add(broken ? brokenShaft(0.55, h, 7300 + i) : flutedShaft(0.55, h, 20, 80, 6), this.ruinMarble, x, 0.55, z);
       if (!broken) add(new THREE.CylinderGeometry(0.75, 0.62, 0.35, 24), this.mats.gold, x, 0.55 + h + 0.17, z);
       this.collision.addCircle(cx + x, cz + z, 0.8);
     }
