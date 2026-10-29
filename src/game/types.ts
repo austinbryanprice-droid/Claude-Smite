@@ -124,6 +124,12 @@ export interface SkillDef {
    * can't hide in stealth while it lasts.
    */
   primes?: { mark: string; duration: number };
+  /**
+   * Seconds the caster's basic attacks carry this skill: each basic that lands
+   * on an enemy applies the skill's enemy effects to it, refreshing (not
+   * stacking) any damage over time it already left there.
+   */
+  imbue?: number;
 }
 
 export interface BasicAttackDef {

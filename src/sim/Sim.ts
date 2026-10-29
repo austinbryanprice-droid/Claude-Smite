@@ -76,6 +76,8 @@ export class Sim {
   private readonly primed = new Map<Unit, { owner: Unit; cast: ResolvedSkill; mark: string }>();
   /** Gods a priming skill revealed, and until when; outlasts the primed hit itself. */
   private readonly revealed = new Map<Unit, number>();
+  /** Skills riding on a unit's basic attacks, and until when (see SkillDef.imbue). */
+  private readonly imbued = new Map<Unit, { cast: ResolvedSkill; until: number }>();
   private events: SimEvent[] = [];
   time = 0;
 
@@ -362,6 +364,7 @@ export class Sim {
       const where = t.type === 'ground' ? at : { x: u.x, z: u.z };
       this.summon(u, e.unit, e.duration, where);
     }
+    if (cast.skill.imbue) this.imbued.set(u, { cast, until: this.time + cast.skill.imbue });
     this.emit({ type: 'cast', unit: u, cast, x: at.x, z: at.z });
   }
 
@@ -433,6 +436,13 @@ export class Sim {
     if (!r) return;
     this.report(u, target, before, wasAlive, r.crit, false);
     this.checkLevel(credit, levelBefore);
+    const im = this.imbued.get(u);
+    if (!im) return;
+    if (this.time >= im.until) this.imbued.delete(u);
+    else if (c.alive && target.team !== u.team && !isStructure(target)) {
+      removeWhere(this.pending, (p) => p.cast === im.cast && p.target === target);
+      this.hit(u, im.cast, target);
+    }
   }
 
   private report(source: Unit, target: Unit, before: number, wasAlive: boolean, crit: boolean, ability: boolean): void {
