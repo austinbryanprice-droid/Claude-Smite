@@ -122,7 +122,18 @@ Fetched through `https://api.polyhaven.com` at 2K (skies at 4K). Poly Haven asse
 
 **5. Flowing VFX textures (noise, gradient ramps, trails).** Generate them in code at load time (or bake once into PNG) from simplex, Worley and curl noise; combine with the Kenney sprites and Babylon flipbooks above.
 
-**6. Not surveyed yet:** audio and music, UI fonts and icons. Fonts are easy: `@fontsource/cinzel` and `@fontsource/cormorant-garamond` on npm are OFL-licensed and fit the mythology theme.
+**6. Not surveyed yet:** UI fonts and icons. (Audio and music are covered below: all made in code.) Fonts are easy: `@fontsource/cinzel` and `@fontsource/cormorant-garamond` on npm are OFL-licensed and fit the mythology theme.
+
+## Audio and music: made in code, no files
+
+Every sound effect, ambience loop and piece of music is synthesized in code at load time (`src/audio/`), so there are no audio files, downloads or licenses to track. Nothing is sampled from Smite, Hi-Rez or any other game.
+
+- **Effects:** `src/audio/gestures.ts` holds the building blocks (filtered-noise whooshes, pitch-dropping thumps, electric zaps, thunder, struck metal, sand, smoke, insect swarms, formant-filtered voices and roars, falling debris, bells, fire, birdsong). `sounds.ts` layers them into the bank (footsteps on stone, grass and dirt; god, minion, tower and monster attacks and hits; deaths; collapses; bosses; UI; ambience). `skillSounds.ts` gives each of the 55 skills its own cast, in-flight, impact and lingering-area sounds.
+- **Music:** `music.ts` synthesizes strings, choir, harp, horn, bass and drums, and plays two original pieces from written parts: a title hymn and a battle theme whose drums and brass rise with the fighting. Victory and defeat have their own fanfares.
+- **Herald:** the spoken cues are original lines spoken by the browser's built-in speech synthesis (the player's own system voices; nothing is shipped). Each line opens with a synthesized sting.
+- Rendering takes a few seconds of CPU and runs on worker threads, so it never stalls the game. Unit tests (`src/audio/audio.test.ts`) check every sound for clipping, silence and DC offset.
+
+If we later want recorded sounds, CC0 libraries on GitHub (for example Kenney's audio packs mirrored there) can be added through the fetch script like the other assets.
 
 ## License obligations, in one place
 
@@ -131,4 +142,5 @@ Fetched through `https://api.polyhaven.com` at 2K (skies at 4K). Poly Haven asse
 - **MIT** (EZ-Tree): keep the MIT notice when shipping its files or package.
 - **CMU mocap:** free for any use, including commercial; the raw data may not be resold. Credit: "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217."
 - **Poly Haven API:** "Powered by Poly Haven" credit when the Poly Haven tier is used.
-- Nothing here uses Smite or Hi-Rez art, names or trademarks.
+- **Audio:** synthesized in code; no obligations.
+- Nothing here uses Smite or Hi-Rez art, audio, names or trademarks.
