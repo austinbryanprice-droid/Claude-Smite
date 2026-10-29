@@ -46,6 +46,10 @@
 .help-foot { margin-top: 12px; font-family: Georgia, serif; font-size: 13px; opacity: 0.75; }
 /* the end screen owns the view: no controls hint or crosshair over the scoreboard */
 body:has(.mh-end.show) .hud-hint, body:has(.mh-end.show) .hud-crosshair { display: none; }
+/* ...and no score bar or herald banner over its title (the subtitle already gives the time) */
+body:has(.mh-end.show) .mh-top, body:has(.mh-end.show) .mh-banner { display: none; }
+/* the Conquest minimap owns the top right, so fps and the quality picker move to the bottom right */
+body:has(.mh-map) .hud-panel { top: auto; bottom: 12px; right: 12px; }
 .fatal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(4, 3, 2, 0.85); font-family: 'Cinzel', Georgia, serif; color: var(--ink, #f4ead8); pointer-events: auto; }
 .fatal-panel { max-width: 640px; padding: 20px 26px; background: linear-gradient(180deg, rgba(40, 18, 14, 0.97), rgba(14, 8, 6, 0.98)); border: 1px solid rgba(255, 140, 110, 0.6); border-radius: 8px; }
 .fatal h3 { margin: 0 0 8px; color: #ffb08a; letter-spacing: 0.1em; }
