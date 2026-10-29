@@ -6,7 +6,7 @@ import { GOD_IDS } from '../actors/gods/assets';
  * `?showcase` dev view for comparing god models: a lineup in front of the
  * spawn with a fixed camera. Options (all optional):
  *   showcase=zeus,thor   which gods (default: all)
- *   pose=idle|walk|jog|sprint|cast
+ *   pose=idle|walk|jog|sprint|cast|death|hit (death and hit freeze at t= seconds)
  *   view=front|back|side|close|three|portrait|bust
  *   (bust frames head and shoulders for the title screen's face cards; see tools/portraits)
  */
@@ -14,12 +14,14 @@ export class Showcase {
   readonly gods: GodModel[] = [];
   private readonly state = { speed: 0, localDir: new THREE.Vector2(), grounded: true, verticalSpeed: 0 };
   private readonly pose: string;
+  private readonly freeze: number;
   private t = 0;
   private readonly view: string;
 
   constructor(params: URLSearchParams, parent: THREE.Object3D, spawn: { x: number; z: number; yaw: number }, ground: (x: number, z: number) => number, private readonly camera: THREE.PerspectiveCamera) {
     const list = (params.get('showcase') || GOD_IDS.join(',')).split(',').filter(Boolean);
     this.pose = params.get('pose') ?? 'idle';
+    this.freeze = Number(params.get('t') ?? 1.5);
     const view = params.get('view') ?? 'front';
     this.view = view;
     // `flip` turns the lineup around so the sun lights the fronts
@@ -66,7 +68,9 @@ export class Showcase {
     this.t += dt;
     for (const g of this.gods) {
       if (this.pose === 'cast') g.castWeight = 1;
-      g.animate(dt, this.state);
+      if (this.pose === 'death') g.deathTime = this.freeze;
+      if (this.pose === 'hit' && this.t > 0.5 && this.t - dt <= 0.5) g.flinch(1);
+      g.animate(this.pose === 'hit' && this.t > 0.5 + this.freeze ? 0 : dt, this.state);
     }
     const g = this.gods[0];
     if (this.view === 'bust' && g) {
