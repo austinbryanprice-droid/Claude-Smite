@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionLocal, positionWorld, sin, smoothstep, time, uv, vec3 } from '../render/tsl';
+import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionLocal, sin, smoothstep, time, uv, vec3, vec4 } from '../render/tsl';
 import type { CampKind } from '../map/ConquestLayout';
 import { BUFF_COLOR } from '../scene/conquest/Props';
 import { MonsterBrain } from '../sim/Jungle';
@@ -55,10 +55,11 @@ function buildShared() {
   const hoof = new THREE.MeshStandardNodeMaterial({ color: 0x1b1410, roughness: 0.5 });
   // weathered stone with moss on every upward face
   const stone = new THREE.MeshStandardNodeMaterial({ roughness: 0.88 });
-  const grain = n(3.5, positionWorld).mul(0.6).add(n(14, positionWorld).mul(0.4));
-  const moss = smoothstep(0.2, 0.7, normalWorld.y.add(n(2.2, positionWorld).sub(0.5).mul(0.7)));
+  // object space, so the stone's pattern stays on the Warden as it walks and swings
+  const grain = n(3.5).mul(0.6).add(n(14).mul(0.4));
+  const moss = smoothstep(0.2, 0.7, normalWorld.y.add(n(2.2).sub(0.5).mul(0.7)));
   const rockCol = mix(vec3(0.16, 0.16, 0.19), vec3(0.38, 0.35, 0.32), grain);
-  stone.colorNode = mix(rockCol, mix(vec3(0.17, 0.3, 0.07), vec3(0.32, 0.46, 0.12), n(9, positionWorld)), moss.mul(0.92));
+  stone.colorNode = mix(rockCol, mix(vec3(0.17, 0.3, 0.07), vec3(0.32, 0.46, 0.12), n(9)), moss.mul(0.92));
   stone.roughnessNode = float(0.95).sub(moss.mul(0.1));
   return { fur, hide, bone, hoof, stone };
 }
@@ -276,6 +277,7 @@ function giant(o: GiantOptions): MonsterView {
   // arms: shoulder boulder, upper arm, forearm and a huge fist, with rune bands
   const arms: THREE.Group[] = [];
   let core: THREE.PointLight | null = null;
+  let embers: Embers | null = null;
   if (o.molten) {
     // a crown of basalt horns with molten tips, spiked shoulders, a fire in its chest
     const horn = geo('mc-horn', () => new THREE.ConeGeometry(0.11, 0.7, 7).translate(0, 0.35, 0));
@@ -290,6 +292,7 @@ function giant(o: GiantOptions): MonsterView {
     core = new THREE.PointLight(o.glow, 30, 16, 2);
     core.position.set(0, 0.95, 1.2);
     torso.add(core);
+    embers = makeEmbers(body);
   }
   for (const sx of [-1, 1]) {
     mesh(torso, geo('wd-shoulder', () => rock(0.66, 17)), stone, sx * 1.22, 1.5, 0);
@@ -334,6 +337,7 @@ function giant(o: GiantOptions): MonsterView {
       torso.rotation.x = 0.18 - raise * 0.25 + smash * 0.35 - special * 0.15;
       hips.position.y -= special * 0.25;
       if (core) core.intensity = 30 + raise * 40 + Math.sin(t * 5) * 6;
+      embers?.step(dt, deathTime >= 0 ? 0 : 1 + raise * 2);
       // living crystal: the heart pulses, the shards orbit, the head looks about
       const pulse = 1 + Math.sin(t * 3) * 0.08 + raise * 0.25;
       heart.scale.setScalar(pulse);
@@ -359,21 +363,77 @@ function giant(o: GiantOptions): MonsterView {
 // ---------------------------------------------------------------------------
 // Molten Colossus material
 
+const EMBERS = 26;
+let emberMat: THREE.SpriteNodeMaterial | null = null;
+
+interface Embers {
+  /** Advance the sparks; `rate` scales how fast they rise and how many show (0 lets them die out). */
+  step(dt: number, rate: number): void;
+}
+
+/** Sparks that drift up off the Colossus's body and wink out. */
+function makeEmbers(parent: THREE.Object3D): Embers {
+  if (!emberMat) {
+    const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const r = uv().sub(0.5).length().mul(2);
+    const f = smoothstep(1, 0, r).pow(2);
+    m.colorNode = vec4(vec3(1, 0.42, 0.08).mul(6).add(smoothstep(0.3, 0, r).mul(4)).mul(f), 1);
+    m.opacityNode = f;
+    emberMat = m;
+  }
+  const sparks = Array.from({ length: EMBERS }, () => {
+    const s = new THREE.Sprite(emberMat!);
+    parent.add(s);
+    return { s, age: Math.random() * 2.5, life: 1.6 + Math.random() * 1.4, x: 0, y: 0, z: 0, vx: 0, vz: 0 };
+  });
+  const respawn = (p: (typeof sparks)[number]) => {
+    const a = Math.random() * Math.PI * 2;
+    const r = 0.5 + Math.random() * 1.1;
+    p.x = Math.cos(a) * r;
+    p.z = Math.sin(a) * r * 0.7;
+    p.y = 0.6 + Math.random() * 2.2;
+    p.vx = (Math.random() - 0.5) * 0.3;
+    p.vz = (Math.random() - 0.5) * 0.3;
+    p.age = 0;
+  };
+  for (const p of sparks) respawn(p);
+  return {
+    step(dt, rate) {
+      for (const p of sparks) {
+        p.age += dt * Math.max(0.5, rate);
+        if (p.age > p.life) {
+          if (rate <= 0) {
+            p.s.visible = false;
+            continue;
+          }
+          respawn(p);
+        }
+        const k = p.age / p.life;
+        p.s.visible = true;
+        p.s.position.set(p.x + p.vx * p.age + Math.sin(p.age * 3 + p.life) * 0.08, p.y + p.age * 0.9, p.z + p.vz * p.age);
+        // flare in, then shrink to nothing
+        p.s.scale.setScalar(0.14 * Math.min(1, k * 6) * (1 - k));
+      }
+    },
+  };
+}
+
 let lava: THREE.Material | null = null;
 
 /** Black basalt split by a network of glowing molten cracks that throb slowly. */
 function lavaStone(): THREE.Material {
   if (lava) return lava;
   const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.9 });
-  const p = positionWorld;
+  // object space, so the cracks stay put on the Colossus's body as it moves
+  const p = positionLocal;
   const basalt = mix(vec3(0.05, 0.04, 0.04), vec3(0.17, 0.13, 0.12), n(2.5, p).mul(0.7).add(n(11, p).mul(0.3)));
   // noise zero-crossings make a branching crack network; a finer octave adds hairline cracks
-  const wide = smoothstep(0.09, 0.0, abs(mx_noise_float(p.mul(0.9))));
-  const fine = smoothstep(0.05, 0.0, abs(mx_noise_float(p.mul(2.6).add(7)))).mul(0.6);
+  const wide = smoothstep(0.06, 0.0, abs(mx_noise_float(p.mul(0.9))));
+  const fine = smoothstep(0.03, 0.0, abs(mx_noise_float(p.mul(2.6).add(7)))).mul(0.45);
   const crack = wide.add(fine).clamp(0, 1);
   const throb = sin(time.mul(1.8).add(n(0.6, p).mul(6))).mul(0.25).add(0.85);
   m.colorNode = mix(basalt, vec3(1, 0.45, 0.12), crack.mul(0.6));
-  m.emissiveNode = mix(vec3(1, 0.22, 0.02), vec3(1, 0.7, 0.25), crack.pow(3)).mul(crack.mul(throb).mul(4.5));
+  m.emissiveNode = mix(vec3(1, 0.22, 0.02), vec3(1, 0.7, 0.25), crack.pow(3)).mul(crack.mul(throb).mul(4));
   m.roughnessNode = float(0.92).sub(crack.mul(0.4));
   return (lava = m);
 }
@@ -410,7 +470,8 @@ function bezier(out: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, c: THREE
  */
 function wyrm(): MonsterView {
   const scales = new THREE.MeshPhysicalNodeMaterial({ metalness: 0.8, roughness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.3 });
-  const cell = mx_worley_noise_float(positionWorld.mul(3.2));
+  // object space: the coils move every frame, and world-space scales would slide across them
+  const cell = mx_worley_noise_float(positionLocal.mul(3.2));
   const rim = smoothstep(0.15, 0.55, cell);
   const belly = smoothstep(-0.05, -0.45, normalWorld.y);
   const gold = mix(vec3(1, 0.8, 0.32), vec3(0.5, 0.27, 0.06), rim);
