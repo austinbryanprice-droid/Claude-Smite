@@ -3,6 +3,8 @@ import './style.css';
 import { Input } from './core/Input';
 import { Loop } from './core/Loop';
 import { GodModel } from './actors/GodModel';
+import { preloadGodAssets } from './actors/gods/assets';
+import { Showcase } from './dev/Showcase';
 import { PlayerController } from './player/PlayerController';
 import { ThirdPersonCamera } from './player/ThirdPersonCamera';
 import { grading, PostFX } from './render/PostFX';
@@ -24,6 +26,7 @@ async function main(): Promise<void> {
   const textures = new TextureLibrary(renderer.getMaxAnisotropy?.() ?? 8);
   await textures.load((f) => hud.progress(0.05 + f * 0.5, 'Quarrying marble…'));
 
+  await preloadGodAssets((f) => hud.progress(0.55 + f * 0.05, 'Summoning the gods…'));
   hud.progress(0.6, 'Raising the temple…');
   await new Promise((r) => setTimeout(r, 0));
   const world = new World(textures, camera);
@@ -34,6 +37,14 @@ async function main(): Promise<void> {
   const player = new PlayerController(input, world.collision, god);
   player.spawn(world.spawn.x, world.spawn.z, world.spawn.yaw);
   const follow = new ThirdPersonCamera(camera, player, world.collision);
+  const params = new URLSearchParams(location.search);
+  const showcase = params.has('showcase')
+    ? new Showcase(params, world.actors, world.spawn, (x, z) => world.collision.groundAt(x, z), camera)
+    : null;
+  if (showcase) {
+    god.root.visible = false;
+    follow.update = () => {};
+  }
 
   const post = new PostFX(renderer, world.scene, camera);
   let quality = QUALITY_PRESETS[initialQuality(isWebGPU)];
@@ -82,6 +93,7 @@ async function main(): Promise<void> {
     const dt = loop.tick(now);
     player.render(dt, loop.alpha);
     combat.frame(dt, loop.alpha, loop.time);
+    showcase?.update(dt);
     follow.update(dt);
     world.update(dt, loop.time, god.root.position);
     post.render();

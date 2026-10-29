@@ -161,17 +161,8 @@ class TitanStructure implements StructureModel {
   constructor(team: Team) {
     this.model.root.scale.setScalar(3.4);
     this.root.add(this.model.root);
-    // tint the cloth and trim to the team by swapping the model's materials
-    this.model.root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      const mat = mesh.material as THREE.MeshStandardNodeMaterial | undefined;
-      if (!mesh.isMesh || !mat || !('color' in mat)) return;
-      if (mat.metalness > 0.9 && mat.color.getHex() !== 0x9aa3ad) {
-        const m = mat.clone();
-        m.color.setHex(TEAM[team].trim);
-        mesh.material = m;
-      }
-    });
+    // the statue's armor in the team's metal (this instance only)
+    this.model.tintMetal(TEAM[team].trim);
     const sm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
     sm.colorNode = color(new THREE.Color(TEAM[team].glow)).mul(float(0.35)).mul(this.shieldOn);
     this.halo = new THREE.Mesh(new THREE.SphereGeometry(7, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.4, 1), sm);
