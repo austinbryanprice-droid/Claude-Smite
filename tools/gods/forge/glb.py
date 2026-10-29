@@ -34,6 +34,9 @@ class GlbWriter:
         arr = np.ascontiguousarray(arr)
         comp = {np.float32: FLOAT, np.uint8: U8, np.uint16: U16, np.uint32: U32}[arr.dtype.type]
         width = 1 if arr.ndim == 1 else int(np.prod(arr.shape[1:]))
+        # WebGPU has no vertex format for 1- or 3-component 8/16-bit data: the pipeline throws and the screen goes black
+        if target == 34962 and comp != FLOAT and width in (1, 3):
+            raise ValueError(f'vertex attribute with {width} {arr.dtype} components has no WebGPU format; use float32')
         acc = {
             'bufferView': self._view(arr.tobytes(), target), 'componentType': comp,
             'count': int(arr.shape[0]), 'type': TYPES[width],
@@ -73,10 +76,8 @@ class GlbWriter:
             if p.get('color') is not None:
                 attrs['COLOR_0'] = self.accessor(np.clip(p['color'] * 255 + 0.5, 0, 255).astype(np.uint8), normalized=True, target=34962)
             for k, v in p.get('extra', {}).items():
-                if k == 'ao':  # 0..1 occlusion fits in a normalized byte
-                    attrs['_AO'] = self.accessor(np.clip(v * 255 + 0.5, 0, 255).astype(np.uint8), normalized=True, target=34962)
-                else:
-                    attrs['_' + k.upper()] = self.accessor(v.astype(np.float32), target=34962)
+                # scalar channels (ao, edge, side) stay float: WebGPU has no 1-component 8-bit vertex format
+                attrs['_' + k.upper()] = self.accessor(v.astype(np.float32), target=34962)
             idx = p['indices'].reshape(-1)
             idx = idx.astype(np.uint16 if idx.max() < 65535 else np.uint32)
             out.append({'attributes': attrs, 'indices': self.accessor(idx, target=34963), 'material': self.material(p['material'])})
