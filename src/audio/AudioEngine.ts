@@ -75,6 +75,9 @@ export class AudioEngine {
   private wetIns = {} as Record<Bus, GainNode>;
   private readonly settingsListeners: ((s: AudioSettings) => void)[] = [];
   private reverbIn!: GainNode;
+  private readonly muffles: BiquadFilterNode[] = [];
+  private musicDuck!: GainNode;
+  private muffle = 0;
   private readonly raw = new Map<string, { data: Float32Array[]; loop: boolean }>();
   private readonly buffers = new Map<string, AudioBuffer[]>();
   private readonly voices: Voice[] = [];
@@ -154,13 +157,19 @@ export class AudioEngine {
 
     for (const b of Object.keys(BUS_TRIM) as Bus[]) {
       const g = ctx.createGain();
-      g.connect(this.master);
+      // the world (effects and ambience) can be muffled while the player is dead
+      const muffled = b === 'sfx' || b === 'ambience';
+      if (b === 'music') this.musicDuck = ctx.createGain();
+      const post: AudioNode = muffled ? this.muffleFilter() : b === 'music' ? this.musicDuck : g;
+      if (post !== g) g.connect(post);
+      post.connect(this.master);
       const send = ctx.createGain();
       send.gain.value = REVERB_SEND[b];
-      g.connect(send).connect(this.reverbIn);
+      post.connect(send).connect(this.reverbIn);
       this.buses[b] = g;
       const wet = ctx.createGain();
-      wet.connect(this.reverbIn);
+      if (muffled) wet.connect(this.muffleFilter()).connect(this.reverbIn);
+      else wet.connect(this.reverbIn);
       this.wetIns[b] = wet;
     }
     const l = ctx.listener;
@@ -175,6 +184,32 @@ export class AudioEngine {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && this.ctx?.state === 'suspended') void this.ctx.resume();
     });
+  }
+
+  private muffleFilter(): BiquadFilterNode {
+    const f = this.ctx!.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 20000;
+    f.Q.value = 0.9;
+    this.muffles.push(f);
+    return f;
+  }
+
+  /**
+   * Muffle the world: 0 is clear, 1 is heard from far away (effects and
+   * ambience lose their highs, the music drops back). Smoothed here, so it
+   * can be called every frame.
+   */
+  setMuffle(amount: number): void {
+    if (!this.ctx) return;
+    const m = Math.min(1, Math.max(0, amount));
+    if (Math.abs(m - this.muffle) < 0.001) return;
+    this.muffle = m;
+    const now = this.ctx.currentTime;
+    // sweep on a log scale, from wide open down to about 550 Hz
+    const hz = 20000 * Math.pow(550 / 20000, m);
+    for (const f of this.muffles) f.frequency.setTargetAtTime(hz, now, 0.25);
+    this.musicDuck.gain.setTargetAtTime(1 - 0.45 * m, now, 0.4);
   }
 
   // -------------------------------------------------------------------------

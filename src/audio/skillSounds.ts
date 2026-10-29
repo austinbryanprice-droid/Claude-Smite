@@ -102,7 +102,7 @@ export const SKILL_SOUNDS: Record<string, SkillSound> = {
   },
   'zeus.storm-step': {
     cast: (r) => layer([thunder(r, 0.9, { crack: 1.4, rumble: 0.5 }), 1], [whoosh(r, 0.3, 6000, 800, { q: 0.8 }), 0.8], [zap(r, 0.4, 180, { chaos: 1.2, hiss: 1 }), 0.6]),
-    impact: (r) => zap(r, 0.25, 420, { chaos: 0.8, hiss: 1 }),
+    impact: (r) => layer([zap(r, 0.25, 420, { chaos: 0.8, hiss: 1 }), 1], [thump(r, 0.35, 110, 40, { click: 0.5, noise: 0.5, drive: 2 }), 0.8]),
   },
   'zeus.thundering-presence': {
     cast: (r) => layer([boom(r, 1.4, 1.2, 0.7), 1], [hum(r, 1.2, 140, 1.6), 0.6], [zap(r, 0.6, 90, { chaos: 0.6, fall: 3, hiss: 0.6 }), 0.5]),
@@ -118,7 +118,7 @@ export const SKILL_SOUNDS: Record<string, SkillSound> = {
   'zeus.ball-lightning': {
     cast: (r) => layer([zap(r, 0.5, 120, { chaos: 0.4, fall: 2.5, hiss: 0.8 }), 1], [whoosh(r, 0.5, 400, 2000, { q: 0.9 }), 0.6]),
     travel: (r) => layer([hum(r, 1.2, 110, 2), 1], [zap(r, 1.2, 55, { chaos: 0.2, fall: 1, hiss: 0.2 }), 0.5]),
-    impact: (r) => zap(r, 0.2, 500, { chaos: 1, hiss: 1.2, gain: 0.8 }),
+    impact: (r) => layer([zap(r, 0.2, 500, { chaos: 1, hiss: 1.2, gain: 0.8 }), 1], [thump(r, 0.3, 120, 45, { click: 0.5, drive: 2 }), 0.7]),
   },
   'zeus.wrath-mark': {
     cast: (r) => layer([zap(r, 0.25, 700, { chaos: 0.3, fall: 1.3, hiss: 0.6 }), 1], [whoosh(r, 0.2, 3000, 7000, { q: 1.4 }), 0.6]),
@@ -137,7 +137,8 @@ export const SKILL_SOUNDS: Record<string, SkillSound> = {
   },
   'zeus.olympian-spear': {
     cast: (r) => layer([zap(r, 0.7, 60, { chaos: 0.2, fall: 8, hiss: 1.2 }), 0.7], [boom(r, 2.4, 1.8, 1.2), 1, 0.35], [whoosh(r, 0.7, 6000, 300, { q: 0.7 }), 0.8, 0.3]),
-    impact: (r) => zap(r, 0.3, 520, { chaos: 1, hiss: 1.4 }),
+    // the ultimate lands like a thunderbolt hitting the ground
+    impact: (r) => layer([thunder(r, 1.4, { crack: 1.4, rumble: 0.9 }), 1], [boom(r, 1.6, 1.4, 1), 0.8], [zap(r, 0.3, 520, { chaos: 1, hiss: 1.4 }), 0.6]),
     impactDelay: 0.4,
   },
   'zeus.ascension': {
@@ -305,7 +306,7 @@ export const SKILL_SOUNDS: Record<string, SkillSound> = {
   },
   'anubis.locust-swarm': {
     cast: (r) => layer([buzz(r, 1.8, 190, { voices: 14, env: (t) => ahr(t, 0.12, 1, 0.6) }), 1], [sand(r, 0.8, { tone: 2600 }), 0.4]),
-    impact: (r) => buzz(r, 0.6, 230, { voices: 8, env: (t) => perc(t, 0.02, 0.6), gain: 0.6 }),
+    impact: (r) => layer([buzz(r, 0.6, 230, { voices: 8, env: (t) => perc(t, 0.02, 0.6), gain: 0.6 }), 1], [sand(r, 0.5, { tone: 1800 }), 0.5], [thump(r, 0.25, 120, 60, { noise: 0.5 }), 0.5]),
     impactDelay: 0.25,
   },
   'anubis.mummify': {
@@ -315,7 +316,7 @@ export const SKILL_SOUNDS: Record<string, SkillSound> = {
   },
   'anubis.scales-of-maat': {
     cast: (r) => layer([gong(r, 1.8, 130.8), 0.8], [chime(r, 1.4, 523.3), 0.5, 0.2], [sand(r, 1.2, { tone: 1800, peak: 0.6 }), 0.5]),
-    impact: (r) => layer([fire(r, 0.8, { gain: 0.5 }), 0.6], [shimmer(r, 0.8, 660, { rise: 1.2, peak: 0.2 }), 0.6]),
+    impact: (r) => layer([fire(r, 0.8, { gain: 0.5 }), 0.6], [shimmer(r, 0.8, 660, { rise: 1.2, peak: 0.2 }), 0.6], [thump(r, 0.4, 100, 45, { click: 0.3, drive: 2 }), 0.8]),
     impactDelay: 0.3,
   },
   'anubis.grave-grasp': {
