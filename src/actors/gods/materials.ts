@@ -42,7 +42,7 @@ const PALETTES: Record<string, GodPalette> = {
     eye: 0xbfe4ff, gem: 0x4aa8ff,
   },
   odin: {
-    skin: 0xc8906c, skinDeep: 0x7a3a28, gold: 0xe0a33a, steel: 0x9aa4ae, cloth: 0x2b3240, clothDeep: 0x0e1118,
+    skin: 0xc8906c, skinDeep: 0x7a3a28, gold: 0xe0a33a, steel: 0x7e8a9c, cloth: 0x2b3240, clothDeep: 0x0e1118,
     cloth2: 0x6a1c1c, leather: 0x3a2416, hair: 0xb8bcc2, hairTip: 0xeceef0, fur: 0x5a5048, glow: 0xffc955,
     eye: 0xffd27a, gem: 0xffa62a,
   },
@@ -254,10 +254,20 @@ function glowMaterial(c: number, strength = 6): THREE.Material {
 }
 
 function eyeMaterial(c: number): THREE.Material {
-  const m = new THREE.MeshBasicNodeMaterial();
-  const pupil = data().x;
-  const iris = smoothstep(0.82, 0.9, pupil);
-  m.colorNode = mix(color(c).mul(0.6), color(c).mul(5), iris).add(color(0xffffff).mul(smoothstep(0.97, 0.99, pupil).mul(3)));
+  // a lit, wet eye: off-white sclera, a colored iris with a dark limbal ring and pupil,
+  // and a faint godly glow in the iris only
+  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.03 });
+  const d = data().x; // 1 at the pupil, falling off toward the white
+  const iris = smoothstep(0.84, 0.87, d);
+  const limbal = smoothstep(0.84, 0.87, d).mul(float(1).sub(smoothstep(0.87, 0.9, d)));
+  const pupil = smoothstep(0.965, 0.975, d);
+  const fibers = mx_noise_float(positionLocal.mul(900)).mul(0.25).add(0.85);
+  const sclera = mix(color(0xd8cfc4), color(0xf2ece4), smoothstep(0.3, 0.75, d));
+  let col: any = mix(sclera, color(c).mul(fibers), iris);
+  col = mix(col, color(c).mul(0.15), limbal.mul(0.8));
+  col = mix(col, color(0x050404), pupil);
+  m.colorNode = col;
+  m.emissiveNode = color(c).mul(iris.mul(float(1).sub(pupil)).mul(fibers).mul(1.4));
   return m;
 }
 

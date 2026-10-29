@@ -133,6 +133,15 @@ class Odin(God):
         band = kit.ring_around(o + np.array([0, -0.008, 0.0]), [0, 1, 0], rx + 0.004, 0.012, seg=48, sides=6, rz=rz / rx)
         ridge_pts = np.array([o + np.array([0, (h + 0.004) * np.cos(a), (rz + 0.004) * np.sin(a)]) for a in np.linspace(-1.5, 1.5, 14)])
         ridge = tube(ridge_pts, np.full(14, 0.011), 6, flat=0.6)
+        # side-to-side strap (spangenhelm frame) and rivets along the brow band
+        cross_pts = np.array([o + np.array([(rx + 0.004) * np.sin(a), (h + 0.004) * np.cos(a), 0.0]) for a in np.linspace(-1.5, 1.5, 14)])
+        cross = tube(cross_pts, np.full(14, 0.009), 6, flat=0.6)
+        rivets = []
+        for a in np.linspace(0, 2 * np.pi, 16, endpoint=False):
+            if abs(np.sin(a)) > 0.97:
+                continue  # leave the temples clear for the wings
+            pnt = o + np.array([np.sin(a) * (rx + 0.016), -0.008, np.cos(a) * (rz + 0.016)])
+            rivets.append(sphere(0.006, 8, 6).transformed(t=pnt))
         nasal = tube(np.array([o + np.array([0, 0.0, rz + 0.004]), o + np.array([0, -0.06, rz + 0.012])]), np.array([0.012, 0.008]), 6, flat=0.5)
         # wings: fanned feathers sweeping up and back from each temple
         feathers = []
@@ -147,7 +156,7 @@ class Odin(God):
                 n = normalize(np.array([sx, 0.0, 0.5]))
                 R = look_rotation(normalize(n - d * np.dot(n, d)), d)
                 feathers.append(f.transformed(R=R, t=root + np.array([0, 0, -0.008 * k])))
-        self.add('helm_trim', 'gold', merge([band, ridge, nasal]), 'DEF-head')
+        self.add('helm_trim', 'gold', merge([band, ridge, cross, nasal] + rivets), 'DEF-head')
         self.add('helm_wings', 'steel', merge(feathers), 'DEF-head')
 
     def eyepatch(self):
