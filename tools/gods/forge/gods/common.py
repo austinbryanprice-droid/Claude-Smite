@@ -70,7 +70,7 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
         # hairline: high on the forehead, above the ears on the sides, low at the nape
         front = smooth(rel_z, 0.02, 0.07)
         backness = smooth(-rel_z, 0.0, 0.05)
-        line = (ey + 0.045) * front + (ey + 0.012) * (1 - front) * (1 - backness) + (lm['neck'][1] + 0.07) * backness
+        line = (ey + 0.065) * front + (ey + 0.012) * (1 - front) * (1 - backness) + (lm['neck'][1] + 0.07) * backness
         scalp = np.minimum(smooth(headw, 0.5, 0.8), smooth(y - line, 0, 0.01))
         if bald_top:
             scalp = np.minimum(scalp, smooth(-(y - lm['crown'][1] + 0.06), 0, 0.02))
@@ -87,7 +87,7 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
 
         def length(P, N):
             back = smooth(-(P[:, 2] - lm['head'][2]), -0.06, 0.08)
-            return hair_len * (0.35 + 0.65 * back) * np.random.default_rng(seed).uniform(0.8, 1.15, len(P))
+            return hair_len * (0.22 + 0.78 * back) * np.random.default_rng(seed).uniform(0.8, 1.15, len(P))
 
         style = hairmod.Style(length=length, width=0.05, flatness=0.32, segments=12, sides=8, lift=0.12, gravity=0.6, flow=flow,
                            curl=wild, curl_freq=1.1, jitter=0.2, clearance=0.018, taper=1.2, seed=seed)
@@ -95,7 +95,7 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
         # a second, fuller layer further out gives the mane volume
         style2 = hairmod.Style(length=lambda P, N: length(P, N) * 1.15, width=0.065, flatness=0.3, segments=12, sides=8, lift=0.22,
                                gravity=0.6, flow=flow, curl=wild * 1.2, curl_freq=0.9, jitter=0.25, clearance=0.034, taper=1.2, seed=seed + 11)
-        m2, _ = hairmod.hair(b, scalp, spacing * 1.2, style2)
+        m2, _ = hairmod.hair(b, np.minimum(scalp, smooth(-rel_z, -0.04, 0.0)), spacing * 1.2, style2)  # volume behind the hairline only
         meshes.append(m2)
         meshes.append(m)
     if beard:
