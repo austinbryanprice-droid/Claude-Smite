@@ -7,7 +7,7 @@ import type { Team } from '../../map/ConquestLayout';
 import { flutedShaft, lathe } from '../Architecture';
 import { Fire } from '../Effects';
 import type { MaterialLibrary } from '../Materials';
-import { TEAM_STYLE, TeamMaterials } from './common';
+import { mergeStatic, TEAM_STYLE, TeamMaterials } from './common';
 
 /**
  * A team's fountain: a wide marble basin of glowing healing water around a
@@ -109,6 +109,7 @@ export class Fountain {
       this.fires.push(fire);
       this.group.add(fire.group);
     }
+    mergeStatic(this.group, this.fires.map((f) => f.group));
   }
 
   update(time: number): void {

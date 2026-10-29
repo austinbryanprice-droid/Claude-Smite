@@ -115,7 +115,7 @@ export class Terrain {
     const gA = planar(textures.get('grass_ground'), positionWorld.xz.mul(0.16), n);
     const gB = planar(textures.get('grass_ground'), positionWorld.xz.mul(0.037).add(vec2(0.37, 0.71)), n);
     const dirt = planar(textures.get('dirt'), positionWorld.xz.mul(0.22), n);
-    const paved = planar(textures.get('flagstone'), positionWorld.xz.mul(0.16), n);
+    const paved = planar(textures.get('flagstone'), positionWorld.xz.mul(0.11), n);
     const rock = triplanar(textures.get('rock'), 0.06, 6);
     const rockFine = triplanar(textures.get('rock'), 0.21, 6);
 
@@ -123,7 +123,8 @@ export class Terrain {
     // Rock on steep slopes and high up; noise breaks up the transition line.
     const rockW = smoothstep(0.8, 0.6, slope.add(macro.sub(0.5).mul(0.2)));
 
-    const grassCol = mix(gA.color, gB.color, 0.4).mul(mix(vec3(0.92, 1.0, 0.85), vec3(1.08, 1.0, 0.92), macro));
+    // tinted toward the blades' green so gaps between grass clumps don't read as bare earth
+    const grassCol = mix(gA.color, gB.color, 0.4).mul(mix(vec3(0.72, 1.0, 0.6), vec3(0.86, 1.04, 0.66), macro));
     // Layer stack: grass -> dirt -> paved -> rock. Pebbles poke through the
     // grass edge first (height-aware blend using the dirt AO as a height proxy).
     const dW = smoothstep(0.25, 0.75, dirtW.add(dirt.color.g.mul(0.8)).sub(0.2));
@@ -134,13 +135,14 @@ export class Terrain {
       col: grassCol, nrm: mix(gA.normal, gB.normal, 0.4), rough: mix(gA.roughness, gB.roughness, 0.4), ao: gA.ao,
     };
     L = lerp4(L, { col: dirt.color, nrm: dirt.normal, rough: dirt.roughness, ao: dirt.ao }, dW);
-    L = lerp4(L, { col: paved.color, nrm: paved.normal, rough: paved.roughness, ao: paved.ao }, pavedW);
+    // worn, slightly mossy grey-olive paving, darker than the temple's sandstone
+    L = lerp4(L, { col: paved.color.mul(vec3(0.64, 0.68, 0.6)), nrm: paved.normal, rough: paved.roughness, ao: paved.ao }, pavedW);
     // Warm sandstone cliffs with horizontal strata, and moss and grass that
     // cling to every ledge the detail normal says faces upward.
     const rockNrm = rock.normal.add(rockFine.normal).normalize();
     const strata = sin(positionWorld.y.mul(1.7).add(rock.color.r.mul(6))).mul(0.5).add(0.5);
     const rockCol = rock.color.mul(rockFine.color.mul(1.75))
-      .mul(mix(vec3(1.18, 1.0, 0.8), vec3(1.32, 1.08, 0.82), strata));
+      .mul(mix(vec3(0.92, 1.0, 0.98), vec3(1.12, 1.12, 1.04), strata));
     const ledge = smoothstep(0.55, 0.85, rockNrm.y.add(macro.sub(0.5).mul(0.5)));
     const mossCol = grassCol.mul(vec3(0.9, 1.05, 0.8));
     L = lerp4(L, {

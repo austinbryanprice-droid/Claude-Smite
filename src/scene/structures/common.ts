@@ -161,3 +161,5 @@ export function freeze(o: THREE.Object3D): void {
 }
 
 export const vecUp = new THREE.Vector3(0, 1, 0);
+
+export { mergeStatic } from '../merge';

@@ -6,7 +6,7 @@ import type { Team } from '../../map/ConquestLayout';
 import { lathe } from '../Architecture';
 import { Fire } from '../Effects';
 import type { MaterialLibrary } from '../Materials';
-import { clamp01, crackedStone, ease, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
 import type { StructureModel } from './TowerModel';
 
 /** One feather: a long, flat, pointed blade along +Y from its root. */
@@ -99,8 +99,8 @@ export class PhoenixModel implements StructureModel {
       const crest = add(head, feather(0.9 - i * 0.15, 0.22), birdMat, 0, 0.18, -0.1 - i * 0.12);
       crest.rotation.x = -0.9 - i * 0.25;
     }
-    head.add(this.muzzle);
-    this.muzzle.position.set(0, 0, 0.5);
+    this.bird.add(this.muzzle);
+    this.muzzle.position.set(0, 0.5, 1.65);
     // neck
     add(this.bird, new THREE.CylinderGeometry(0.18, 0.3, 0.8, 12).rotateX(-0.9), birdMat, 0, 0.32, 0.8);
 
@@ -130,6 +130,9 @@ export class PhoenixModel implements StructureModel {
     this.rubble = new Rubble(3.2, 12, [stone, lib.bronze], 500);
     this.rubble.group.position.y = 1.0;
     this.root.add(this.rubble.group);
+    for (const w of this.wings) mergeStatic(w);
+    mergeStatic(this.bird, this.wings);
+    mergeStatic(this.root, [this.bird, this.fire.group, this.shield, this.rubble.group]);
   }
 
   setShielded(on: boolean): void {

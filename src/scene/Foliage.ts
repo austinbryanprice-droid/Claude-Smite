@@ -204,12 +204,27 @@ function fronds(b: GeoBuilder, origin: THREE.Vector3, count: number, length: num
 interface Variant {
   trunk: THREE.BufferGeometry | null;
   leaves: THREE.BufferGeometry;
+  /** Distant level of detail: fewer, larger cards and thinner tubes. */
+  trunkLo: THREE.BufferGeometry | null;
+  leavesLo: THREE.BufferGeometry;
   /** Footprint radius for spacing and collision. */
   radius: number;
 }
 
 function grow(species: SpeciesName, seed: number): Variant {
+  const hi = growDetail(species, seed, 1);
+  const lo = growDetail(species, seed, 0);
+  return { trunk: hi.trunk, leaves: hi.leaves, trunkLo: lo.trunk, leavesLo: lo.leaves, radius: hi.radius };
+}
+
+/** Grows one level of detail; the shape (branches, clusters) is the same for both. */
+function growDetail(species: SpeciesName, seed: number, detail: 0 | 1): { trunk: THREE.BufferGeometry | null; leaves: THREE.BufferGeometry; radius: number } {
   const rand = rng(seed);
+  // cards draw from their own stream so both levels share the branch structure
+  const cardRand = rng(seed + 7919);
+  const nCards = (n: number) => Math.max(3, Math.round(n * (detail ? 1 : 0.3)));
+  const cardSize = detail ? 1 : 1.55;
+  const ring = (n: number) => (detail ? n : Math.max(4, Math.round(n / 2)));
   const wob = () => rand() * 2 - 1;
   const trunk = new GeoBuilder();
   const leaves = new GeoBuilder();
@@ -224,7 +239,7 @@ function grow(species: SpeciesName, seed: number): Variant {
     const radii = stem.map((_, i) => R * (1 - (i / (stem.length - 1)) * 0.72));
     const lobes = 4 + Math.floor(rand() * 3);
     const flare = (t: number, theta: number) => 1 + Math.pow(Math.max(0, 1 - t * 7), 2) * (0.9 + 0.7 * Math.max(0, Math.cos(theta * lobes)));
-    tube(trunk, stem, radii, 12, swayOf, flare);
+    tube(trunk, stem, radii, ring(12), swayOf, flare);
     const clusters: Cluster[] = [];
     const branchN = tall ? 4 : 5 + Math.floor(rand() * 2);
     for (let i = 0; i < branchN; i++) {
@@ -235,13 +250,13 @@ function grow(species: SpeciesName, seed: number): Variant {
       const len = (tall ? 2 : 3 + rand() * 1.5) * (1.1 - t * 0.4);
       const pts = limb(at, dir, len, 5, 0.25, wob);
       const r0 = R * 0.45 * (1.1 - t * 0.5);
-      tube(trunk, pts, pts.map((_, k) => r0 * (1 - (k / (pts.length - 1)) * 0.75)), 6, swayOf);
+      tube(trunk, pts, pts.map((_, k) => r0 * (1 - (k / (pts.length - 1)) * 0.75)), ring(6), swayOf);
       clusters.push({ center: pts[pts.length - 1]!.clone().add(new THREE.Vector3(0, 0.5, 0)), radius: tall ? 1.8 + rand() * 0.6 : 2.3 + rand() * 0.8 });
     }
     clusters.push({ center: stem[stem.length - 1]!.clone().add(new THREE.Vector3(0, 0.6, 0)), radius: tall ? 2.2 : 2.8 });
     if (tall) clusters.push({ center: stem[Math.round(stem.length * 0.75)]!.clone(), radius: 2.0 });
     for (const c of clusters) {
-      leafCards(leaves, c, Math.round(c.radius * c.radius * 9), tall ? 1.3 : 1.55, [0, 1, 1], rand, swayOf, H);
+      leafCards(leaves, c, nCards(c.radius * c.radius * 6.5), (tall ? 1.5 : 1.8) * cardSize, [0, 1, 1], cardRand, swayOf, H);
     }
     return { trunk: trunk.build(), leaves: leaves.build(), radius: R * 1.8 };
   }
@@ -257,11 +272,11 @@ function grow(species: SpeciesName, seed: number): Variant {
       stem.push(new THREE.Vector3(0, t * H - 0.3, 0).addScaledVector(bendDir, t * t * H * 0.28));
     }
     // ringed palm trunk: radius pulses every segment
-    tube(trunk, stem, stem.map((_, i) => R * (1.25 - (i / 14) * 0.35) * (i % 2 ? 0.94 : 1.04)), 10, swayOf,
+    tube(trunk, stem, stem.map((_, i) => R * (1.25 - (i / 14) * 0.35) * (i % 2 ? 0.94 : 1.04)), ring(10), swayOf,
       (t, theta) => 1 + Math.pow(Math.max(0, 1 - t * 10), 2) * (0.6 + 0.3 * Math.cos(theta * 5)));
     const top = stem[stem.length - 1]!;
-    fronds(leaves, top, 11, 4.2, 1.1, 2, 0.5, 0.9, rand, swayOf);
-    leafCards(leaves, { center: top.clone(), radius: 0.6 }, 6, 1.0, [1], rand, swayOf, H);
+    fronds(leaves, top, detail ? 11 : 7, 4.2, 1.1 * (detail ? 1 : 1.3), 2, 0.5, 0.9, cardRand, swayOf);
+    leafCards(leaves, { center: top.clone(), radius: 0.6 }, nCards(6), cardSize, [1], cardRand, swayOf, H);
     return { trunk: trunk.build(), leaves: leaves.build(), radius: 0.5 };
   }
 
@@ -273,15 +288,15 @@ function grow(species: SpeciesName, seed: number): Variant {
       const a = rand() * Math.PI * 2;
       const d = i === 0 ? 0 : 0.6 + rand() * 0.6;
       const radius = 0.9 + rand() * 0.6;
-      leafCards(leaves, { center: new THREE.Vector3(Math.cos(a) * d, radius * 0.75, Math.sin(a) * d), radius }, Math.round(radius * radius * 16), 1.05, [1, 1, 0], rand, swayOf, H);
+      leafCards(leaves, { center: new THREE.Vector3(Math.cos(a) * d, radius * 0.75, Math.sin(a) * d), radius }, nCards(radius * radius * 11), 1.2 * cardSize, [1, 1, 0], cardRand, swayOf, H);
     }
-    fronds(leaves, new THREE.Vector3(0, 0, 0), 6, 1.4, 0.45, 3, 1.6, 0.9, rand, swayOf);
+    fronds(leaves, new THREE.Vector3(0, 0, 0), detail ? 6 : 3, 1.4, 0.45, 3, 1.6, 0.9, cardRand, swayOf);
     return { trunk: null, leaves: leaves.build(), radius: 1.4 };
   }
 
   // fern
   const swayOf = (p: THREE.Vector3) => Math.min(1, Math.max(0, p.y) / 1.2) * 0.5 + 0.1;
-  fronds(leaves, new THREE.Vector3(0, 0.05, 0), 9 + Math.floor(rand() * 4), 1.4 + rand() * 0.5, 0.55, 2, 1.1, 1.0, rand, swayOf);
+  fronds(leaves, new THREE.Vector3(0, 0.05, 0), (9 + Math.floor(rand() * 4)) * (detail ? 1 : 0.5), 1.4 + rand() * 0.5, 0.55, 2, 1.1, 1.0, cardRand, swayOf);
   return { trunk: null, leaves: leaves.build(), radius: 0.9 };
 }
 
@@ -303,11 +318,13 @@ export class Foliage {
   private readonly bark: THREE.MeshStandardNodeMaterial;
   private readonly leaves: THREE.MeshStandardNodeMaterial;
   readonly wind = { strength: uniform(1) };
-  private chunks: { mesh: THREE.InstancedMesh; center: THREE.Vector3; radius: number }[] = [];
+  private chunks: { mesh: THREE.InstancedMesh; center: THREE.Vector3; radius: number; hi: THREE.BufferGeometry; lo: THREE.BufferGeometry }[] = [];
+  /** Chunks farther than this switch to the low-detail meshes. */
+  lodDistance = 40;
   /** Chunks farther than this from the camera are hidden (the fog covers the cut). */
   drawDistance = 200;
 
-  constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3, private readonly chunk = 60) {
+  constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3, private readonly chunk = 80) {
     this.group.name = 'foliage';
     let seed = 900;
     for (const s of Object.keys(VARIANTS) as SpeciesName[]) {
@@ -387,7 +404,12 @@ export class Foliage {
 
   update(camera: THREE.Camera): void {
     const p = camera.position;
-    for (const c of this.chunks) c.mesh.visible = Math.hypot(c.center.x - p.x, c.center.z - p.z) - c.radius < this.drawDistance;
+    for (const c of this.chunks) {
+      const d = Math.hypot(c.center.x - p.x, c.center.z - p.z) - c.radius;
+      c.mesh.visible = d < this.drawDistance;
+      const geo = d > this.lodDistance ? c.lo : c.hi;
+      if (c.mesh.geometry !== geo) c.mesh.geometry = geo;
+    }
   }
 
   /** Replaces all instances. Call once after placement (or on quality change). */
@@ -408,7 +430,8 @@ export class Foliage {
     const s = new THREE.Vector3();
     const p = new THREE.Vector3();
     for (const [key, { variant, items }] of buckets) {
-      const make = (geo: THREE.BufferGeometry, mat: THREE.Material) => {
+      const species = key.split(':')[0] as SpeciesName;
+      const make = (geo: THREE.BufferGeometry, lo: THREE.BufferGeometry, mat: THREE.Material) => {
         const mesh = new THREE.InstancedMesh(geo, mat, items.length);
         items.forEach((it, i) => {
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.yaw);
@@ -417,14 +440,15 @@ export class Foliage {
         });
         mesh.instanceMatrix.needsUpdate = true;
         mesh.computeBoundingSphere();
-        mesh.castShadow = true;
+        // ferns are too low and small to read in the shadow maps
+        mesh.castShadow = species !== 'fern';
         mesh.receiveShadow = true;
         mesh.name = key;
         this.group.add(mesh);
-        this.chunks.push({ mesh, center: mesh.boundingSphere!.center.clone(), radius: mesh.boundingSphere!.radius });
+        this.chunks.push({ mesh, center: mesh.boundingSphere!.center.clone(), radius: mesh.boundingSphere!.radius, hi: geo, lo });
       };
-      if (variant.trunk) make(variant.trunk, this.bark);
-      make(variant.leaves, this.leaves);
+      if (variant.trunk) make(variant.trunk, variant.trunkLo!, this.bark);
+      make(variant.leaves, variant.leavesLo, this.leaves);
     }
   }
 }

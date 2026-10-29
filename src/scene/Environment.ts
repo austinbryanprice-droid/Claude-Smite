@@ -23,9 +23,9 @@ export class Environment {
 
   /** Brightness multiplier that puts the sky model in the same units as the sun. */
   readonly skyScale = uniform(0.5);
-  readonly fogDensity = uniform(0.0035);
-  readonly fogHeightFalloff = uniform(0.06);
-  readonly fogColor = uniform(new THREE.Color(0.55, 0.68, 0.86));
+  readonly fogDensity = uniform(0.0055);
+  readonly fogHeightFalloff = uniform(0.075);
+  readonly fogColor = uniform(new THREE.Color(0.5, 0.58, 0.84));
   readonly sunColor = new THREE.Color(1.0, 0.9, 0.76);
 
   /** Sun elevation and azimuth in degrees. Late-morning sun gives long, readable shadows. */
@@ -149,7 +149,7 @@ export class Environment {
     this.envTarget?.dispose();
     this.envTarget = pmrem.fromScene(envScene, 0.0, 0.1, 400);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = 0.9;
+    this.scene.environmentIntensity = 1.05;
     pmrem.dispose();
     sky.geometry.dispose();
     ground.geometry.dispose();

@@ -14,6 +14,7 @@ import type { MaterialLibrary } from '../Materials';
 import type { Terrain } from '../Terrain';
 import type { MapContent } from '../World';
 import type { ConquestTerrainDef } from './ConquestTerrain';
+import { ConquestProps } from './Props';
 
 /** Spatial hash for rejecting placements that crowd each other. */
 class Spacing {
@@ -51,6 +52,7 @@ export class ConquestMap implements MapContent {
   readonly group = new THREE.Group();
   readonly dynamic = new THREE.Group();
   readonly fires: Fire[] = [];
+  readonly lights: THREE.PointLight[] = [];
   readonly spawn = baseOf('order').spawn;
   readonly groundColor = new THREE.Color(0.14, 0.17, 0.08);
   readonly foliage: Foliage;
@@ -73,6 +75,12 @@ export class ConquestMap implements MapContent {
     this.foliage = new Foliage(materials.textures, sunDirection);
     this.group.add(this.foliage.group);
     this.buildStructures();
+    const props = new ConquestProps(materials, terrain, collision, def);
+    this.group.add(props.group);
+    this.fires.push(...props.fires);
+    for (const g of [this.dynamic, this.group]) g.traverse((o) => {
+      if ((o as THREE.PointLight).isPointLight) this.lights.push(o as THREE.PointLight);
+    });
   }
 
   private buildStructures(): void {
@@ -149,8 +157,8 @@ export class ConquestMap implements MapContent {
       if (normal.y < (tree ? 0.72 : 0.6)) continue;
       const y = this.terrain.heightAt(x, z);
       if (y > 45) continue;
-      const scale = 0.8 + rand() * 0.45;
-      const r = this.foliage.radius(species) * scale * (tree ? 2.4 : 1.1);
+      const scale = 0.85 + rand() * 0.5;
+      const r = this.foliage.radius(species) * scale * (tree ? 2.7 : 1.1);
       if (!spacing.free(x, z, r)) continue;
       spacing.add(x, z, r);
       out.push({ species, x, y: y - 0.05, z, yaw: rand() * Math.PI * 2, scale });

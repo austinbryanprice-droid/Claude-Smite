@@ -3,7 +3,7 @@ import { rng } from '../../core/random';
 import type { Team } from '../../map/ConquestLayout';
 import { columnCapital, flutedShaft, roundedBox } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
-import { clamp01, crackedStone, ease, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
 
 /** What every structure view exposes to the combat code. */
 export interface StructureModel {
@@ -146,6 +146,8 @@ export class TowerModel implements StructureModel {
     this.root.add(this.shield);
     this.rubble = new Rubble(4.2, 22, [stone, lib.marble, lib.sandstone], 300 + seed);
     this.root.add(this.rubble.group);
+    mergeStatic(this.upper, [this.crystal]);
+    mergeStatic(this.root, [this.upper, this.shield, this.rubble.group]);
   }
 
   setShielded(on: boolean): void {

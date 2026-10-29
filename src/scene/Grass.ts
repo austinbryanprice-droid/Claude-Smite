@@ -131,8 +131,8 @@ export class Grass {
     const faceN = vec3(facing.x, 0.4, facing.y).normalize();
     mat.normalNode = transformNormalToView(normalize(mix(faceN.mul(faceDirection), vec3(0, 1, 0), 0.75)));
 
-    const base = mix(vec3(0.06, 0.12, 0.025), vec3(0.1, 0.15, 0.03), variation);
-    const tipGreen = mix(vec3(0.3, 0.48, 0.08), vec3(0.55, 0.55, 0.16), smoothstep(0.6, 0.97, variation));
+    const base = mix(vec3(0.05, 0.13, 0.03), vec3(0.08, 0.17, 0.035), variation);
+    const tipGreen = mix(vec3(0.22, 0.47, 0.07), vec3(0.4, 0.55, 0.11), smoothstep(0.6, 0.97, variation));
     const col = mix(base, tipGreen, pow(h, float(0.9)));
     mat.colorNode = col;
     mat.roughnessNode = float(0.55).add(h.mul(0.15));
@@ -142,7 +142,7 @@ export class Grass {
     const viewDir = normalize(pos.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
     const back = pow(dot(viewDir, sun.negate()).max(0), float(3)).mul(h).mul(0.22);
-    mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(1.8);
+    mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(1.0);
     return mat;
   }
 
@@ -183,11 +183,11 @@ export class Grass {
           if (y > this.field.maxHeight) continue;
           // clumping: density modulated by low-frequency hash
           const clump = 0.55 + 0.45 * Math.sin(x * 0.31 + Math.sin(z * 0.23) * 2.0) * Math.sin(z * 0.27 + x * 0.05);
-          if (random() > clump + 0.25) continue;
+          if (random() > clump + 0.45) continue;
           const edge = 1 - bare; // shorter grass at path edges
           const height = (0.32 + random() * 0.38) * (0.5 + 0.5 * edge) * (0.8 + clump * 0.4);
           A.push(x, y - 0.03, z, random() * Math.PI * 2);
-          B.push(height, 0.09 + random() * 0.08, (random() - 0.2) * 0.45, random());
+          B.push(height, 0.12 + random() * 0.1, (random() - 0.2) * 0.45, random());
           minY = Math.min(minY, y);
           maxY = Math.max(maxY, y + height);
         }

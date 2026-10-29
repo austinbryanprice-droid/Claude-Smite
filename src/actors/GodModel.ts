@@ -3,6 +3,7 @@ import {
   color, float, fract, max, min, mix, mx_noise_float, positionLocal, sin, smoothstep, step, time, uniform, uv, vec3,
 } from '../render/tsl';
 import { lathe } from '../scene/Architecture';
+import { mergeRig } from '../scene/merge';
 
 /** Locomotion input the model animates from. All values are per frame. */
 export interface LocomotionState {
@@ -216,6 +217,7 @@ export class GodModel {
     // --- cape: a cloth strip whose motion runs in the vertex shader
     this.buildCape(cloth, gold);
 
+    mergeRig(this.root);
     this.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.frustumCulled = false;
     });

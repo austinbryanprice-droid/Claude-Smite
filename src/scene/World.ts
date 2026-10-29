@@ -24,6 +24,8 @@ export interface MapContent {
   readonly group: THREE.Group;
   /** Braziers and other flickering lights; only the nearest few get real lights. */
   readonly fires: Fire[];
+  /** All flickering point lights, if more than the fires'; only the nearest few are switched on. */
+  readonly lights?: THREE.PointLight[];
   readonly spawn: { x: number; z: number; yaw: number };
   /** Approximate sunlit ground color, for the environment's lower hemisphere. */
   readonly groundColor: THREE.Color;
@@ -123,10 +125,12 @@ export class World {
     this.content.update(dt, t, this.camera);
     this.grass.update(this.camera, focus);
     // enable only the closest N fire lights
-    const sorted = this.content.fires
-      .map((f) => ({ f, d: f.group.position.distanceToSquared(focus) }))
-      .sort((a, b) => a.d - b.d);
-    sorted.forEach(({ f }, i) => (f.light.visible = i < this.maxLights));
+    const lights = this.content.lights ?? this.content.fires.map((f) => f.light);
+    const p = new THREE.Vector3();
+    lights
+      .map((l) => ({ l, d: l.getWorldPosition(p).distanceToSquared(focus) }))
+      .sort((a, b) => a.d - b.d)
+      .forEach(({ l }, i) => (l.visible = i < this.maxLights));
     for (const u of this.updaters) u(dt, t);
   }
 

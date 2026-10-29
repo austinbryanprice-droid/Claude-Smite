@@ -14,10 +14,10 @@ import type { QualitySettings } from './Quality';
 export const grading = {
   exposure: uniform(0.85),
   /** ASC CDL in display space: slope (gain), offset (lift), power (gamma). */
-  slope: uniform(new THREE.Vector3(1.04, 1.01, 0.97)),
-  offset: uniform(new THREE.Vector3(-0.012, -0.012, -0.004)),
+  slope: uniform(new THREE.Vector3(1.05, 1.0, 0.94)),
+  offset: uniform(new THREE.Vector3(-0.016, -0.01, 0.006)),
   power: uniform(new THREE.Vector3(1.08, 1.06, 1.04)),
-  saturation: uniform(1.18),
+  saturation: uniform(1.2),
   vignette: uniform(0.32),
   grain: uniform(0.025),
   bloomStrength: uniform(0.22),
