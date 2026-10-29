@@ -66,7 +66,7 @@ export class World {
     this.materials = new MaterialLibrary(textures);
     const conquest = map === 'conquest' ? conquestTerrain() : null;
     this.terrain = new Terrain(textures, conquest ?? arenaTerrain());
-    this.static.add(this.terrain.mesh);
+    this.static.add(this.terrain.root);
     this.collision = new CollisionWorld((x, z) => this.terrain.heightAt(x, z));
     if (conquest) {
       this.collision.setWalkable(conquest.walkable);
