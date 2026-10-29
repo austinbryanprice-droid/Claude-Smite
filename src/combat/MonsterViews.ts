@@ -276,7 +276,8 @@ function giant(o: GiantOptions): MonsterView {
   const shards = [0, 1, 2].map((i) => mesh(orbit, shard, lit, Math.cos((i / 3) * Math.PI * 2) * 0.7, 0, Math.sin((i / 3) * Math.PI * 2) * 0.7, 0, 0, 0, false));
   // arms: shoulder boulder, upper arm, forearm and a huge fist, with rune bands
   const arms: THREE.Group[] = [];
-  let core: THREE.PointLight | null = null;
+  // a soft halo instead of a real light: adding a light mid-match makes every lit shader recompile
+  let core: THREE.Sprite | null = null;
   let embers: Embers | null = null;
   if (o.molten) {
     // a crown of basalt horns with molten tips, spiked shoulders, a fire in its chest
@@ -289,10 +290,10 @@ function giant(o: GiantOptions): MonsterView {
     for (const sx of [-1, 1]) {
       for (let i = 0; i < 3; i++) mesh(torso, geo('mc-spike', () => new THREE.ConeGeometry(0.14, 0.75, 7).translate(0, 0.37, 0)), stone, sx * (1.15 + i * 0.18), 1.95 - i * 0.12, -0.1 - i * 0.12, -0.3, 0, -sx * (0.5 + i * 0.2));
     }
-    core = new THREE.PointLight(o.glow, 30, 16, 2);
-    core.position.set(0, 0.95, 1.2);
-    torso.add(core);
     embers = makeEmbers(body);
+    core = new THREE.Sprite(emberMat!);
+    core.position.set(0, 0.95, 0.95);
+    torso.add(core);
   }
   for (const sx of [-1, 1]) {
     mesh(torso, geo('wd-shoulder', () => rock(0.66, 17)), stone, sx * 1.22, 1.5, 0);
@@ -336,7 +337,7 @@ function giant(o: GiantOptions): MonsterView {
       }
       torso.rotation.x = 0.18 - raise * 0.25 + smash * 0.35 - special * 0.15;
       hips.position.y -= special * 0.25;
-      if (core) core.intensity = 30 + raise * 40 + Math.sin(t * 5) * 6;
+      core?.scale.setScalar(1.3 + raise * 0.9 + Math.sin(t * 5) * 0.12);
       embers?.step(dt, deathTime >= 0 ? 0 : 1 + raise * 2);
       // living crystal: the heart pulses, the shards orbit, the head looks about
       const pulse = 1 + Math.sin(t * 3) * 0.08 + raise * 0.25;
@@ -353,7 +354,7 @@ function giant(o: GiantOptions): MonsterView {
         torso.rotation.x = 0.18 + k * 0.7;
         for (const arm of arms) arm.rotation.x = k * 0.8;
         heart.scale.setScalar(Math.max(0.01, 1 - k));
-        if (core) core.intensity = 30 * (1 - k);
+        core?.scale.setScalar(Math.max(0.001, 1.3 * (1 - k)));
         orbit.visible = k < 0.4;
       } else orbit.visible = true;
     },
@@ -598,6 +599,21 @@ function wyrm(): MonsterView {
 /** The camp kind is encoded in the monster's tag: `<team>-<kind>-<i>:<type>`. */
 function campKindOf(u: Unit): CampKind {
   return u.tag.split(':')[0]!.split('-')[1] as CampKind;
+}
+
+/**
+ * One of every monster, for drawing once while the match loads so their
+ * shaders are compiled before the first camp appears instead of mid-fight.
+ */
+export function monsterWarmup(): THREE.Object3D[] {
+  const buffs = ['might', 'wisdom', 'swiftness', 'insight'] as const;
+  return [
+    thornback(false),
+    thornback(true),
+    ...buffs.map((b) => giant({ glow: BUFF_GLOW[b] ?? 0xffffff, stone: mats().stone, scale: 1 })),
+    giant({ glow: 0xff6a1a, stone: lavaStone(), scale: 2.1, molten: true }),
+    wyrm(),
+  ].map((v) => v.root);
 }
 
 export function createMonsterView(u: Unit): MonsterView {
