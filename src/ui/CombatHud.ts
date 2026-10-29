@@ -1,5 +1,5 @@
 import { BUFF_GLOW } from '../combat/MonsterViews';
-import { BUFF_DURATION, BUFF_KINDS, BUFFS, buffMark, FURY_DURATION, type BuffKind } from '../sim/Jungle';
+import { BUFF_DURATION, BUFF_KINDS, BUFFS, buffMark, FURY_DURATION, isBoss, isBuff, MonsterBrain, type BuffKind } from '../sim/Jungle';
 import * as THREE from 'three/webgpu';
 import { SLOT_KEYS, ULTIMATE_SLOT } from '../game/loadout';
 import { MAX_LEVEL } from '../game/progression';
@@ -34,6 +34,9 @@ const CC_LABEL: Partial<Record<CCKind, string>> = {
 interface Bar {
   el: HTMLDivElement;
   hp: HTMLDivElement;
+  /** Recent damage: a pale strip that drains after the health fill. */
+  lag: HTMLDivElement;
+  lagPct: number;
   shield: HTMLDivElement;
   level: HTMLSpanElement;
   name: HTMLSpanElement;
@@ -46,6 +49,19 @@ interface Floater {
   age: number;
   drift: number;
 }
+
+/** Original epithets for the jungle's big monsters, shown on the objective bar. */
+const EPITHET: Record<string, string> = {
+  treasureWyrm: 'Coiled Keeper of the Hoard',
+  moltenColossus: 'Heart of the Sunken Forge',
+};
+const SPECIAL_NAME: Record<string, string> = { treasureWyrm: 'Tail Sweep', moltenColossus: 'Eruption' };
+const OBJECTIVE_COLOR: Record<string, string> = { treasureWyrm: '#f5c542', moltenColossus: '#ff6a1a' };
+/** The objective bar shows the nearest boss or Warden within this range of the player. */
+const OBJECTIVE_RANGE = 38;
+
+/** Drain a lagging damage strip toward the real value, quickly at first. */
+const drain = (lag: number, pct: number, dt: number): number => (pct >= lag ? pct : Math.max(pct, lag - Math.max(0.04, (lag - pct) * 2.5) * dt));
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, html = ''): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -81,6 +97,10 @@ export class CombatHud {
   private readonly toastBox: HTMLDivElement;
   private readonly overlay: HTMLDivElement;
   private readonly bars = new Map<Unit, Bar>();
+  /** The big bar under the scoreboard for a boss or Warden the player is near. */
+  private readonly objective: { root: HTMLDivElement; name: HTMLDivElement; hp: HTMLDivElement; lag: HTMLDivElement; pct: HTMLSpanElement; cast: HTMLDivElement; castFill: HTMLDivElement };
+  private objectiveUnit: Unit | null = null;
+  private objectiveLag = 1;
   private readonly floaters: Floater[] = [];
   private readonly v = new THREE.Vector3();
   private loadoutKey = '';
@@ -132,6 +152,18 @@ export class CombatHud {
     this.death = el('div', 'ch-death', this.root, '<div class="ch-death-title">Slain</div><div>Returning in <span></span></div>');
     this.deathTimer = this.death.querySelector('span')!;
     this.toastBox = el('div', 'ch-toasts', this.root);
+
+    const obj = el('div', 'ch-boss', this.root);
+    const name = el('div', 'ch-boss-name', obj);
+    const track = el('div', 'ch-boss-bar', obj);
+    const lag = el('div', 'ch-boss-lag', track);
+    const hpFill = el('div', 'ch-boss-hp', track);
+    el('div', 'ch-boss-ticks', track);
+    const pct = el('span', 'ch-boss-pct', track);
+    const cast = el('div', 'ch-boss-cast', obj);
+    const castFill = el('div', 'ch-boss-cast-fill', cast);
+    el('span', '', cast);
+    this.objective = { root: obj, name, hp: hpFill, lag, pct, cast, castFill };
   }
 
   setPlayer(u: Unit): void {
@@ -262,7 +294,8 @@ export class CombatHud {
     this.death.classList.toggle('show', !c.alive);
     if (!c.alive) this.deathTimer.textContent = `${Math.ceil(c.respawnTimer)}s`;
 
-    this.overheadBars(units);
+    this.overheadBars(units, dt);
+    this.objectiveBar(units, dt);
     this.updateFloaters(dt);
   }
 
@@ -293,7 +326,54 @@ export class CombatHud {
     return { x: (this.v.x * 0.5 + 0.5) * window.innerWidth, y: (-this.v.y * 0.5 + 0.5) * window.innerHeight };
   }
 
-  private overheadBars(units: readonly Unit[]): void {
+  /** Bosses and Wardens near the player get a big named bar under the scoreboard instead of a small overhead one. */
+  private objectiveBar(units: readonly Unit[], dt: number): void {
+    const p = this.player;
+    let best: Unit | null = null;
+    let bd = OBJECTIVE_RANGE;
+    for (const u of units) {
+      if (!u.alive || !(u.brain instanceof MonsterBrain)) continue;
+      const kind = u.brain.camp.camp.kind;
+      if (!isBoss(kind) && !isBuff(kind)) continue;
+      const d = Math.hypot(u.x - p.x, u.z - p.z);
+      if (d < bd) {
+        best = u;
+        bd = d;
+      }
+    }
+    const o = this.objective;
+    o.root.classList.toggle('show', best !== null);
+    if (!best) {
+      this.objectiveUnit = null;
+      return;
+    }
+    const brain = best.brain as MonsterBrain;
+    const kind = brain.camp.camp.kind;
+    if (best !== this.objectiveUnit) {
+      this.objectiveUnit = best;
+      this.objectiveLag = 1;
+      const color = OBJECTIVE_COLOR[kind] ?? hex(BUFF_GLOW[kind] ?? 0xffffff);
+      o.root.style.setProperty('--c', color);
+      const title = isBoss(kind) ? EPITHET[kind]! : `Guardian of ${BUFFS[kind as BuffKind].name}`;
+      o.name.innerHTML = `${best.name}<small>${title}</small>`;
+      o.root.classList.toggle('ch-boss-major', isBoss(kind));
+      // a notch every thousand health
+      o.root.style.setProperty('--tick', `${(100 * 1000) / best.combatant.stats.maxHealth}%`);
+      o.cast.querySelector('span')!.textContent = SPECIAL_NAME[kind] ?? '';
+    }
+    const c = best.combatant;
+    const pct = c.health / c.stats.maxHealth;
+    this.objectiveLag = drain(this.objectiveLag, pct, dt);
+    o.hp.style.width = `${pct * 100}%`;
+    o.lag.style.width = `${this.objectiveLag * 100}%`;
+    o.pct.textContent = `${Math.ceil(c.health).toLocaleString()} / ${Math.round(c.stats.maxHealth).toLocaleString()}`;
+    const cast = brain.specialProgress;
+    o.cast.classList.toggle('show', cast > 0);
+    o.castFill.style.width = `${cast * 100}%`;
+    o.root.classList.toggle('engaged', brain.target !== null);
+  }
+
+  private overheadBars(units: readonly Unit[], dt: number): void {
     const seen = new Set<Unit>();
     for (const u of units) {
       seen.add(u);
@@ -302,7 +382,8 @@ export class CombatHud {
       const head = u.alive ? this.headOf(u, this.v) : null;
       const at = head && this.project(head);
       const enemyHidden = u.team !== this.player.team && u.stealth > 0;
-      if (!at || enemyHidden) {
+      // the objective bar already shows it
+      if (!at || enemyHidden || u === this.objectiveUnit) {
         b.el.style.display = 'none';
         continue;
       }
@@ -319,7 +400,13 @@ export class CombatHud {
       const max = c.stats.maxHealth;
       const shield = c.shieldTotal;
       const total = Math.max(max, c.health + shield);
-      b.hp.style.width = `${(c.health / total) * 100}%`;
+      const pct = c.health / total;
+      b.lagPct = drain(b.lagPct, pct, dt);
+      b.hp.style.width = `${pct * 100}%`;
+      b.lag.style.width = `${b.lagPct * 100}%`;
+      // a notch every 250 health on gods, every thousand on structures
+      const step = u.kind === 'god' ? 250 : isStructure(u) ? 1000 : 0;
+      if (step) b.el.style.setProperty('--tick', `${(100 * step) / total}%`);
       b.shield.style.left = `${(c.health / total) * 100}%`;
       b.shield.style.width = `${(shield / total) * 100}%`;
       b.level.textContent = u.kind === 'god' ? String(c.level) : '';
@@ -340,10 +427,12 @@ export class CombatHud {
     const name = el('span', 'ch-ob-name', head, u === this.player ? '' : u.name);
     const marks = el('span', 'ch-ob-marks', head);
     const bar = el('div', 'ch-ob-bar', root);
+    const lag = el('div', 'ch-ob-lag', bar);
     const hp = el('div', 'ch-ob-hp', bar);
-    hp.style.background = TEAM_COLORS[side];
+    hp.style.setProperty('--c', TEAM_COLORS[side]);
     const shield = el('div', 'ch-ob-shield', bar);
-    const b = { el: root, hp, shield, level, name, marks };
+    el('div', 'ch-ob-ticks', bar);
+    const b = { el: root, hp, lag, lagPct: 1, shield, level, name, marks };
     this.bars.set(u, b);
     return b;
   }
