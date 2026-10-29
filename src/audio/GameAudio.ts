@@ -208,8 +208,9 @@ export class GameAudio {
       gap = 0.05;
     } else if (src.kind === 'monster') name = src.radius > 2 ? 'hit.blunt' : 'hit.monster';
     else name = 'hit.flesh';
-    this.at(name, target, { gain, vary: 0.08 }, src === this.me ? 4 : 2, gap);
-    if (crit) this.at('hit.crit', target, { gain: 0.6 }, 3);
+    const mine = src === this.me || target === this.me;
+    this.at(name, target, { gain, vary: 0.08 }, src === this.me ? 4 : 2, gap, mine);
+    if (crit) this.at('hit.crit', target, { gain: 0.6 }, 3, 0, mine);
   }
 
   private onImpact(owner: Unit, x: number, z: number, big: boolean): void {
@@ -591,9 +592,13 @@ export class GameAudio {
     if (this.engine.has(name)) this.at(name, u, { gain: u === this.me ? gain : gain * 0.85, vary: 0.04, ref: 7, wet: 0.05 }, priority, gap);
   }
 
-  /** Play a sound at a unit. */
-  private at(name: string, u: Unit, o: Parameters<AudioEngine['play']>[1] = {}, priority = 1, gap = 0): void {
-    const gain = (o.gain ?? 1) * (u === this.me ? 1 : this.crowd);
+  /**
+   * Play a sound at a unit. `own` marks the player's own sounds (made by or
+   * aimed at them), which stay at full level when a crowded fight ducks the
+   * rest; so do the big moments (priority 5 and up: deaths, collapses, bosses).
+   */
+  private at(name: string, u: Unit, o: Parameters<AudioEngine['play']>[1] = {}, priority = 1, gap = 0, own = u === this.me): void {
+    const gain = (o.gain ?? 1) * (own || priority >= 5 ? 1 : this.crowd);
     this.engine.play(name, { ...o, gain, at: { x: u.x, y: u.body.y + 1.2, z: u.z } }, priority, gap);
   }
 }
