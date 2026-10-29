@@ -1,4 +1,5 @@
 import { QUALITY_PRESETS, type QualityName } from '../render/Quality';
+import { controlsHtml } from './StartMenu';
 
 /** Minimal overlay: FPS, backend, quality picker, controls hint, loading screen. */
 export class Hud {
@@ -8,6 +9,7 @@ export class Hud {
   private readonly loading: HTMLDivElement;
   private readonly bar: HTMLDivElement;
   private readonly hint: HTMLDivElement;
+  private readonly help: HTMLDivElement;
   private frames = 0;
   private acc = 0;
 
@@ -25,10 +27,15 @@ export class Hud {
         </label>
       </div>
       <div class="hud-crosshair"></div>
-      <div class="hud-hint">Click to play &middot; WASD move &middot; Mouse aim &middot; Left click attack &middot; 1-4, R skills &middot; B recall &middot; K skills &amp; trees &middot; Esc release mouse</div>
+      <div class="hud-hint">Click to play &middot; WASD move &middot; Left click attack &middot; 1-4, R skills &middot; B recall &middot; K skills &amp; trees &middot; H all controls</div>
       <div class="hud-loading"><div class="hud-title">ASCENDANT</div><div class="hud-bar"><div></div></div><div class="hud-sub">Raising the temple&hellip;</div></div>
     `;
     document.body.appendChild(this.root);
+    this.help = document.createElement('div');
+    this.help.className = 'help';
+    this.help.innerHTML = `<div class="help-panel"><h3>Controls</h3>${controlsHtml()}<div class="help-foot">Press H or click to close.</div></div>`;
+    this.help.addEventListener('click', () => this.toggleHelp(false));
+    document.body.appendChild(this.help);
     this.fps = this.root.querySelector('.hud-fps')!;
     this.stats = this.root.querySelector('.hud-stats')!;
     this.loading = this.root.querySelector('.hud-loading')!;
@@ -52,6 +59,15 @@ export class Hud {
   ready(): void {
     this.loading.classList.add('done');
     setTimeout(() => this.loading.remove(), 1200);
+  }
+
+  get helpOpen(): boolean {
+    return this.help.classList.contains('show');
+  }
+
+  toggleHelp(show = !this.helpOpen): void {
+    this.help.classList.toggle('show', show);
+    if (show) document.exitPointerLock?.();
   }
 
   setLocked(locked: boolean): void {

@@ -39,6 +39,8 @@ export interface CombatDeps {
   world: World;
   /** 'conquest' plays a full match against bots; 'arena' is the training ground. */
   mode?: 'arena' | 'conquest';
+  /** The player's god (defaults to Zeus). */
+  god?: string;
   input: Input;
   player: PlayerController;
   camera: THREE.PerspectiveCamera;
@@ -127,7 +129,8 @@ export class CombatGame implements Updatable {
     world.vfx.add(this.shapeDecal.mesh, this.rangeDecal.mesh);
 
     if (conquest) player.spawn(spawn.x, spawn.z, spawn.yaw);
-    this.player = godUnit(godById('zeus')!, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
+    const mine = godById(deps.god ?? 'zeus') ?? GODS[0]!;
+    this.player = godUnit(mine, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
     // the Conquest map builds and places its own Tower, Phoenix and Titan models
     // the map dims a buff altar's crystal while its Warden is down (when the map supports it)
@@ -140,7 +143,7 @@ export class CombatGame implements Updatable {
       return undefined;
     });
     world.actors.add(this.views.group);
-    this.setPlayerModel('zeus');
+    this.setPlayerModel(mine.id);
 
     this.hud = new CombatHud(this.player, deps.camera, (u, out) => this.views.headOf(u, out));
     this.menu = new LoadoutMenu(
@@ -164,7 +167,7 @@ export class CombatGame implements Updatable {
       // build the bots' jungle paths while the map loads, not mid-match
       this.match.nav.warm();
       this.match.addGod(this.player);
-      this.addTeam('order', GODS.filter((g) => g.id !== 'zeus'), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
+      this.addTeam('order', GODS.filter((g) => g.id !== mine.id), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
       this.addTeam('chaos', GODS, ROLES, [0, 1, 2, 3, 4]);
       this.matchHud = new MatchHud(this.match, this.player);
       this.sim.drainEvents();
