@@ -1,5 +1,7 @@
 import type { BasicShot, CastError, ResolvedSkill, Team } from '../game/combatant';
 import { FAVOR_REWARDS, ranked } from '../game/progression';
+import type { DamageType } from '../game/types';
+import { Passives } from './Passives';
 import {
   isStructure,
   nextEntityId,
@@ -73,6 +75,7 @@ export class Sim {
     this.units.push(unit);
     unit.body.y = this.terrain.groundAt(unit.x, unit.z);
     unit.combatant.inBase = this.inBase(unit);
+    if (unit.kind === 'god') this.passives.install(unit);
     return unit;
   }
 
@@ -83,6 +86,7 @@ export class Sim {
 
   /** Called with every event as it happens, before the view drains them. */
   readonly listeners: ((e: SimEvent) => void)[] = [];
+  readonly passives: Passives = new Passives(this);
 
   private emit(e: SimEvent): void {
     this.events.push(e);
@@ -379,6 +383,18 @@ export class Sim {
     this.checkLevel(credit, levelBefore);
   }
 
+  /** Deal raw damage outside a skill or basic (passive procs) and report it like any hit. */
+  strike(source: Unit, target: Unit, raw: number, type: DamageType): void {
+    if (!target.alive || !target.targetable || target.team === source.team || isStructure(target)) return;
+    const c = target.combatant;
+    const before = c.health + c.shieldTotal;
+    const credit = source.owner ?? source;
+    const levelBefore = credit.combatant.level;
+    source.combatant.dealDamage(c, raw, type, true);
+    this.report(source, target, before, true, false, true);
+    this.checkLevel(credit, levelBefore);
+  }
+
   private landBasic(u: Unit, target: Unit, shot: BasicShot): void {
     const c = target.combatant;
     const before = c.health + c.shieldTotal;
@@ -582,6 +598,11 @@ export class Sim {
     });
   }
 
+  /** A flash for effects outside skills (passive procs). */
+  flashAt(owner: Unit, shape: FlashShape): void {
+    this.flash(owner, shape);
+  }
+
   private flash(owner: Unit, shape: FlashShape): void {
     this.flashes.push({ id: nextEntityId(), shape, owner, age: 0, life: 0.45 });
   }
@@ -664,6 +685,7 @@ export class Sim {
     this.stepProjectiles(dt);
     this.stepZones(dt);
     this.stepPending();
+    this.passives.step();
     for (const f of this.flashes) f.age += dt;
     removeWhere(this.flashes, (f) => f.age >= f.life);
   }

@@ -402,6 +402,9 @@ export class Combatant {
     return { raw, crit: rng() < this.stats.critChance };
   }
 
+  /** Outgoing damage multiplier against a target, for passives that depend on the world (facing, distance, marks). */
+  damageAmp: ((target: Combatant, fromAbility: boolean) => number) | null = null;
+
   landBasic(target: Combatant, shot: BasicShot): DamageResult | null {
     if (target.team === this.team || !target.alive) return null;
     return this.dealDamage(target, shot.raw, this.god.basicAttack.damageType, false, shot.crit);
@@ -410,6 +413,8 @@ export class Combatant {
   dealDamage(target: Combatant, raw: number, type: DamageType, fromAbility: boolean, crit = false): DamageResult {
     if (!target.alive) return { raw: 0, dealt: 0, crit: false };
     const execute = this.hasKeystone('executeBelow');
+    // god passives (set by the simulation, which knows positions and marks)
+    if (this.damageAmp) raw *= this.damageAmp(target, fromAbility);
     const result = computeDamage(raw, type, this.stats, target.stats, crit);
     // Lifesteal only counts damage the target could actually take (no overkill).
     const sustained = Math.min(result.dealt, target.health + target.shieldTotal);

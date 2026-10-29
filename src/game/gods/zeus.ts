@@ -32,7 +32,7 @@ export const zeus: GodDef = {
   basicAttack: { range: 8.8, damageType: 'magical', projectileSpeed: 40 },
   passive: {
     name: 'Overcharge',
-    description: 'Hits apply Charge (max 3). Each Charge makes the target take 15% more damage from your basic attacks.',
+    description: 'Hits apply Charge (max 3). Each Charge makes the target take 8% more damage from your basic attacks.',
   },
   skills: [
     {
