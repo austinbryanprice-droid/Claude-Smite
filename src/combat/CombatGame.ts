@@ -439,7 +439,10 @@ export class CombatGame implements Updatable {
       } else {
         // shots fly a narrow line and stop at the first enemy or wall
         const perp = Math.abs(rx * dir.z - rz * dir.x);
-        const reach = t.radius + 0.45;
+        // the sim samples a shot at most 0.6 apart, so a glancing pass can slip between samples;
+        // only count the band where the chord through the target is long enough to always be sampled
+        const r = t.radius + 0.45;
+        const reach = Math.sqrt(Math.max(0, r * r - 0.09));
         if (perp > reach) continue;
         const contact = along - Math.sqrt(reach * reach - perp * perp);
         if (!this.sim.shotClear(u, dir, contact)) continue;
