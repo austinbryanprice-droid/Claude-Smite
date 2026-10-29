@@ -14,22 +14,34 @@ import { TextureLibrary } from './scene/Materials';
 import { mapFromUrl, World } from './scene/World';
 import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
+import { GODS, godById } from './game/gods';
+import { showStartMenu, type StartChoice } from './ui/StartMenu';
 
 async function main(): Promise<void> {
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
   const hud = new Hud((q) => void applyQuality(q));
   hud.progress(0.05, 'Starting renderer…');
 
-  const { renderer, isWebGPU } = await createRenderer(document.body);
+  const params = new URLSearchParams(location.search);
+  // Links with ?map= (and automated captures) skip the title screen.
+  const skipMenu = params.has('map') || params.has('capture') || params.has('showcase');
+  const rendering = createRenderer(document.body);
+  const chosen: Promise<StartChoice> = skipMenu
+    ? Promise.resolve({ mode: mapFromUrl(), god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
+    : showStartMenu(GODS, rendering.then((r) => r.isWebGPU));
+
+  const { renderer, isWebGPU } = await rendering;
   const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 3000);
 
+  // textures and god models load behind the title screen
   const textures = new TextureLibrary(renderer.getMaxAnisotropy?.() ?? 8);
   await textures.load((f) => hud.progress(0.05 + f * 0.5, 'Quarrying marble…'));
 
   await preloadGodAssets((f) => hud.progress(0.55 + f * 0.05, 'Summoning the gods…'));
-  hud.progress(0.6, 'Raising the temple…');
+  const choice = await chosen;
+  hud.progress(0.6, choice.mode === 'conquest' ? 'Raising the battlefield…' : 'Raising the temple…');
   await new Promise((r) => setTimeout(r, 0));
-  const world = new World(textures, camera, mapFromUrl());
+  const world = new World(textures, camera, choice.mode);
 
   const input = new Input(renderer.domElement);
   const god = new GodModel();
@@ -37,7 +49,6 @@ async function main(): Promise<void> {
   const player = new PlayerController(input, world.collision, god);
   player.spawn(world.spawn.x, world.spawn.z, world.spawn.yaw);
   const follow = new ThirdPersonCamera(camera, player, world.collision);
-  const params = new URLSearchParams(location.search);
   const showcase = params.has('showcase')
     ? new Showcase(params, world.actors, world.spawn, (x, z) => world.collision.groundAt(x, z), camera)
     : null;
@@ -74,9 +85,8 @@ async function main(): Promise<void> {
 
   const loop = new Loop();
   loop.addFixed(player);
-  // ?map=conquest plays a full match against bots; the default is the training ground
-  const mode = new URLSearchParams(location.search).get('map') === 'conquest' ? 'conquest' : 'arena';
-  const combat = new CombatGame({ world, input, player, camera, mode, shake: (a) => follow.addShake(a) });
+  // Conquest plays a full match against bots; the arena is the training ground
+  const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);
@@ -84,6 +94,9 @@ async function main(): Promise<void> {
   await renderer.compileAsync(world.scene, camera);
   hud.ready();
 
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyH' && !e.repeat) hud.toggleHelp();
+  });
   document.addEventListener('pointerlockchange', () => hud.setLocked(input.locked));
 
   const frame = (now: number) => {

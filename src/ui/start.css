@@ -1,0 +1,36 @@
+/* Title screen (mode, god, controls) and the in-game help overlay. */
+.sm, .help { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; background: radial-gradient(ellipse at center, #2a2118 0%, #0b0a09 75%); font-family: 'Cinzel', Georgia, serif; color: var(--ink, #f4ead8); pointer-events: auto; transition: opacity 0.4s; overflow: auto; }
+.sm.done { opacity: 0; pointer-events: none; }
+.sm button { font: inherit; color: inherit; cursor: pointer; }
+.sm-panel { width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 14px; }
+.sm-title { text-align: center; font-size: 46px; letter-spacing: 0.4em; padding-left: 0.4em; color: var(--gold, #e7c27a); text-shadow: 0 0 24px rgba(231, 194, 122, 0.4); }
+.sm-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.sm h3, .help h3 { margin: 4px 0 8px; font-size: 14px; font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase; color: #e7c27a; }
+.sm-modes { display: flex; flex-direction: column; gap: 8px; }
+.sm-mode, .sm-god { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(231, 194, 122, 0.3); border-radius: 6px; }
+.sm-mode b, .sm-god b { font-size: 17px; letter-spacing: 0.08em; }
+.sm-mode span, .sm-god span { font-family: Georgia, serif; font-size: 13px; opacity: 0.8; text-transform: capitalize; }
+.sm-mode span { text-transform: none; }
+.sm-mode.on, .sm-god.on { background: rgba(231, 194, 122, 0.18); border-color: #e7c27a; color: #ffe3a3; box-shadow: 0 0 14px rgba(255, 210, 120, 0.25); }
+.sm-gods { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.sm-detail { margin-top: 12px; padding: 12px 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(231, 194, 122, 0.15); border-radius: 6px; font-family: Georgia, serif; font-size: 14px; line-height: 1.45; }
+.sm-name { font-family: 'Cinzel', Georgia, serif; font-size: 22px; color: #ffe3a3; letter-spacing: 0.06em; }
+.sm-name span { font-size: 13px; opacity: 0.75; letter-spacing: 0.04em; color: var(--ink, #f4ead8); }
+.sm-passive { margin: 6px 0 10px; }
+.sm-skills { display: flex; gap: 8px; }
+.sm-skill { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.sm-ico { width: 46px; height: 46px; }
+.sm-ico svg { width: 100%; height: 100%; display: block; }
+.sm-k { font-family: 'Cinzel', Georgia, serif; font-size: 12px; color: #ffe3a3; }
+.sm-sn { font-size: 12px; line-height: 1.2; }
+.sm-tip { margin-top: 10px; opacity: 0.8; font-size: 13px; }
+.sm-controls { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; font-family: Georgia, serif; font-size: 14px; }
+.sm-key { font-family: 'Cinzel', Georgia, serif; color: #ffe3a3; white-space: pre; }
+.sm-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sm-note { flex: 1; font-family: Georgia, serif; font-size: 13px; opacity: 0.7; }
+.sm-play { padding: 12px 54px; font-size: 22px !important; letter-spacing: 0.2em; color: #1a1209 !important; background: linear-gradient(180deg, #ffe3a3, #c8963e); border: none; border-radius: 6px; box-shadow: 0 0 24px rgba(255, 210, 120, 0.35); }
+.sm-play:hover { filter: brightness(1.1); }
+.help { z-index: 25; background: rgba(4, 3, 2, 0.78); display: none; }
+.help.show { display: flex; }
+.help-panel { padding: 20px 26px; background: linear-gradient(180deg, rgba(28, 22, 16, 0.97), rgba(12, 10, 8, 0.98)); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 8px; max-width: 560px; }
+.help-foot { margin-top: 12px; font-family: Georgia, serif; font-size: 13px; opacity: 0.75; }
