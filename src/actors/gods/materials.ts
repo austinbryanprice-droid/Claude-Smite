@@ -33,7 +33,7 @@ export interface GodPalette {
 const PALETTES: Record<string, GodPalette> = {
   zeus: {
     skin: 0xc48a66, skinDeep: 0x7a3a2a, gold: 0xf7c450, steel: 0xc8d2dc, cloth: 0x2457c8, clothDeep: 0x0d1f5c,
-    cloth2: 0xeee4d0, leather: 0x5a3420, hair: 0xaab4c4, hairTip: 0xf2f4f8, fur: 0xd8d0c0, glow: 0x6fd8ff,
+    cloth2: 0xe2d6bc, leather: 0x5a3420, hair: 0xaab4c4, hairTip: 0xf2f4f8, fur: 0xd8d0c0, glow: 0x6fd8ff,
     eye: 0x8fe8ff, gem: 0x39b8ff,
   },
   thor: {
@@ -42,7 +42,7 @@ const PALETTES: Record<string, GodPalette> = {
     eye: 0xbfe4ff, gem: 0x4aa8ff,
   },
   odin: {
-    skin: 0xc8906c, skinDeep: 0x7a3a28, gold: 0xe0a33a, steel: 0x9aa4ae, cloth: 0x2b3240, clothDeep: 0x0e1118,
+    skin: 0xc8906c, skinDeep: 0x7a3a28, gold: 0xe0a33a, steel: 0x7e8a9c, cloth: 0x2b3240, clothDeep: 0x0e1118,
     cloth2: 0x6a1c1c, leather: 0x3a2416, hair: 0xb8bcc2, hairTip: 0xeceef0, fur: 0x5a5048, glow: 0xffc955,
     eye: 0xffd27a, gem: 0xffa62a,
   },
@@ -52,7 +52,7 @@ const PALETTES: Record<string, GodPalette> = {
     eye: 0x9dff7a, gem: 0x3dff7a,
   },
   anubis: {
-    skin: 0x2a2018, skinDeep: 0x0c0806, gold: 0xf2b84a, steel: 0x2a3e8a, cloth: 0xf0e6d0, clothDeep: 0x9a8a6a,
+    skin: 0x2a2018, skinDeep: 0x0c0806, gold: 0xf2b84a, steel: 0x2a3e8a, cloth: 0xe6dac0, clothDeep: 0x8a7a5a,
     cloth2: 0x1c3f9a, leather: 0x3a2412, hair: 0x14100c, hairTip: 0x2a2018, fur: 0x1e1712, glow: 0xffa040,
     eye: 0xffb050, gem: 0x2fd0c0,
   },
@@ -90,11 +90,21 @@ function studioEnv(): THREE.DataTexture {
       const y = d.y;
       let r: number, g: number, b: number;
       if (y > 0) {
-        const t = Math.pow(y, 0.5);
-        r = 1.0 + t * 1.1; g = 0.98 + t * 1.0; b = 1.0 + t * 0.8;
+        // dim zenith, bright band at the horizon: curved metal gets light-dark-light streaks
+        const t = Math.pow(y, 0.6);
+        const band = Math.exp(-y * y * 40) * 1.6;
+        r = 0.55 - t * 0.2 + band; g = 0.56 - t * 0.18 + band * 0.95; b = 0.62 - t * 0.1 + band * 0.85;
       } else {
         const t = Math.pow(-y, 0.4);
-        r = 0.55 - t * 0.42; g = 0.45 - t * 0.35; b = 0.34 - t * 0.27;
+        const band = Math.exp(-y * y * 60) * 0.9;
+        r = 0.28 - t * 0.22 + band; g = 0.2 - t * 0.16 + band * 0.85; b = 0.13 - t * 0.1 + band * 0.7;
+      }
+      // tall softboxes left and right of the key make vertical highlights
+      for (const sx of [-1, 1]) {
+        const ax = Math.abs(lon - sx * 1.15);
+        r += Math.exp(-ax * ax * 30) * Math.exp(-lat * lat * 3) * 1.4;
+        g += Math.exp(-ax * ax * 30) * Math.exp(-lat * lat * 3) * 1.35;
+        b += Math.exp(-ax * ax * 30) * Math.exp(-lat * lat * 3) * 1.3;
       }
       const k = Math.pow(Math.max(0, d.dot(key)), 60) * 14 + Math.pow(Math.max(0, d.dot(key)), 8) * 1.2;
       const rr = Math.pow(Math.max(0, d.dot(rimDir)), 40) * 7;
@@ -119,6 +129,8 @@ function studioEnv(): THREE.DataTexture {
 const edge = () => attribute('_edge', 'float');
 const side = () => attribute('_side', 'float');
 const data = () => attribute('color', 'vec4');
+/** Baked per-vertex ambient occlusion (tools/gods/forge/ao.py). */
+const ao = () => attribute('_ao', 'float');
 
 /** Fresnel-ish rim factor in view space, for the painted rim light Smite characters have. */
 const rim = () => pow(float(1).sub(saturate(normalView.dot(positionView.normalize().negate()))), 3);
@@ -133,8 +145,13 @@ function skinMaterial(p: GodPalette): THREE.Material {
   const base = mix(color(p.skin), color(p.skinDeep), crease.mul(0.75).add(mottle.mul(0.12)));
   // warm subsurface-looking tint in creases, light catches the ridges of muscle
   const lit = base.mul(float(1).add(ridge.mul(0.22))).add(fine);
-  m.colorNode = lit;
-  m.roughnessNode = float(0.5).add(crease.mul(0.15)).sub(ridge.mul(0.12)).add(mx_noise_float(positionLocal.mul(90)).mul(0.06));
+  // painted face shading: deep eye sockets and tinted lips
+  const lips = d.z;
+  const socket = d.w;
+  const lipColor = color(p.skin).mul(vec3(0.82, 0.5, 0.48));
+  const painted = mix(mix(lit, color(p.skinDeep).mul(0.55), socket.mul(0.65)), lipColor, lips.mul(0.55));
+  m.colorNode = painted;
+  m.roughnessNode = float(0.5).add(crease.mul(0.15)).sub(ridge.mul(0.12)).add(mx_noise_float(positionLocal.mul(90)).mul(0.06)).sub(lips.mul(0.2));
   // a little warm back-scatter at grazing angles
   m.emissiveNode = color(p.skinDeep).mul(rim().mul(0.18));
   return m;
@@ -165,12 +182,15 @@ function metalMaterial(base: number, trim: number, opts: { engrave?: boolean; da
 }
 
 function clothMaterial(c: number, deep: number, trim: number, opts: { pattern?: boolean } = {}): THREE.Material {
-  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.82, sheen: 0.8, sheenRoughness: 0.45, side: THREE.DoubleSide });
-  m.sheenColor = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.35);
+  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.82, sheen: 0.45, sheenRoughness: 0.5, side: THREE.DoubleSide });
+  m.sheenColor = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.25);
   const v = uv();
-  const weave = mx_noise_float(positionLocal.mul(vec3(260, 260, 260))).mul(0.06);
-  const folds = mx_fractal_noise_float(positionLocal.mul(6), 2).mul(0.5).add(0.5);
-  let col: any = mix(color(deep), color(c), folds.mul(0.5).add(0.45)).add(weave);
+  const weave = mx_noise_float(positionLocal.mul(vec3(260, 260, 260))).mul(0.03);
+  // painted drape: long vertical folds plus a little broad variation
+  const drape = mx_fractal_noise_float(positionLocal.mul(vec3(10, 1.6, 10)), 2).mul(0.5).add(0.5);
+  const broad = mx_fractal_noise_float(positionLocal.mul(4), 2).mul(0.5).add(0.5);
+  const folds = smoothstep(0.2, 0.8, drape.mul(0.7).add(broad.mul(0.3)));
+  let col: any = mix(color(deep), color(c), folds.mul(0.65).add(0.35)).add(weave);
   if (opts.pattern) {
     // gold embroidered border: along uv edges (cloth panels have 0..1 uv)
     const ex = min(v.x, float(1).sub(v.x));
@@ -187,6 +207,21 @@ function clothMaterial(c: number, deep: number, trim: number, opts: { pattern?: 
     m.roughnessNode = mix(float(0.82), float(0.3), t);
   }
   m.colorNode = col;
+  return m;
+}
+
+/** Striped headcloth (a nemes): bands of cloth and gold along uv.y, gold-trimmed hem. */
+function stripesMaterial(c: number, trim: number): THREE.Material {
+  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.7, sheen: 0.5, sheenRoughness: 0.4, side: THREE.DoubleSide });
+  m.sheenColor = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.4);
+  const v = uv();
+  const weave = mx_noise_float(positionLocal.mul(vec3(240, 240, 240))).mul(0.05);
+  const band = smoothstep(0.42, 0.5, fract(v.y.mul(9))).mul(float(1).sub(smoothstep(0.92, 1.0, fract(v.y.mul(9)))));
+  const hem = float(1).sub(smoothstep(0.03, 0.045, min(v.x, float(1).sub(v.x)))).max(smoothstep(0.95, 0.965, v.y));
+  const t = max(band, hem);
+  m.colorNode = mix(color(c).add(weave), color(trim), t);
+  m.metalnessNode = t.mul(0.9);
+  m.roughnessNode = mix(float(0.7), float(0.28), t);
   return m;
 }
 
@@ -214,7 +249,9 @@ function hairMaterial(root: number, tip: number): THREE.Material {
   const tint = data().y.mul(0.16).add(0.88); // per-clump variation
   // roots sit in the shadow of the clumps around them
   const occl = smoothstep(0.0, 0.45, t).mul(0.55).add(0.45);
-  m.colorNode = mix(color(root), color(tip), t.mul(0.8)).mul(strands.mul(0.3).add(0.62)).mul(occl).mul(tint);
+  // painted shine band a third of the way down each lock, broken up by the strands
+  const shine = smoothstep(0.18, 0.3, t).mul(float(1).sub(smoothstep(0.38, 0.52, t))).mul(strands).mul(0.22);
+  m.colorNode = mix(color(root), color(tip), t.mul(0.8)).mul(strands.mul(0.3).add(0.62)).mul(occl).mul(tint).add(color(tip).mul(shine));
   m.roughnessNode = float(0.5).sub(strands.mul(0.15));
   return m;
 }
@@ -227,10 +264,20 @@ function glowMaterial(c: number, strength = 6): THREE.Material {
 }
 
 function eyeMaterial(c: number): THREE.Material {
-  const m = new THREE.MeshBasicNodeMaterial();
-  const pupil = data().x;
-  const iris = smoothstep(0.82, 0.9, pupil);
-  m.colorNode = mix(color(c).mul(0.6), color(c).mul(5), iris).add(color(0xffffff).mul(smoothstep(0.97, 0.99, pupil).mul(3)));
+  // a lit, wet eye: off-white sclera, a colored iris with a dark limbal ring and pupil,
+  // and a faint godly glow in the iris only
+  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.03 });
+  const d = data().x; // 1 at the pupil, falling off toward the white
+  const iris = smoothstep(0.84, 0.87, d);
+  const limbal = smoothstep(0.84, 0.87, d).mul(float(1).sub(smoothstep(0.87, 0.9, d)));
+  const pupil = smoothstep(0.965, 0.975, d);
+  const fibers = mx_noise_float(positionLocal.mul(900)).mul(0.25).add(0.85);
+  const sclera = mix(color(0xd8cfc4), color(0xf2ece4), smoothstep(0.3, 0.75, d));
+  let col: any = mix(sclera, color(c).mul(fibers), iris);
+  col = mix(col, color(c).mul(0.15), limbal.mul(0.8));
+  col = mix(col, color(0x050404), pupil);
+  m.colorNode = col;
+  m.emissiveNode = color(c).mul(iris.mul(float(1).sub(pupil)).mul(fibers).mul(1.4));
   return m;
 }
 
@@ -262,12 +309,18 @@ function buildMaterials(id: string, variant?: string): Map<string, THREE.Materia
   m.set('clothplain', clothMaterial(p.cloth, p.clothDeep, p.gold));
   m.set('cloth2', clothMaterial(p.cloth2, new THREE.Color(p.cloth2).multiplyScalar(0.55).getHex(), p.gold, { pattern: true }));
   m.set('leather', leatherMaterial(p.leather, p.gold));
+  m.set('stripes', stripesMaterial(p.cloth2, p.gold));
   m.set('hair', hairMaterial(p.hair, p.hairTip));
   m.set('fur', hairMaterial(p.fur, new THREE.Color(p.fur).lerp(new THREE.Color(0xffe8c8), 0.3).getHex()));
   m.set('glow', glowMaterial(p.glow));
   m.set('eye', eyeMaterial(p.eye));
   m.set('gem', gemMaterial(p.gem));
   m.set('default', new THREE.MeshStandardNodeMaterial({ color: 0x888888 }));
-  for (const [name, mat] of m) mat.name = name;
+  for (const [name, mat] of m) {
+    mat.name = name;
+    // contact shadows on everything lit; glow and eyes stay bright
+    const nm = mat as THREE.MeshPhysicalNodeMaterial;
+    if (nm.colorNode && name !== 'glow' && name !== 'eye') nm.colorNode = nm.colorNode.mul(mix(float(1), ao(), 0.92));
+  }
   return m;
 }

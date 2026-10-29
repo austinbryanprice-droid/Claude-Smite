@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.sparse import coo_matrix
 
-from . import body as bodymod, export, mh, skin
+from . import ao, body as bodymod, export, mh, skin
 from .geo import Mesh, merge
 from .mathx import normalize
 from .regions import Fields
@@ -37,14 +37,35 @@ class God:
     height = 2.3
     shape = mh.Shape()
     bulk: dict = {}
+    definition: float = 0.7  # how strongly muscle forms are exaggerated (0 = MakeHuman as is)
 
     def __init__(self):
         self.body = bodymod.build(self.shape, self.height)
         if self.bulk:
             bodymod.bulk(self.body, self.bulk)
         self.F = Fields(self.body)
+        if self.definition:
+            self.define_muscles(self.definition)
         self.parts: list[export.Part] = []
         self.meta: dict = {'hipsScale': self.body.rig.hips_scale, 'height': self.height, 'chains': [], 'cloths': []}
+
+    def define_muscles(self, k: float):
+        """Unsharp-masks the body surface so muscle forms read from a game camera.
+        Leaves the face, hands and feet alone (their small features would turn lumpy)."""
+        from .shell import laplacian
+        b = self.body
+        tris = b.tris()
+        used = b.used
+        remap = -np.ones(len(b.verts), dtype=int)
+        remap[used] = np.arange(len(used))
+        P = b.verts[used]
+        T = remap[tris]
+        Ps = laplacian(P, T, 20, 0.6)
+        mask = 1 - np.clip(self.F.bones('head', 'hand', 'f_', 'thumb', 'foot', 'toe')[used] * 1.5, 0, 1)
+        P2 = P + (P - Ps) * (k * mask)[:, None]
+        b.verts[used] = P2
+        b.normals[:] = bodymod.vertex_normals(b.verts, b.faces)
+        self.F = Fields(b)
 
     # ---------------------------------------------------------------- parts
     def add(self, name: str, material: str, mesh: Mesh, weights: np.ndarray | str | None = None, transfer_only=None):
@@ -93,15 +114,32 @@ class God:
         col = np.zeros((len(self.body.verts), 4))
         col[:, 0] = np.clip(c * 60, 0, 1)  # creases
         col[:, 1] = np.clip(-c * 60, 0, 1)  # ridges
-        col[:, 2] = self.skin_region()
+        col[:, 2], col[:, 3] = self.face_paint()
         self.parts.append(export.body_part(self.body, faces, uvf, material, 'body', col))
 
-    def skin_region(self) -> np.ndarray:
-        """Blue channel of the skin data: 1 on the face (for lips/cheek tint)."""
-        return self.F.bones('DEF-head')
+    def face_paint(self):
+        """Blue and alpha of the skin data: lips, and the shadow of the eye sockets.
+
+        Painted shading, as on a stylized character: it keeps the eyes reading as
+        deep-set and the mouth as a mouth when the geometry alone is too soft.
+        """
+        V, J = self.body.verts, self.body.J
+        head = self.F.bones('DEF-head')
+        socket = np.zeros(len(V))
+        for s in ('L', 'R'):
+            e = J[f'eye.{s}____head']
+            # centered a little above and behind the eyeball: the brow casts down into the socket
+            d = np.linalg.norm((V - (e + np.array([0, 0.004, -0.006]))) * np.array([0.85, 1.15, 1.0]), axis=1)
+            socket = np.maximum(socket, 1 - np.clip((d - 0.016) / 0.02, 0, 1))
+        mouth_y = (J['eye.L____head'][1] + J['jaw____tail'][1]) / 2 - 0.05 * (J['eye.L____head'][1] - J['jaw____tail'][1])
+        m = np.array([0, mouth_y, J['oris06____head'][2]])
+        q = (V - m) / np.array([0.026, 0.011, 0.03])
+        lips = np.clip(1.4 - np.linalg.norm(q, axis=1), 0, 1) * (V[:, 2] > m[2] - 0.02)
+        return lips * head, socket * head
 
     def build(self, path) -> int:
         self.make()
+        ao.bake(self.parts)
         return export.write(path, self.body, self.parts, self.meta)
 
     def make(self):

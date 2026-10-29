@@ -11,7 +11,7 @@ from ..geo import extrude, tube, merge, look_rotation, sphere
 from ..god import God
 from ..mathx import normalize
 from ..regions import smooth
-from .common import add_boot_feet, heroic, face_fields, add_hair_head, add_skirt, head_weights
+from .common import add_boot_feet, heroic, face_fields, add_hair_head, add_skirt, head_weights, heroic_face
 
 
 class Odin(God):
@@ -20,7 +20,7 @@ class Odin(God):
     bulk = {'DEF-thigh': 1.2, 'DEF-shin': 1.15, 'DEF-upper_arm': 1.28, 'DEF-forearm': 1.22, 'DEF-spine.003': (1.1, 1.0, 1.04),
             'DEF-neck': 1.18, 'DEF-hand': 1.1, 'DEF-shoulder': 1.15}
     shape = mh.Shape(gender=1, muscle=0.85, weight=0.7, height=1.0, proportions=1.0, extra={
-        **heroic(0.9),
+        **heroic(0.9), **heroic_face(0.9),
         'nose/nose-hump-incr': 0.6, 'nose/nose-scale-vert-incr': 0.3, 'head/head-square': 0.3,
         'cheek/l-cheek-bones-incr': 0.5, 'cheek/r-cheek-bones-incr': 0.5,
         'expression/units/caucasian/eyebrows-left-down': 0.8, 'expression/units/caucasian/eyebrows-right-down': 0.8,
@@ -45,7 +45,7 @@ class Odin(God):
         neckline = smooth(nl - y, 0.0, 0.015)
         lower = smooth(y - (hips[1] + 0.08), 0.0, 0.015)
         plate_f = np.minimum.reduce([torso, armhole, neckline, lower])
-        plate, W = shell.plate(b, plate_f, offset=0.03, thickness=0.012, rim=0.012, rim_width=0.03, smooth=6)
+        plate, W = shell.plate(b, plate_f, offset=0.03, thickness=0.012, rim=0.012, rim_width=0.03, smooth=6, sharpen=1.6)
         self.add('cuirass', 'steel', plate, W)
         # gold raven-eye medallion
         cy = neck[1] - 0.22
@@ -88,7 +88,7 @@ class Odin(God):
             o = p - neck
             o[:, 1] = 0
             return normalize(normalize(o + 1e-6) * 0.7 + np.array([0, -1.0, 0]))
-        style = hairmod.Style(length=0.14, width=0.08, flatness=0.4, segments=8, sides=8, lift=0.9, gravity=0.5, flow=mflow,
+        style = hairmod.Style(length=0.14, width=0.08, flatness=0.4, segments=6, sides=8, grooves=3, lift=0.9, gravity=0.5, flow=mflow,
                               curl=0.25, jitter=0.35, clearance=0.075, taper=0.8, seed=21)
         m, _ = hairmod.hair(b, mantle, 0.028, style)
         self.add('mantle', 'fur', m, None)
@@ -108,6 +108,8 @@ class Odin(God):
 
         hide = (plate_f > 0.75) | (F.bones('foot', 'toe') > 0.9) & (y < 0.06)
         hide = hide | add_boot_feet(self)
+        # skin under the helm (the heavy brow would poke through the dome)
+        hide = hide | ((F.bones('DEF-head') > 0.5) & (y > face_fields(self)['eye'][1] + 0.045))
         self.add_body(hide=hide | skirt.hide)
         self.eyes()
         self.meta['grip'] = ['R']
@@ -133,6 +135,15 @@ class Odin(God):
         band = kit.ring_around(o + np.array([0, -0.008, 0.0]), [0, 1, 0], rx + 0.004, 0.012, seg=48, sides=6, rz=rz / rx)
         ridge_pts = np.array([o + np.array([0, (h + 0.004) * np.cos(a), (rz + 0.004) * np.sin(a)]) for a in np.linspace(-1.5, 1.5, 14)])
         ridge = tube(ridge_pts, np.full(14, 0.011), 6, flat=0.6)
+        # side-to-side strap (spangenhelm frame) and rivets along the brow band
+        cross_pts = np.array([o + np.array([(rx + 0.004) * np.sin(a), (h + 0.004) * np.cos(a), 0.0]) for a in np.linspace(-1.5, 1.5, 14)])
+        cross = tube(cross_pts, np.full(14, 0.009), 6, flat=0.6)
+        rivets = []
+        for a in np.linspace(0, 2 * np.pi, 16, endpoint=False):
+            if abs(np.sin(a)) > 0.97:
+                continue  # leave the temples clear for the wings
+            pnt = o + np.array([np.sin(a) * (rx + 0.016), -0.008, np.cos(a) * (rz + 0.016)])
+            rivets.append(sphere(0.006, 8, 6).transformed(t=pnt))
         nasal = tube(np.array([o + np.array([0, 0.0, rz + 0.004]), o + np.array([0, -0.06, rz + 0.012])]), np.array([0.012, 0.008]), 6, flat=0.5)
         # wings: fanned feathers sweeping up and back from each temple
         feathers = []
@@ -147,7 +158,7 @@ class Odin(God):
                 n = normalize(np.array([sx, 0.0, 0.5]))
                 R = look_rotation(normalize(n - d * np.dot(n, d)), d)
                 feathers.append(f.transformed(R=R, t=root + np.array([0, 0, -0.008 * k])))
-        self.add('helm_trim', 'gold', merge([band, ridge, nasal]), 'DEF-head')
+        self.add('helm_trim', 'gold', merge([band, ridge, cross, nasal] + rivets), 'DEF-head')
         self.add('helm_wings', 'steel', merge(feathers), 'DEF-head')
 
     def eyepatch(self):

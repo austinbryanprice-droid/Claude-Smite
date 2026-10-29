@@ -26,6 +26,25 @@ def heroic(k: float = 1.0, hands: float = 0.5) -> dict[str, float]:
     return out
 
 
+def heroic_face(k: float = 1.0) -> dict[str, float]:
+    """Stylized heroic face: a heavy brow over deep-set eyes, high cheekbones, a broad jaw."""
+    out = {
+        'forehead/forehead-nubian-incr': 0.6 * k,
+        'forehead/forehead-temple-decr': 0.4 * k,
+        'chin/chin-bones-incr': 0.5 * k,
+        'mouth/mouth-laugh-lines-in': 0.3 * k,
+    }
+    for s in ('l', 'r'):
+        out.update({
+            f'eyes/{s}-eye-push1-in': 0.5 * k,
+            f'eyes/{s}-eye-eyefold-down': 0.5 * k,
+            f'eyes/{s}-eye-bag-decr': 0.6 * k,
+            f'cheek/{s}-cheek-bones-incr': 0.4 * k,
+            f'cheek/{s}-cheek-inner-decr': 0.4 * k,
+        })
+    return out
+
+
 # ---------------------------------------------------------------- head landmarks and hair
 
 import numpy as np  # noqa: E402
@@ -89,13 +108,13 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
             back = smooth(-(P[:, 2] - lm['head'][2]), -0.06, 0.08)
             return hair_len * (0.22 + 0.78 * back) * np.random.default_rng(seed).uniform(0.8, 1.15, len(P))
 
-        style = hairmod.Style(length=length, width=0.05, flatness=0.32, segments=12, sides=8, lift=0.12, gravity=0.6, flow=flow,
-                           curl=wild, curl_freq=1.1, jitter=0.2, clearance=0.018, taper=1.2, seed=seed)
-        m, _ = hairmod.hair(b, scalp, spacing * 0.8, style)
+        style = hairmod.Style(length=length, width=0.062, flatness=0.3, segments=6, sides=8, lift=0.12, gravity=0.6, flow=flow,
+                           curl=wild, curl_freq=1.1, jitter=0.2, clearance=0.018, taper=1.2, grooves=2, seed=seed)
+        m, _ = hairmod.hair(b, scalp, spacing * 0.95, style)
         # a second, fuller layer further out gives the mane volume
-        style2 = hairmod.Style(length=lambda P, N: length(P, N) * 1.15, width=0.065, flatness=0.3, segments=12, sides=8, lift=0.22,
-                               gravity=0.6, flow=flow, curl=wild * 1.2, curl_freq=0.9, jitter=0.25, clearance=0.034, taper=1.2, seed=seed + 11)
-        m2, _ = hairmod.hair(b, np.minimum(scalp, smooth(-rel_z, -0.04, 0.0)), spacing * 1.2, style2)  # volume behind the hairline only
+        style2 = hairmod.Style(length=lambda P, N: length(P, N) * 1.15, width=0.08, flatness=0.28, segments=6, sides=8, lift=0.22,
+                               gravity=0.6, flow=flow, curl=wild * 1.2, curl_freq=0.9, jitter=0.25, clearance=0.034, taper=1.2, grooves=3, seed=seed + 11)
+        m2, _ = hairmod.hair(b, np.minimum(scalp, smooth(-rel_z, -0.04, 0.0)), spacing * 1.4, style2)  # volume behind the hairline only
         meshes.append(m2)
         meshes.append(m)
     if beard:
@@ -115,8 +134,8 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
             low = smooth(-(P[:, 1] - mouth[1]), 0.0, 0.05)
             return beard_len * (0.3 + 0.7 * center * (0.4 + 0.6 * low))
 
-        style = hairmod.Style(length=blen, width=0.036, flatness=0.32, segments=10, sides=8, lift=0.3, gravity=0.6, flow=bflow,
-                           curl=wild * 0.8, curl_freq=1.6, jitter=0.25, clearance=0.01, tip_curl=0.2, seed=seed + 1)
+        style = hairmod.Style(length=blen, width=0.036, flatness=0.32, segments=6, sides=8, lift=0.3, gravity=0.6, flow=bflow,
+                           curl=wild * 0.8, curl_freq=1.6, jitter=0.25, clearance=0.01, tip_curl=0.2, grooves=2, seed=seed + 1)
         m, _ = hairmod.hair(b, jaw, spacing * 0.85, style)
         meshes.append(m)
     if mustache:
@@ -186,8 +205,15 @@ def add_cloth_panel(god, name, material, top, front=True, width=0.3, length=0.5,
     return m
 
 
+def _pleat(a):
+    """Knife-pleat profile: broad flat faces with sharp folds, instead of a soft sine wave."""
+    x = np.sin(a)
+    return np.sign(x) * np.abs(x) ** 0.45
+
+
 def add_skirt(god, name, material, top, length, flare=0.08, pleats=20, depth=0.008, clearance=0.025, rows=8, seg=48):
     """A pleated cloth skirt wrapped around the hips, flaring toward the hem."""
+    seg = max(seg, pleats * 8)  # enough columns that each pleat has a crisp fold and a shadowed valley
     from ..geo import lathe
     b = god.body
     P = b.verts[b.used]
@@ -210,7 +236,7 @@ def add_skirt(god, name, material, top, length, flare=0.08, pleats=20, depth=0.0
     # never narrower than the row above (hangs over the buttocks and thighs)
     rad = np.maximum.accumulate(rad, axis=0)
     t = np.linspace(0, 1, rows)[:, None]
-    rad = rad + clearance + flare * t ** 1.3 + np.sin(ang[None] * pleats) * depth * (0.3 + t)
+    rad = rad + clearance + flare * t ** 1.3 + _pleat(ang[None] * pleats) * depth * 1.8 * (0.3 + t)
     v = np.zeros((rows, seg, 3))
     v[..., 0] = rad * np.sin(ang)[None]
     v[..., 1] = ys[:, None]

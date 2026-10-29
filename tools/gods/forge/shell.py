@@ -107,7 +107,7 @@ def edge_distance(P: np.ndarray, f: np.ndarray) -> np.ndarray:
 
 
 def plate(body: Body, field: np.ndarray, *, iso: float = 0.5, offset: float = 0.012, thickness: float = 0.006,
-          rim: float = 0.012, rim_width: float = 0.018, smooth: int = 6, inflate=None, bulge=None):
+          rim: float = 0.012, rim_width: float = 0.018, smooth: int = 6, inflate=None, bulge=None, sharpen: float = 0.0):
     """A solid armor plate. Returns (Mesh, dense weights).
 
     attrs['edge'] holds the distance to the plate's border (m), for trim shading.
@@ -121,6 +121,10 @@ def plate(body: Body, field: np.ndarray, *, iso: float = 0.5, offset: float = 0.
     if smooth:
         # smooth the boundary along itself and the interior freely, to soften anatomy
         P = laplacian(P, f, smooth)
+    if sharpen:
+        # unsharp mask on the surface: exaggerates the anatomy under it (sculpted muscle cuirass)
+        Ps = laplacian(P, f, 16, 0.6)
+        P = P + (P - Ps) * sharpen
     Nn = normalize(vertex_normals(P, f) * 0.7 + Nn * 0.3)
     d = edge_distance(P, f)
     lift = offset + np.zeros(len(P))

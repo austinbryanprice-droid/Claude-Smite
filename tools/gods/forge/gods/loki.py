@@ -10,7 +10,7 @@ from ..geo import extrude, tube, merge, look_rotation
 from ..god import God
 from ..mathx import normalize
 from ..regions import smooth
-from .common import add_boot_feet, heroic, face_fields, add_hair_head, head_weights
+from .common import add_boot_feet, heroic, face_fields, add_hair_head, head_weights, heroic_face
 
 
 class Loki(God):
@@ -18,7 +18,7 @@ class Loki(God):
     height = 2.22
     bulk = {'DEF-upper_arm': 1.12, 'DEF-forearm': 1.1, 'DEF-thigh': 1.08, 'DEF-shin': 1.05, 'DEF-neck': 1.0}
     shape = mh.Shape(gender=1, muscle=0.8, weight=0.42, height=1.0, proportions=1.0, extra={
-        **heroic(0.55, hands=0.3),
+        **heroic(0.55, hands=0.3), **heroic_face(0.6),
         'chin/chin-prominent-incr': 0.4, 'nose/nose-scale-vert-incr': 0.2, 'cheek/l-cheek-bones-incr': 0.8,
         'cheek/r-cheek-bones-incr': 0.8, 'head/head-oval': 0.5,
         'expression/units/caucasian/eyebrows-left-down': 0.5, 'expression/units/caucasian/eyebrows-right-down': 0.5,
@@ -41,7 +41,27 @@ class Loki(God):
         suit, W = shell.wrap(b, np.minimum(suit_f, 1 - legs), offset=0.008, smooth=3)
         self.add('trousers', 'leather', suit, W)
         top, W = shell.wrap(b, np.minimum(suit_f, legs), offset=0.01, smooth=3)
-        self.add('tunic', 'clothplain', top, W)
+        self.add('tunic', 'cloth', top, W)
+        # crossed leather harness over the tunic, pinned by a gold serpent-ring clasp
+        s1 = F.joint('DEF-spine.001')
+        straps = np.zeros(len(y))
+        for side, sx in (('L', 1), ('R', -1)):
+            d = (F.v - F.joint(f'DEF-upper_arm.{side}')) @ normalize(np.array([-sx * 0.9, 1.0, 0.0]))
+            band = np.minimum(smooth(d, -0.035, -0.025), smooth(-d, -0.035, -0.025))
+            straps = np.maximum(straps, band)
+        straps = np.minimum.reduce([straps, 1 - smooth(arm, 0.2, 0.4), 1 - F.bones('head', 'neck'), smooth(y, s1[1] - 0.02, s1[1] + 0.02)])
+        harness, W = shell.plate(b, straps, offset=0.022, thickness=0.008, rim=0.004, smooth=4)
+        self.add('harness', 'leather', harness, W)
+        P = b.verts[b.used]
+        ua = F.joint('DEF-upper_arm.L')
+        cross_y = ua[1] - 0.9 * ua[0]
+        near = (np.abs(P[:, 0]) < 0.03) & (np.abs(P[:, 1] - cross_y) < 0.02)
+        c = np.array([0, cross_y, P[near, 2].max() + 0.04])
+        clasp = [kit.ring_around(c, [0, 0, 1], 0.045, 0.011, seg=32, sides=8, flat=0.6)]
+        # a serpent biting its tail: the ring with a small head bump
+        clasp.append(kit.dome(0.016, 0.012, seg=12).transformed(R=look_rotation([0, 1, 0], [0, 0, 1]), t=c + np.array([0.0, 0.045, 0.006])))
+        self.add('clasp', 'gold', merge(clasp), 'DEF-spine.003')
+        self.add('clasp_gem', 'gem', kit.dome(0.022, 0.012, seg=16).transformed(R=look_rotation([0, 1, 0], [0, 0, 1]), t=c), 'DEF-spine.003')
         # gold gorget around the base of the neck, flaring onto the chest
         dn = F.dist(neck + np.array([0, -0.03, 0.0]))
         gor_f = np.minimum.reduce([smooth(-dn, -0.17, -0.15), smooth(dn, 0.06, 0.07), 1 - smooth(arm, 0.3, 0.5), 1 - F.bones('head')])

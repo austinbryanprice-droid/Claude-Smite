@@ -11,7 +11,7 @@ from ..geo import extrude, tube, merge, look_rotation, sphere
 from ..god import God
 from ..mathx import normalize
 from ..regions import smooth
-from .common import add_boot_feet, heroic, face_fields, add_hair_head, add_skirt, head_weights
+from .common import add_boot_feet, heroic, face_fields, add_hair_head, add_skirt, head_weights, heroic_face
 
 
 class Thor(God):
@@ -20,7 +20,7 @@ class Thor(God):
     bulk = {'DEF-thigh': 1.3, 'DEF-shin': 1.25, 'DEF-upper_arm': 1.38, 'DEF-forearm': 1.32, 'DEF-spine.003': (1.14, 1.0, 1.05),
             'DEF-spine.002': (1.06, 1.0, 1.05), 'DEF-neck': 1.25, 'DEF-hand': 1.15, 'DEF-shoulder': 1.2}
     shape = mh.Shape(gender=1, muscle=1.0, weight=0.8, height=0.9, proportions=1.0, extra={
-        **heroic(1.15, hands=0.65),
+        **heroic(1.15, hands=0.65), **heroic_face(1.0),
         'chin/chin-prominent-incr': 0.6, 'chin/chin-width-incr': 0.5, 'nose/nose-scale-horiz-incr': 0.3,
         'head/head-square': 0.6,
         'expression/units/caucasian/eyebrows-left-down': 0.7, 'expression/units/caucasian/eyebrows-right-down': 0.7,
@@ -45,7 +45,7 @@ class Thor(God):
         waist = s1[1] - 0.07 - 0.04 * np.cos(np.clip(x / 0.2, -1, 1) * np.pi / 2)
         lower = smooth(y - waist, 0.0, 0.015)
         plate_f = np.minimum.reduce([torso, armhole, neckline, lower])
-        plate, W = shell.plate(b, plate_f, offset=0.02, thickness=0.012, rim=0.012, rim_width=0.03, smooth=5)
+        plate, W = shell.plate(b, plate_f, offset=0.02, thickness=0.012, rim=0.012, rim_width=0.03, smooth=5, sharpen=1.6)
         self.add('breastplate', 'steel', plate, W)
         # gold knotwork medallion at the sternum
         P = b.verts[b.used]
@@ -128,7 +128,7 @@ class Thor(God):
         self.meta['curl'] = kit.grip_curl(self.body, 'R')
 
     def fur_patch(self, name, field, length, width, clearance, spacing, seed, flow, lift=0.7):
-        style = hairmod.Style(length=length, width=width * 1.3, flatness=0.4, segments=8, sides=8, lift=lift, gravity=0.5, flow=flow,
+        style = hairmod.Style(length=length, width=width * 1.3, flatness=0.4, segments=6, sides=8, grooves=3, lift=lift, gravity=0.5, flow=flow,
                               curl=0.25, curl_freq=1.0, jitter=0.35, clearance=clearance, taper=0.8, seed=seed)
         m, _ = hairmod.hair(self.body, field, spacing, style)
         self.add(name, 'fur', m, None)
