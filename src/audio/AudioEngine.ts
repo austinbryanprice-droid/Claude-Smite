@@ -71,6 +71,9 @@ export class AudioEngine {
   ctx: AudioContext | null = null;
   private master!: GainNode;
   private buses = {} as Record<Bus, GainNode>;
+  /** Per-bus extra reverb sends, scaled by the bus volume like the dry signal. */
+  private wetIns = {} as Record<Bus, GainNode>;
+  private readonly settingsListeners: ((s: AudioSettings) => void)[] = [];
   private reverbIn!: GainNode;
   private readonly raw = new Map<string, { data: Float32Array[]; loop: boolean }>();
   private readonly buffers = new Map<string, AudioBuffer[]>();
@@ -156,6 +159,9 @@ export class AudioEngine {
       send.gain.value = REVERB_SEND[b];
       g.connect(send).connect(this.reverbIn);
       this.buses[b] = g;
+      const wet = ctx.createGain();
+      wet.connect(this.reverbIn);
+      this.wetIns[b] = wet;
     }
     const l = ctx.listener;
     if (l.positionX) {
@@ -178,6 +184,12 @@ export class AudioEngine {
     this.settings = { ...this.settings, ...s };
     saveSettings(this.settings);
     this.applySettings();
+    for (const f of this.settingsListeners) f(this.settings);
+  }
+
+  /** Called after every settings change (the herald's speech bypasses the mixer). */
+  onSettings(fn: (s: AudioSettings) => void): void {
+    this.settingsListeners.push(fn);
   }
 
   private applySettings(): void {
@@ -186,7 +198,11 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(s.muted ? 0 : s.master, now, 0.03);
     const vol: Record<Bus, number> = { music: s.music, sfx: s.sfx, ui: s.sfx, voice: s.voice, ambience: s.ambience };
-    for (const b of Object.keys(BUS_TRIM) as Bus[]) this.buses[b].gain.setTargetAtTime(vol[b] * vol[b] * BUS_TRIM[b] * 1.4, now, 0.03);
+    for (const b of Object.keys(BUS_TRIM) as Bus[]) {
+      const g = vol[b] * vol[b] * BUS_TRIM[b] * 1.4;
+      this.buses[b].gain.setTargetAtTime(g, now, 0.03);
+      this.wetIns[b].gain.setTargetAtTime(g, now, 0.03);
+    }
   }
 
   /** The bus node, for modules that build their own graphs (music). */
@@ -340,7 +356,7 @@ export class AudioEngine {
     if (o.wet) {
       const s = ctx.createGain();
       s.gain.value = o.wet;
-      node.connect(s).connect(this.reverbIn);
+      node.connect(s).connect(this.wetIns[o.bus ?? 'sfx']);
     }
     return panner;
   }

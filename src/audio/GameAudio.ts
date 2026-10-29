@@ -506,22 +506,42 @@ export class GameAudio {
     }
   }
 
+  /**
+   * Start the ambience beds. The bank may still be rendering when audio
+   * unlocks, so beds whose sound is not ready yet are retried each second.
+   */
   private startAmbience(): void {
-    if (this.ambience.length) return;
-    const add = (l: LoopHandle | null) => l && this.ambience.push(l);
-    add(this.engine.loop('amb.wind', { bus: 'ambience', gain: 0.55, pan: -0.5 }));
-    add(this.engine.loop('amb.wind', { bus: 'ambience', gain: 0.45, pan: 0.5, rate: 0.93 }));
-    add(this.engine.loop('amb.leaves', { bus: 'ambience', gain: 0.35, pan: 0.2 }));
-    add(this.engine.loop('amb.jungle', { bus: 'ambience', gain: this.conquest ? 0.18 : 0.08, pan: -0.2 }));
-    const sim = this.game.sim;
-    for (const b of Object.values(sim.bases)) {
-      add(this.engine.loop('amb.fountain', { bus: 'ambience', at: { x: b.x, y: 1, z: b.z }, gain: 0.8, ref: 7 }));
-      add(this.engine.loop('amb.fire', { bus: 'ambience', at: { x: b.x + 6, y: 2, z: b.z }, gain: 0.5, ref: 4 }));
-      add(this.engine.loop('amb.fire', { bus: 'ambience', at: { x: b.x - 6, y: 2, z: b.z }, gain: 0.5, ref: 4, rate: 1.1 }));
+    const specs: [string, Parameters<AudioEngine['loop']>[1]][] = [];
+    const add = (name: string, o: Parameters<AudioEngine['loop']>[1]) => specs.push([name, o]);
+    add('amb.wind', { bus: 'ambience', gain: 0.55, pan: -0.5 });
+    add('amb.wind', { bus: 'ambience', gain: 0.45, pan: 0.5, rate: 0.93 });
+    add('amb.leaves', { bus: 'ambience', gain: 0.35, pan: 0.2 });
+    add('amb.jungle', { bus: 'ambience', gain: this.conquest ? 0.18 : 0.08, pan: -0.2 });
+    for (const b of Object.values(this.game.sim.bases)) {
+      add('amb.fountain', { bus: 'ambience', at: { x: b.x, y: 1, z: b.z }, gain: 0.8, ref: 7 });
+      add('amb.fire', { bus: 'ambience', at: { x: b.x + 6, y: 2, z: b.z }, gain: 0.5, ref: 4 });
+      add('amb.fire', { bus: 'ambience', at: { x: b.x - 6, y: 2, z: b.z }, gain: 0.5, ref: 4, rate: 1.1 });
     }
+    this.ambiencePending = specs;
+    this.retryAmbience();
+  }
+
+  private ambiencePending: [string, Parameters<AudioEngine['loop']>[1]][] = [];
+  private ambienceRetryIn = 0;
+
+  private retryAmbience(): void {
+    this.ambiencePending = this.ambiencePending.filter(([name, o]) => {
+      const l = this.engine.loop(name, o);
+      if (l) this.ambience.push(l);
+      return !l;
+    });
   }
 
   private ambientLife(dt: number): void {
+    if (this.ambiencePending.length && (this.ambienceRetryIn -= dt) <= 0) {
+      this.ambienceRetryIn = 1;
+      this.retryAmbience();
+    }
     const l = this.engine.listenerPos;
     this.birdIn -= dt;
     if (this.birdIn <= 0) {
