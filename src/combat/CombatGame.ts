@@ -422,7 +422,8 @@ export class CombatGame implements Updatable {
     let bestIn = false;
     let bestKey = Infinity;
     for (const t of this.sim.enemiesOf(u)) {
-      if (!t.targetable || t.stealth > 0) continue;
+      // a hidden enemy still stops a shot, but never lights the reticle
+      if (!t.targetable || (melee && t.stealth > 0)) continue;
       const rx = t.x - u.x;
       const rz = t.z - u.z;
       const along = rx * dir.x + rz * dir.z;
@@ -450,6 +451,7 @@ export class CombatGame implements Updatable {
         bestKey = key;
       }
     }
+    if (best && best.stealth > 0) return { target: null, inRange: false };
     return { target: best, inRange: bestIn };
   }
 
