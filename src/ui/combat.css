@@ -136,3 +136,13 @@
 /* the enemy a basic attack is lined up on */
 .ch-ob-target .ch-ob-bar { box-shadow: 0 0 0 1px #ffe3a3, 0 0 8px rgba(255, 90, 60, 0.8), 0 2px 4px rgba(0, 0, 0, 0.6); }
 .ch-ob-target .ch-ob-name { color: #fff; }
+
+/* hitmarker: four ticks around the crosshair when the player's damage lands */
+.ch-hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; z-index: 4; }
+.ch-hitmarker i { position: absolute; left: 50%; top: 50%; width: 2px; height: 8px; margin: -4px -1px; background: #fff; border-radius: 1px; box-shadow: 0 0 3px rgba(0,0,0,0.8); }
+.ch-hitmarker i:nth-child(1) { transform: rotate(45deg) translateY(-11px); }
+.ch-hitmarker i:nth-child(2) { transform: rotate(135deg) translateY(-11px); }
+.ch-hitmarker i:nth-child(3) { transform: rotate(225deg) translateY(-11px); }
+.ch-hitmarker i:nth-child(4) { transform: rotate(315deg) translateY(-11px); }
+.ch-hitmarker[data-kind='crit'] i { background: #ffd34a; width: 3px; }
+.ch-hitmarker[data-kind='kill'] i { background: #ff4a3a; width: 3px; height: 10px; }

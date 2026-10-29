@@ -109,6 +109,9 @@ export class CombatHud {
   /** Red screen edges: pulse on damage taken, linger at low health. */
   private readonly vignette: HTMLElement;
   private hurt = 0;
+  /** Ticks around the crosshair that flash when the player's damage lands. */
+  private readonly hitmarker: HTMLElement;
+  private hitAnim: Animation | null = null;
 
   constructor(
     private player: Unit,
@@ -118,6 +121,7 @@ export class CombatHud {
     this.root = el('div', 'combat-hud', document.body);
     this.vignette = el('div', 'ch-vignette', this.root);
     this.overlay = el('div', 'ch-overlay', this.root);
+    this.hitmarker = el('div', 'ch-hitmarker', this.root, '<i></i><i></i><i></i><i></i>');
 
     const frame = el('div', 'ch-frame', this.root);
     this.buffs = el('div', 'ch-buffs', frame);
@@ -207,6 +211,7 @@ export class CombatHud {
         const mine = e.source === this.player || e.source?.owner === this.player;
         const onMe = e.target === this.player;
         if (onMe) this.hurt = Math.min(1, this.hurt + 0.25 + (e.amount / this.player.combatant.stats.maxHealth) * 3);
+        if (mine && !onMe) this.markHit(e.crit ? 'crit' : 'hit');
         if (!mine && !onMe) break;
         const cls = onMe ? 'taken' : e.crit ? 'crit' : e.ability ? 'ability' : 'basic';
         this.floater(e.target, `${Math.round(e.amount)}${e.crit ? '!' : ''}`, `ch-num ch-num-${cls}`);
@@ -222,7 +227,10 @@ export class CombatHud {
         if (e.unit === this.player && e.favor > 0) this.floater(e.unit, `+${e.xp} XP &middot; +${e.favor} Favor`, 'ch-num ch-num-reward');
         break;
       case 'death':
-        if (e.killer === this.player && e.unit.kind === 'god') this.toast(`You slew ${e.unit.name}`, 'gold');
+        if (e.killer === this.player && e.unit.kind === 'god') {
+          this.toast(`You slew ${e.unit.name}`, 'gold');
+          this.markHit('kill');
+        }
         break;
       case 'recall':
         if (e.unit === this.player && e.state === 'cancel') this.toast('Recall interrupted', 'warn');
@@ -230,6 +238,24 @@ export class CombatHud {
       default:
         break;
     }
+  }
+
+  /** Flash the hitmarker; a crit or kill outranks a plain hit still on screen. */
+  private markHit(kind: 'hit' | 'crit' | 'kill'): void {
+    const rank = { hit: 0, crit: 1, kill: 2 };
+    const shown = this.hitmarker.dataset.kind as keyof typeof rank | undefined;
+    if (this.hitAnim?.playState === 'running' && shown && rank[shown] > rank[kind]) return;
+    this.hitmarker.dataset.kind = kind;
+    this.hitAnim?.cancel();
+    const big = kind === 'kill' ? 1.5 : kind === 'crit' ? 1.2 : 1;
+    this.hitAnim = this.hitmarker.animate(
+      [
+        { opacity: 1, transform: `translate(-50%, -50%) scale(${0.7 * big})` },
+        { opacity: 1, transform: `translate(-50%, -50%) scale(${big})`, offset: 0.25 },
+        { opacity: 0, transform: `translate(-50%, -50%) scale(${1.1 * big})` },
+      ],
+      { duration: kind === 'kill' ? 520 : 260, easing: 'ease-out' },
+    );
   }
 
   private floater(u: Unit, html: string, cls: string): void {
