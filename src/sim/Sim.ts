@@ -37,7 +37,8 @@ const BOUNCE_RANGE = 9;
 const LEAP_SPEED = 24;
 const DASH_SPEED = 28;
 /** Melee basic attacks hit everything in this arc (degrees). */
-const MELEE_ARC = 100;
+/** Melee basic attacks hit enemies within this arc (degrees) in front of the attacker. */
+export const MELEE_ARC = 100;
 /** Gods this close to a dying minion or structure share its XP. */
 export const XP_SHARE_RANGE = 22;
 /** Damage within this window before a god dies counts as an assist. */
@@ -906,6 +907,14 @@ export class Sim {
       }
     }
     return best;
+  }
+
+  /** Whether a shot from `u` along `dir` would reach `dist` without hitting terrain. */
+  shotClear(u: Unit, dir: Point, dist: number): boolean {
+    for (let d = u.radius * 0.8; d < dist; d += 0.5) {
+      if (this.blocked(u.x + dir.x * d, u.z + dir.z * d)) return false;
+    }
+    return true;
   }
 
   private blocked(x: number, z: number): boolean {

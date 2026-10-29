@@ -13,7 +13,7 @@ import { GodBot, SummonBrain } from '../sim/Bot';
 import { dummyUnit, godUnit, summonUnit } from '../sim/factory';
 import { LaneBot, ROLES, spawnPoint, type BotRole } from '../sim/LaneBot';
 import { conquestBases, Match } from '../sim/Match';
-import { Sim, type BaseZone, type SimTerrain } from '../sim/Sim';
+import { angleBetween, MELEE_ARC, Sim, type BaseZone, type SimTerrain } from '../sim/Sim';
 import { isStructure, Unit, WORLD_SCALE, type Body, type SimEvent } from '../sim/Unit';
 import { CombatHud } from '../ui/CombatHud';
 import { LoadoutMenu } from '../ui/LoadoutMenu';
@@ -73,6 +73,8 @@ export class CombatGame implements Updatable {
   private readonly auras = new BuffAuras();
   /** Monsters drawn out of sight for the first frames, so their shaders compile during loading. */
   private warm: { group: THREE.Group; frames: number } | null = null;
+  /** The HUD's crosshair, which shows whether a basic attack would land. */
+  private reticle: HTMLElement | null = null;
   private setCampActive: ((id: string, active: boolean) => void) | null = null;
   private readonly campLit = new Map<string, boolean>();
   private readonly hud: CombatHud;
@@ -255,6 +257,7 @@ export class CombatGame implements Updatable {
       this.warm = null;
     }
     this.updateAim();
+    this.updateReticle();
 
     if (input.wasPressed('KeyK')) this.toggleMenu();
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
@@ -390,6 +393,70 @@ export class CombatGame implements Updatable {
 
   private cancelPreview(): void {
     this.preview = null;
+  }
+
+  /**
+   * Tell the player what a basic attack would hit right now: the crosshair
+   * turns red over an enemy in reach (grey when the enemy is lined up but too
+   * far), and that enemy's health bar is outlined.
+   */
+  private updateReticle(): void {
+    this.reticle ??= document.querySelector<HTMLElement>('.hud-crosshair');
+    const { target, inRange } = this.aimTarget();
+    this.reticle?.classList.toggle('on-target', target !== null && inRange);
+    this.reticle?.classList.toggle('far-target', target !== null && !inRange);
+    this.hud.setTarget(inRange ? target : null);
+  }
+
+  /** The enemy the player's basic attack is lined up on, and whether it can reach it. */
+  private aimTarget(): { target: Unit | null; inRange: boolean } {
+    const u = this.player;
+    if (!u.alive) return { target: null, inRange: false };
+    const basic = u.combatant.god.basicAttack;
+    const melee = basic.projectileSpeed === undefined;
+    const range = basic.range * WORLD_SCALE;
+    const dir = this.sim.aimDir(u);
+    // a shot starts just ahead of the caster and its own width counts toward the hit
+    const shotStart = u.radius * 0.8;
+    let best: Unit | null = null;
+    let bestIn = false;
+    let bestKey = Infinity;
+    for (const t of this.sim.enemiesOf(u)) {
+      // a hidden enemy still stops a shot, but never lights the reticle
+      if (!t.targetable || (melee && t.stealth > 0)) continue;
+      const rx = t.x - u.x;
+      const rz = t.z - u.z;
+      const along = rx * dir.x + rz * dir.z;
+      // the melee arc test below already rejects enemies behind, and keeps ones overlapping the player
+      if ((!melee && along <= 0) || along > range * 2.5) continue;
+      let inRange: boolean;
+      let key = along;
+      if (melee) {
+        // swings cover an arc and hit everything in it, so a reachable enemy wins over a nearer-lined one
+        const d = Math.hypot(rx, rz);
+        if (d > t.radius && angleBetween(dir, { x: rx, z: rz }) > MELEE_ARC / 2) continue;
+        inRange = d <= range + t.radius;
+      } else {
+        // shots fly a narrow line and stop at the first enemy or wall
+        const perp = Math.abs(rx * dir.z - rz * dir.x);
+        // the sim samples a shot at most 0.6 apart, so a glancing pass can slip between samples;
+        // only count the band where the chord through the target is long enough to always be sampled
+        const r = t.radius + 0.45;
+        const reach = Math.sqrt(Math.max(0, r * r - 0.09));
+        if (perp > reach) continue;
+        const contact = along - Math.sqrt(reach * reach - perp * perp);
+        if (!this.sim.shotClear(u, dir, contact)) continue;
+        inRange = contact <= shotStart + range;
+        key = contact; // the first body the shot touches stops it
+      }
+      if (melee ? (inRange && !bestIn) || (inRange === bestIn && key < bestKey) : key < bestKey) {
+        best = t;
+        bestIn = inRange;
+        bestKey = key;
+      }
+    }
+    if (best && best.stealth > 0) return { target: null, inRange: false };
+    return { target: best, inRange: bestIn };
   }
 
   /** The ground point under the crosshair, by marching the camera's center ray. */

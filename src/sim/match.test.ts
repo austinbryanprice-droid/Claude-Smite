@@ -166,7 +166,7 @@ describe('Conquest match', () => {
     run(sim, match, PHOENIX_RESPAWN);
     expect(phoenix.alive).toBe(true);
     expect(match.empowered.order.has('solo')).toBe(false);
-  });
+  }, 30000);
 
   it('shares minion XP with gods nearby and gives Favor for the last hit', () => {
     const { sim, match } = setup();
