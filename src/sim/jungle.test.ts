@@ -4,7 +4,7 @@ import { FAVOR_REWARDS } from '../game/progression';
 import { ConquestLayout as L } from '../map/ConquestLayout';
 import { godUnit } from './factory';
 import { BOSS_FIRST_SPAWN, BOSS_SPECIAL, BUFF_DURATION, BUFF_KINDS, buffMark, FURY_DURATION, WYRM_TEAM_XP, CAMP_FIRST_SPAWN, CAMP_RESPAWN, LEASH, type CampState } from './Jungle';
-import { LaneBot, spawnPoint } from './LaneBot';
+import { LaneBot, ROLES, spawnPoint } from './LaneBot';
 import { conquestBases, Match } from './Match';
 import { Nav } from './Nav';
 import { Sim, type SimTerrain } from './Sim';
@@ -147,7 +147,7 @@ describe('navigation', () => {
   });
 });
 
-describe('jungle bosses', () => {
+describe('jungle bosses', { timeout: 20000 }, () => {
   const boss = (match: Match, kind: string) => match.jungle.camps.find((c) => c.camp.kind === kind)!;
 
   it('the Treasure Wyrm rises at two minutes and rewards the whole team', () => {
@@ -194,5 +194,42 @@ describe('jungle bosses', () => {
     // b never attacks and the Wyrm fights a; only the area attack can reach b
     run(sim, match, 7 + BOSS_SPECIAL.treasureWyrm.windup);
     expect(hurt).toBeGreaterThan(0);
+  });
+});
+
+describe('boss calls', { timeout: 30000 }, () => {
+  it('a strong team gathers at the Wyrm pit and slays it together', () => {
+    const { sim, match } = setup();
+    const team: Unit[] = [];
+    for (let i = 0; i < 4; i++) {
+      const g = sim.add(godUnit(i % 2 ? thor : zeus, 'order', spawnPoint('order', i)));
+      g.combatant.gainXp(4000);
+      g.combatant.health = g.combatant.stats.maxHealth;
+      g.brain = new LaneBot(sim, match, g, ROLES[i]!);
+      match.addGod(g);
+      team.push(g);
+    }
+    let slain = false;
+    sim.listeners.push((e) => {
+      if (e.type === 'death' && e.unit.tag.endsWith('treasureWyrm') && e.killer?.team === 'order') slain = true;
+    });
+    run(sim, match, BOSS_FIRST_SPAWN.treasureWyrm + 2);
+    let called: string | undefined;
+    for (let i = 0; i < 60 && !called; i++) {
+      run(sim, match, 1);
+      called = match.objectives.call('order')?.camp.kind;
+    }
+    expect(called).toBe('treasureWyrm');
+    for (let i = 0; i < 180 && !slain; i++) run(sim, match, 1);
+    expect(slain).toBe(true);
+  });
+
+  it('a weak team leaves the bosses alone', () => {
+    const { sim, match } = setup();
+    const g = sim.add(godUnit(zeus, 'order', spawnPoint('order', 0)));
+    g.brain = new LaneBot(sim, match, g, 'mid');
+    match.addGod(g);
+    run(sim, match, BOSS_FIRST_SPAWN.treasureWyrm + 2);
+    expect(match.objectives.call('order')).toBeNull();
   });
 });

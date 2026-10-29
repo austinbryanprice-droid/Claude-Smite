@@ -5,6 +5,7 @@ import { minionUnit, structureUnit, type MinionType } from './factory';
 import { Jungle } from './Jungle';
 import { MinionBrain, StructureBrain } from './Lanes';
 import { Nav } from './Nav';
+import { Objectives } from './Objectives';
 import type { BaseZone, Sim } from './Sim';
 import type { SimEvent, Unit } from './Unit';
 
@@ -64,6 +65,8 @@ export class Match {
   readonly jungle: Jungle;
   /** Walkable paths through the map for bots that leave the lanes. */
   readonly nav: Nav;
+  /** Each team's bot calls on the jungle bosses. */
+  readonly objectives: Objectives;
 
   constructor(
     readonly sim: Sim,
@@ -73,6 +76,7 @@ export class Match {
     this.buildStructures();
     this.jungle = new Jungle(sim, base);
     this.nav = new Nav(sim.terrain, L.halfExtent);
+    this.objectives = new Objectives(this.jungle, this.gods);
     sim.listeners.push((e) => this.onEvent(e));
   }
 
@@ -99,6 +103,7 @@ export class Match {
       this.nextWave += WAVE_INTERVAL;
     }
     this.jungle.step(dt);
+    this.objectives.step(dt);
     while (this.queue.length && this.queue[0]!.at <= this.time) this.spawn(this.queue.shift()!);
     for (const [p, at] of this.phoenixDown) {
       if (this.time - at < PHOENIX_RESPAWN) continue;
