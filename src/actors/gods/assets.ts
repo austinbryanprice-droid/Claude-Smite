@@ -66,6 +66,7 @@ export function preloadGodAssets(onProgress?: (fraction: number) => void): Promi
       }
       tick();
       if (!gltf) return;
+      widenVertexFormats(gltf.scene);
       const root = gltf.scene.getObjectByName('god') ?? gltf.scene;
       const meta = root.userData as GodMeta;
       const clips = new Map<string, THREE.AnimationClip>();
@@ -83,6 +84,27 @@ export function preloadGodAssets(onProgress?: (fraction: number) => void): Promi
     }));
   })();
   return loading;
+}
+
+/**
+ * WebGPU has no one- or three-component 8/16-bit vertex formats (three.js
+ * throws "Vertex format not supported yet" and nothing draws), so attributes
+ * like the baked `_ao` (normalized uint8 scalar) become plain floats.
+ */
+function widenVertexFormats(scene: THREE.Object3D): void {
+  scene.traverse((o) => {
+    const geo = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+    if (!geo) return;
+    for (const [name, attr] of Object.entries(geo.attributes)) {
+      if (!(attr instanceof THREE.BufferAttribute) || attr.array instanceof Float32Array) continue;
+      if (attr.itemSize !== 1 && attr.itemSize !== 3) continue;
+      const out = new Float32Array(attr.count * attr.itemSize);
+      for (let i = 0; i < attr.count; i++) {
+        for (let c = 0; c < attr.itemSize; c++) out[i * attr.itemSize + c] = attr.getComponent(i, c);
+      }
+      geo.setAttribute(name, new THREE.BufferAttribute(out, attr.itemSize));
+    }
+  });
 }
 
 export function godAsset(id: string): GodAsset {

@@ -16,8 +16,10 @@ import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
 import { GODS, godById } from './game/gods';
 import { showStartMenu, type StartChoice } from './ui/StartMenu';
+import { installErrorHandlers, showFatal } from './ui/Fatal';
 
 async function main(): Promise<void> {
+  installErrorHandlers();
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
   const hud = new Hud((q) => void applyQuality(q));
   hud.progress(0.05, 'Starting renderer…');
@@ -146,7 +148,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(err);
-  const el = document.querySelector('.hud-sub');
-  if (el) el.textContent = `Failed to start: ${err instanceof Error ? err.message : String(err)}`;
+  showFatal('The game failed to start.', err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err));
 });

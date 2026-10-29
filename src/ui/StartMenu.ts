@@ -1,4 +1,5 @@
 import type { GodDef } from '../game/types';
+import { compatibilityMode, setCompatibilityMode } from './Fatal';
 import { skillIcon } from './icons';
 import './start.css';
 
@@ -120,9 +121,13 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
 
   const note = root.querySelector<HTMLSpanElement>('.sm-note')!;
   void webgpu.then((gpu) => {
-    note.textContent = gpu
-      ? 'Running on WebGPU. Change graphics quality any time at the top right.'
-      : 'WebGPU is unavailable, so the game uses WebGL 2. Chrome or Edge on a recent GPU runs best.';
+    const forced = compatibilityMode();
+    note.innerHTML = gpu
+      ? 'Running on WebGPU. Black screen or glitches? <button class="sm-compat">Use compatibility mode</button>'
+      : forced
+        ? 'Compatibility mode (WebGL 2). <button class="sm-compat">Switch to WebGPU</button>'
+        : 'WebGPU is unavailable, so the game uses WebGL 2. Chrome or Edge on a recent GPU runs best.';
+    note.querySelector('.sm-compat')?.addEventListener('click', () => setCompatibilityMode(!forced));
   });
 
   return new Promise((resolve) => {

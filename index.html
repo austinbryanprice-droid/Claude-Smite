@@ -9,5 +9,15 @@
   </head>
   <body>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      // if the game script never runs (old browser, blocked download), say so instead of a black page
+      setTimeout(function () {
+        if (document.querySelector('.hud')) return;
+        var d = document.createElement('div');
+        d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#f4ead8;font:16px Georgia,serif';
+        d.textContent = 'The game did not start. Please use a recent desktop Chrome or Edge, then reload.';
+        document.body.appendChild(d);
+      }, 15000);
+    </script>
   </body>
 </html>

@@ -36,3 +36,11 @@
 .help-foot { margin-top: 12px; font-family: Georgia, serif; font-size: 13px; opacity: 0.75; }
 /* the end screen owns the view: no controls hint or crosshair over the scoreboard */
 body:has(.mh-end.show) .hud-hint, body:has(.mh-end.show) .hud-crosshair { display: none; }
+.fatal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(4, 3, 2, 0.85); font-family: 'Cinzel', Georgia, serif; color: var(--ink, #f4ead8); pointer-events: auto; }
+.fatal-panel { max-width: 640px; padding: 20px 26px; background: linear-gradient(180deg, rgba(40, 18, 14, 0.97), rgba(14, 8, 6, 0.98)); border: 1px solid rgba(255, 140, 110, 0.6); border-radius: 8px; }
+.fatal h3 { margin: 0 0 8px; color: #ffb08a; letter-spacing: 0.1em; }
+.fatal-msg { font-family: Georgia, serif; font-size: 15px; }
+.fatal-detail { max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: 11px; opacity: 0.7; }
+.fatal-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.fatal button, .sm-compat { font: inherit; color: inherit; cursor: pointer; padding: 8px 14px; background: rgba(231, 194, 122, 0.15); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 4px; }
+.sm-compat { padding: 4px 10px; font-size: 12px; margin-left: 8px; }
