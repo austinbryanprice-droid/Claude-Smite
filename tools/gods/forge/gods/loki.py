@@ -171,9 +171,10 @@ class Loki(God):
             bl = extrude(poly, 0.008, 0.003)
             curve = lambda v: v + np.stack([np.zeros(len(v)), np.zeros(len(v)), np.zeros(len(v))], 1)  # noqa: E731
             del curve
-            T = lambda m: m.transformed(R=R, t=grip)  # noqa: E731
+            # oversized so the blades read at game-camera distance
+            T = lambda m: m.transformed(s=1.5, R=R, t=grip)  # noqa: E731
             self.add(f'dagger_grip.{s}', 'leather', T(handle), f'DEF-hand.{s}')
             self.add(f'dagger_trim.{s}', 'gold', T(merge([pommel, guard])), f'DEF-hand.{s}')
             self.add(f'dagger_blade.{s}', 'steel', T(bl), f'DEF-hand.{s}')
-            glow_edge = tube(np.array([[0.0, 0.1, 0], [0.0, 0.5, 0]]), np.array([0.003, 0.0015]), 4)
+            glow_edge = tube(np.array([[0.0, 0.1, 0], [0.0, 0.5, 0]]), np.array([0.005, 0.0025]), 4)
             self.add(f'dagger_glow.{s}', 'glow', T(glow_edge.transformed(t=[0, 0, 0.005])), f'DEF-hand.{s}')

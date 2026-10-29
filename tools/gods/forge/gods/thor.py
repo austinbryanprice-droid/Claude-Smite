@@ -188,7 +188,8 @@ class Thor(God):
                 bar = extrude(np.array([[-0.008, -0.05], [0.008, -0.05], [0.008, 0.05], [-0.008, 0.05]]), 0.01, 0.002)
                 tilt = look_rotation([0, 0, sz], [np.sin(0.4 * (k - 1)), 1, 0])
                 runes.append(bar.transformed(R=tilt, t=[rx, head_y, sz * (hd / 2 + 0.002)]))
-        T = lambda m: m.transformed(R=R, t=grip)  # noqa: E731
+        # oversized like a hero weapon, so it reads at game-camera distance
+        T = lambda m: m.transformed(s=1.35, R=R, t=grip)  # noqa: E731
         self.add('hammer_handle', 'leather', T(merge([handle])), 'DEF-hand.R')
         self.add('hammer_trim', 'gold', T(merge(bands + [pommel] + caps)), 'DEF-hand.R')
         self.add('hammer_head', 'steel', T(block), 'DEF-hand.R')
