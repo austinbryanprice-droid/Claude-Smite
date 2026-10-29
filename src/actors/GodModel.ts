@@ -92,7 +92,22 @@ const IDLE_STANCE: Record<string, { bone: string; axis: [number, number, number]
 
 /** Bones the cast pose overrides (upper body only, so legs keep running). */
 /** Which upper-body overlay an action plays. */
-export type CastKind = 'basic' | 'skill';
+export type CastKind = 'basic' | 'skill' | 'ult';
+
+/** Per kind: clip playback rate, accent strength, and how long gameplay holds the pose (s). */
+const CAST_FEEL: Record<CastKind, { rate: number; accent: number; hold: number }> = {
+  basic: { rate: 1.6, accent: 0, hold: 0.35 },
+  skill: { rate: 1.6, accent: 1, hold: 0.35 },
+  // ultimates play the skill motion slower and hold it twice as long
+  ult: { rate: 1.05, accent: 1, hold: 0.7 },
+};
+
+/** Layered on top of the god's accent for ultimates: chest arched back, chin up, the off hand raised to the sky. */
+const ULT_ACCENT: { bone: string; axis: [number, number, number]; angle: number }[] = [
+  { bone: 'DEF-spine.003', axis: [1, 0, 0], angle: -0.28 },
+  { bone: 'DEF-head', axis: [1, 0, 0], angle: -0.22 },
+  { bone: 'DEF-upper_arm.L', axis: [0, 0, 1], angle: 1.7 },
+];
 
 const UPPER = /^DEF-(spine00[23]|neck|head|shoulder|upper_arm|forearm|hand|f_|thumb)/;
 
@@ -132,7 +147,7 @@ export class GodModel {
   private readonly asset: GodAsset;
   private readonly bones = new Map<string, THREE.Bone>();
   /** Upper-body overlays: a weapon strike for basic attacks, the god's spell motion for skills. */
-  private readonly overlays: Record<CastKind, { tracks: { bone: THREE.Bone; interp: THREE.Interpolant }[]; duration: number }>;
+  private readonly overlays: Record<'basic' | 'skill', { tracks: { bone: THREE.Bone; interp: THREE.Interpolant }[]; duration: number }>;
   private castKind: CastKind = 'skill';
   private castTime = 1e9;
   private prevCast = 0;
@@ -160,6 +175,7 @@ export class GodModel {
   private readonly tmpQ2 = new THREE.Quaternion();
   private readonly curl: { bone: THREE.Bone; q: THREE.Quaternion }[] = [];
   private readonly accents: { bone: THREE.Bone; axis: THREE.Vector3; angle: number }[] = [];
+  private readonly ultAccents: { bone: THREE.Bone; axis: THREE.Vector3; angle: number }[] = [];
   private readonly stance: { bone: THREE.Bone; axis: THREE.Vector3; angle: number }[] = [];
   private stanceWeight = 1;
   private readonly tmpV = new THREE.Vector3();
@@ -253,6 +269,10 @@ export class GodModel {
       const b = this.bones.get(a.bone.replace(/\./g, ''));
       if (b) this.accents.push({ bone: b, axis: new THREE.Vector3(...a.axis), angle: a.angle });
     }
+    for (const a of ULT_ACCENT) {
+      const b = this.bones.get(a.bone.replace(/\./g, ''));
+      if (b) this.ultAccents.push({ bone: b, axis: new THREE.Vector3(...a.axis), angle: a.angle });
+    }
 
     this.physics = new SecondaryPhysics(this.root, scene, this.asset.meta, this.bones, mats);
     this.mixer.update(0);
@@ -295,7 +315,12 @@ export class GodModel {
     return out;
   }
 
-  /** Starts the overlay for a basic attack or a skill; `castWeight` still blends it in and out. */
+  /** Seconds after an action that gameplay should hold `castWeight` at 1 for the current overlay. */
+  get castHold(): number {
+    return CAST_FEEL[this.castKind].hold;
+  }
+
+  /** Starts the overlay for a basic attack, skill or ultimate; `castWeight` still blends it in and out. */
   startCast(kind: CastKind): void {
     this.castKind = kind;
     this.castTime = 0;
@@ -400,18 +425,20 @@ export class GodModel {
     this.castTime += dt;
     const cw = this.castWeight;
     if (cw > 0.01) {
-      const o = this.overlays[this.castKind];
-      const ct = Math.min(this.castTime * 1.6, o.duration * 0.95);
+      const feel = CAST_FEEL[this.castKind];
+      const o = this.overlays[this.castKind === 'basic' ? 'basic' : 'skill'];
+      const ct = Math.min(this.castTime * feel.rate, o.duration * 0.95);
       for (const c of o.tracks) {
         const v = c.interp.evaluate(ct);
         this.tmpQ.set(v[0]!, v[1]!, v[2]!, v[3]!);
         c.bone.quaternion.slerp(this.tmpQ, cw);
       }
-      // skills only: ease into the god's accent over the first 40% of the clip and hold it
-      if (this.castKind === 'skill' && this.accents.length) {
-        const k = cw * THREE.MathUtils.smoothstep(ct, 0, o.duration * 0.4);
-        this.root.updateMatrixWorld(true);
-        for (const a of this.accents) this.rotateModel(a.bone, a.axis, a.angle * k);
+      // skills and ultimates: ease into the god's accent over the first 40% of the clip and hold it
+      if (feel.accent > 0) {
+        const k = cw * feel.accent * THREE.MathUtils.smoothstep(ct, 0, o.duration * 0.4);
+        const accents = this.castKind === 'ult' ? [...this.accents, ...this.ultAccents] : this.accents;
+        if (accents.length) this.root.updateMatrixWorld(true);
+        for (const a of accents) this.rotateModel(a.bone, a.axis, a.angle * k);
       }
     }
     // hit recoil: a quick ease in, then fade out by the end of the clip

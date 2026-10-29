@@ -167,7 +167,7 @@ export class UnitViews {
       v?.structure?.pulseFire();
       v?.model?.startCast('basic');
     } else if (e.type === 'cast') {
-      this.views.get(e.unit)?.model?.startCast('skill');
+      this.views.get(e.unit)?.model?.startCast(e.cast.skill.kind === 'ultimate' ? 'ult' : 'skill');
     } else if (e.type === 'death') {
       const v = this.views.get(e.unit);
       if (v) v.deathTime = 0;
@@ -247,7 +247,7 @@ export class UnitViews {
     v.wobble += v.wobbleVel * dt;
 
     if (v.model) {
-      const target = u.sinceAction < 0.35 ? 1 : 0;
+      const target = u.sinceAction < v.model.castHold ? 1 : 0;
       v.model.castWeight += (target - v.model.castWeight) * (1 - Math.exp(-dt * (target ? 22 : 6)));
     }
 

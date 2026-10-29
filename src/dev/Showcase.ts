@@ -6,7 +6,7 @@ import { GOD_IDS } from '../actors/gods/assets';
  * `?showcase` dev view for comparing god models: a lineup in front of the
  * spawn with a fixed camera. Options (all optional):
  *   showcase=zeus,thor   which gods (default: all)
- *   pose=idle|walk|jog|sprint|cast|basic|death|hit (death and hit freeze at t= seconds)
+ *   pose=idle|walk|jog|sprint|cast|basic|ult|death|hit (death and hit freeze at t= seconds)
  *   view=front|back|side|close|three|portrait|bust
  *   (bust frames head and shoulders for the title screen's face cards; see tools/portraits)
  */
@@ -67,8 +67,8 @@ export class Showcase {
   update(dt: number): void {
     this.t += dt;
     for (const g of this.gods) {
-      if (this.pose === 'cast' || this.pose === 'basic') g.castWeight = 1;
-      if (this.pose === 'basic' && this.t === dt) g.startCast('basic');
+      if (this.pose === 'cast' || this.pose === 'basic' || this.pose === 'ult') g.castWeight = 1;
+      if ((this.pose === 'basic' || this.pose === 'ult') && this.t === dt) g.startCast(this.pose);
       if (this.pose === 'death') g.deathTime = this.freeze;
       if (this.pose === 'hit' && this.t > 0.5 && this.t - dt <= 0.5) g.flinch(1);
       g.animate(this.pose === 'hit' && this.t > 0.5 + this.freeze ? 0 : dt, this.state);
