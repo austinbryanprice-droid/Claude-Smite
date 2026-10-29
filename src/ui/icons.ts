@@ -28,11 +28,69 @@ const GLYPHS = {
   buff: '<path d="M32 8 L50 30 H38 V56 H26 V30 H14 Z"/>',
   stealth: '<path d="M8 32 Q32 8 56 32 Q32 56 8 32 Z" stroke-width="4" fill="none"/><circle cx="32" cy="32" r="7"/><path d="M12 52 L52 12" stroke-width="4" stroke-linecap="round"/>',
   summon: '<circle cx="22" cy="20" r="7"/><circle cx="42" cy="20" r="7"/><path d="M10 50 C10 34 34 34 34 50 M30 50 C30 34 54 34 54 50" stroke-width="4" fill="none"/>',
+  // themed glyphs, picked by the skill's name
+  bolt: '<path d="M38 4 L16 34 H30 L22 60 L48 26 H34 L44 4 Z"/>',
+  cyclone: '<path d="M10 14 H54 M14 24 H48 M20 34 H44 M24 44 H38 M28 54 H34" stroke-width="5" stroke-linecap="round" fill="none"/>',
+  cloud: '<path d="M16 46 A10 10 0 0 1 16 26 A13 13 0 0 1 40 20 A11 11 0 0 1 50 46 Z"/><path d="M18 54 H46" stroke-width="3" stroke-linecap="round"/>',
+  hammer: '<rect x="12" y="8" width="40" height="18" rx="3"/><path d="M32 26 V58" stroke-width="7" stroke-linecap="round"/><path d="M26 58 H38" stroke-width="4" stroke-linecap="round"/>',
+  spin: '<path d="M32 12 A20 20 0 1 1 13 26" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M8 18 L14 30 L22 20 Z"/><circle cx="32" cy="32" r="6"/>',
+  raven: '<path d="M6 30 Q20 14 32 26 Q44 14 58 30 Q46 26 38 32 L44 44 L32 38 L20 44 L26 32 Q18 26 6 30 Z"/><circle cx="32" cy="24" r="4"/>',
+  eye: '<path d="M6 32 Q32 8 58 32 Q32 56 6 32 Z" stroke-width="4" fill="none"/><circle cx="32" cy="32" r="9"/><path d="M32 6 V14 M32 50 V58" stroke-width="3" stroke-linecap="round"/>',
+  rune: '<path d="M22 8 V56 M22 12 L42 26 L22 38 M22 38 L44 54" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  dagger: '<path d="M32 4 L38 34 H26 Z"/><path d="M18 36 H46" stroke-width="5" stroke-linecap="round"/><path d="M32 38 V54" stroke-width="6" stroke-linecap="round"/><circle cx="32" cy="58" r="3.5"/>',
+  smoke: '<circle cx="22" cy="38" r="12"/><circle cx="38" cy="30" r="14"/><circle cx="44" cy="46" r="9"/><circle cx="18" cy="20" r="5" opacity="0.7"/>',
+  mask: '<path d="M10 16 Q32 8 54 16 Q54 44 32 56 Q10 44 10 16 Z" stroke-width="4" fill="none"/><path d="M18 28 Q24 22 28 30 Z M46 28 Q40 22 36 30 Z"/><path d="M24 44 Q32 38 40 44" stroke-width="3" fill="none"/>',
+  rift: '<path d="M30 4 L24 18 L34 26 L22 40 L30 46 L26 60 M30 46 L40 52 M34 26 L44 22" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  swarm: '<ellipse cx="18" cy="20" rx="6" ry="4"/><ellipse cx="40" cy="14" rx="6" ry="4"/><ellipse cx="30" cy="32" rx="7" ry="5"/><ellipse cx="48" cy="34" rx="5" ry="3.5"/><ellipse cx="16" cy="44" rx="6" ry="4"/><ellipse cx="38" cy="50" rx="6" ry="4"/><path d="M12 16 L8 12 M46 10 L50 6 M24 28 L20 24" stroke-width="2"/>',
+  wrap: '<path d="M18 10 Q32 4 46 10 V54 Q32 60 18 54 Z" stroke-width="3" fill="none"/><path d="M16 18 L48 26 M16 30 L48 22 M16 34 L48 42 M16 46 L48 38" stroke-width="4" stroke-linecap="round"/>',
+  hand: '<path d="M18 58 V30 Q18 26 22 26 Q26 26 26 30 V14 Q26 10 30 10 Q34 10 34 14 V28 V12 Q34 8 38 8 Q42 8 42 12 V30 V18 Q42 14 46 14 Q50 14 50 18 V40 Q50 52 40 58 Z"/>',
+  horn: '<path d="M10 42 Q14 18 40 14 L46 20 Q24 26 20 46 Z"/><path d="M50 26 Q56 32 50 40 M54 20 Q64 32 54 46" stroke-width="3" stroke-linecap="round" fill="none"/>',
+  scales: '<path d="M32 8 V54 M14 54 H50 M12 20 H52" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M6 36 L12 20 L18 36 Z M46 36 L52 20 L58 36 Z" stroke-width="2"/><path d="M4 36 Q12 44 20 36 Z M44 36 Q52 44 60 36 Z"/>',
+  wings: '<path d="M32 30 Q18 8 4 14 Q10 22 8 28 Q16 30 14 38 Q24 36 32 44 Q40 36 50 38 Q48 30 56 28 Q54 22 60 14 Q46 8 32 30 Z"/><circle cx="32" cy="52" r="5"/>',
+  orb: '<circle cx="32" cy="32" r="13"/><path d="M32 6 L28 14 L34 16 M56 30 L48 28 L48 34 M10 38 L18 36 L16 30 M40 56 L36 48 L42 46" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  stormcloud: '<path d="M14 34 A9 9 0 0 1 14 18 A12 12 0 0 1 36 12 A10 10 0 0 1 48 34 Z"/><path d="M34 34 L26 46 H34 L28 60 L42 42 H34 L40 34 Z"/>',
+  chain: '<rect x="6" y="24" width="20" height="14" rx="7" stroke-width="4" fill="none" transform="rotate(-25 16 31)"/><rect x="22" y="24" width="20" height="14" rx="7" stroke-width="4" fill="none" transform="rotate(-25 32 31)"/><rect x="38" y="24" width="20" height="14" rx="7" stroke-width="4" fill="none" transform="rotate(-25 48 31)"/>',
+  crown: '<path d="M10 44 L8 18 L22 30 L32 12 L42 30 L56 18 L54 44 Z"/><path d="M10 52 H54" stroke-width="5" stroke-linecap="round"/>',
+  slam: '<rect x="18" y="6" width="28" height="14" rx="3"/><path d="M32 20 V40" stroke-width="6" stroke-linecap="round"/><path d="M8 54 H56 M12 44 L4 38 M52 44 L60 38 M20 48 L16 40 M44 48 L48 40" stroke-width="4" stroke-linecap="round"/>',
+  skull: '<path d="M32 6 C16 6 10 18 10 28 C10 36 16 40 18 42 V52 H46 V42 C48 40 54 36 54 28 C54 18 48 6 32 6 Z"/><circle cx="23" cy="28" r="6" fill="#07060a" stroke="none"/><circle cx="41" cy="28" r="6" fill="#07060a" stroke="none"/><path d="M26 52 V58 M32 52 V58 M38 52 V58" stroke-width="3"/>',
+  poison: '<path d="M26 4 L32 30 H20 Z"/><path d="M14 32 H38" stroke-width="5" stroke-linecap="round"/><path d="M26 34 V46" stroke-width="5" stroke-linecap="round"/><path d="M46 30 C46 30 38 42 38 48 A8 8 0 0 0 54 48 C54 42 46 30 46 30 Z"/>',
+  anvil: '<path d="M8 18 H48 Q58 18 58 26 H44 L40 34 H24 L20 26 H8 Z"/><path d="M22 34 H42 L46 52 H18 Z"/>',
 } as const;
+
+/** Themed glyphs by skill name, first match wins; the rest fall back to their targeting shape. */
+const BY_NAME: readonly [RegExp, Glyph][] = [
+  [/Worldbreaker|Rift/, 'rift'],
+  [/Anvil/, 'anvil'],
+  [/Mjolnir|Slam/, 'slam'],
+  [/Hammer/, 'hammer'],
+  [/Spin/, 'spin'],
+  [/Sandstorm|Cyclone/, 'cyclone'],
+  [/Skyfall/, 'stormcloud'],
+  [/Aegis|Cloud/, 'cloud'],
+  [/Ball Lightning/, 'orb'],
+  [/Chain/, 'chain'],
+  [/Thunder God/, 'crown'],
+  [/Judgment/, 'skull'],
+  [/Scales/, 'scales'],
+  [/Poison/, 'poison'],
+  [/Arc Bolt/, 'bolt'],
+  [/Raven/, 'raven'],
+  [/Eye|Gaze/, 'eye'],
+  [/Rune/, 'rune'],
+  [/Assassinate/, 'dagger'],
+  [/Smoke/, 'smoke'],
+  [/Decoy|Shapeshift/, 'mask'],
+  [/Locust/, 'swarm'],
+  [/Mummify/, 'wrap'],
+  [/Grasp/, 'hand'],
+  [/Howl|War Cry|Call of Asgard|Valhalla/, 'horn'],
+  [/Ascension/, 'wings'],
+];
 
 type Glyph = keyof typeof GLYPHS;
 
 export function glyphFor(skill: SkillDef): Glyph {
+  for (const [re, g] of BY_NAME) if (re.test(skill.name)) return g;
   const effects = skill.effects.map((e) => e.kind);
   if (effects.includes('summon')) return 'summon';
   if (effects.includes('stealth') && skill.targeting.type === 'self') return 'stealth';
