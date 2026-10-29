@@ -4,6 +4,7 @@ import { baseOf, ConquestLayout as L, laneFrom, type LaneId, type Vec2 } from '.
 import { minionUnit, structureUnit, type MinionType } from './factory';
 import { Jungle } from './Jungle';
 import { MinionBrain, StructureBrain } from './Lanes';
+import { Nav } from './Nav';
 import type { BaseZone, Sim } from './Sim';
 import type { SimEvent, Unit } from './Unit';
 
@@ -61,6 +62,8 @@ export class Match {
   private queue: { at: number; team: Team; lane: LaneId; type: MinionType; slot: number }[] = [];
   private phoenixDown = new Map<Unit, number>();
   readonly jungle: Jungle;
+  /** Walkable paths through the map for bots that leave the lanes. */
+  readonly nav: Nav;
 
   constructor(
     readonly sim: Sim,
@@ -69,6 +72,7 @@ export class Match {
   ) {
     this.buildStructures();
     this.jungle = new Jungle(sim, base);
+    this.nav = new Nav(sim.terrain, L.halfExtent);
     sim.listeners.push((e) => this.onEvent(e));
   }
 
