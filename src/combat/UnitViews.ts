@@ -15,7 +15,7 @@ const GOD_CORPSE = 2.8;
 
 /** How far a fallen god has sunk into the ground, in the last second before it is hidden. */
 function godSink(deathTime: number): number {
-  const t = Math.max(0, deathTime - (GOD_CORPSE - 1));
+  const t = THREE.MathUtils.clamp(deathTime - (GOD_CORPSE - 1), 0, 1);
   return t * t * 0.9;
 }
 
@@ -257,8 +257,9 @@ export class UnitViews {
     if (v.model) v.model.deathTime = v.deathTime;
 
     if (u === this.player) {
+      // no sink: the camera follows this root through the respawn wait
       v.root.visible = u.alive || v.deathTime < GOD_CORPSE;
-      v.root.position.y += v.lift - godSink(v.deathTime);
+      v.root.position.y += v.lift;
       return;
     }
 
