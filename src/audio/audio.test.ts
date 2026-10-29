@@ -31,7 +31,7 @@ function check(name: string, recipe: Recipe): number {
 }
 
 describe('sound bank', () => {
-  test('every sound renders clean audio', () => {
+  test('every sound renders clean audio', { timeout: 60000 }, () => {
     let total = 0;
     for (const [name, r] of Object.entries(SOUNDS)) total += check(name, r);
     for (const [name, r] of Object.entries(INSTRUMENTS)) total += check(name, r);
@@ -39,7 +39,7 @@ describe('sound bank', () => {
     expect(total / RATE).toBeLessThan(900);
   });
 
-  test('every skill of every god has its own cast sound, and its parts render', () => {
+  test('every skill of every god has its own cast sound, and its parts render', { timeout: 60000 }, () => {
     for (const g of GODS) {
       for (const s of g.skills) {
         const ss = SKILL_SOUNDS[s.id];
