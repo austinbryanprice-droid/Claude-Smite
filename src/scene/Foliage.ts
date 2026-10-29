@@ -235,11 +235,12 @@ function growDetail(species: SpeciesName, seed: number, detail: 0 | 1): { trunk:
     const R = tall ? 0.3 + rand() * 0.06 : 0.42 + rand() * 0.1;
     const swayOf = (p: THREE.Vector3) => Math.pow(Math.max(0, p.y) / H, 1.6);
     const lean = new THREE.Vector3(wob() * 0.15, 1, wob() * 0.15);
-    const stem = limb(new THREE.Vector3(0, -0.4, 0), lean, H + 0.4, 12, 0, () => wob() * 0.25);
+    const stem = limb(new THREE.Vector3(0, -0.4, 0), lean, H + 0.4, 8, 0, () => wob() * 0.25);
     const radii = stem.map((_, i) => R * (1 - (i / (stem.length - 1)) * 0.72));
     const lobes = 4 + Math.floor(rand() * 3);
     const flare = (t: number, theta: number) => 1 + Math.pow(Math.max(0, 1 - t * 7), 2) * (0.9 + 0.7 * Math.max(0, Math.cos(theta * lobes)));
-    tube(trunk, stem, radii, ring(12), swayOf, flare);
+    // trunks are mostly hidden by the crowns from the game camera, so they stay light
+    tube(trunk, stem, radii, ring(8), swayOf, flare);
     const clusters: Cluster[] = [];
     const branchN = tall ? 4 : 5 + Math.floor(rand() * 2);
     for (let i = 0; i < branchN; i++) {
@@ -248,9 +249,9 @@ function growDetail(species: SpeciesName, seed: number, detail: 0 | 1): { trunk:
       const yaw = (i / branchN) * Math.PI * 2 + rand() * 0.8;
       const dir = new THREE.Vector3(Math.cos(yaw), tall ? 0.9 : 0.55 + rand() * 0.4, Math.sin(yaw));
       const len = (tall ? 2 : 3 + rand() * 1.5) * (1.1 - t * 0.4);
-      const pts = limb(at, dir, len, 5, 0.25, wob);
+      const pts = limb(at, dir, len, 4, 0.25, wob);
       const r0 = R * 0.45 * (1.1 - t * 0.5);
-      tube(trunk, pts, pts.map((_, k) => r0 * (1 - (k / (pts.length - 1)) * 0.75)), ring(6), swayOf);
+      tube(trunk, pts, pts.map((_, k) => r0 * (1 - (k / (pts.length - 1)) * 0.75)), ring(5), swayOf);
       clusters.push({ center: pts[pts.length - 1]!.clone().add(new THREE.Vector3(0, 0.5, 0)), radius: tall ? 1.8 + rand() * 0.6 : 2.3 + rand() * 0.8 });
     }
     clusters.push({ center: stem[stem.length - 1]!.clone().add(new THREE.Vector3(0, 0.6, 0)), radius: tall ? 2.2 : 2.8 });
