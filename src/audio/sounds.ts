@@ -8,6 +8,7 @@ import { ahr, Biquad, buf, crackle, dcBlock, declick, fill, glide, loopable, nor
 import {
   chime, chirp, choir, clang, debris, filter, fire, knock, layer, puff, roar, rumble, sand, shape, shimmer, thump, twang, vowel, VOWELS, whoosh, zap,
 } from './gestures';
+import { CREATURE_SOUNDS } from './creatures';
 import { VOICE_SOUNDS } from './voices';
 
 export interface Recipe {
@@ -141,6 +142,9 @@ export const SOUNDS: Record<string, Recipe> = {
 
   // -- the gods' own voices (voices.ts)
   ...VOICE_SOUNDS,
+
+  // -- camps, bosses and minion waves (creatures.ts)
+  ...CREATURE_SOUNDS,
 };
 
 // ---------------------------------------------------------------------------

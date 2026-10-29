@@ -38,6 +38,11 @@ export class GameAudio {
   private readonly leaps = new Map<Unit, string>();
   private readonly seenBoss = new Set<Unit>();
   private readonly seenFlash = new Set<number>();
+  /** Idle breathing beds for nearby camps and bosses that are not fighting. */
+  private readonly idle = new Map<Unit, LoopHandle>();
+  private readonly marches = new Map<string, LoopHandle>();
+  /** God kills since each god's last death, for shutdown calls. */
+  private readonly streaks = new Map<Unit, number>();
   private ambience: LoopHandle[] = [];
   private heartbeat: LoopHandle | null = null;
   private heat = 0;
@@ -282,6 +287,9 @@ export class GameAudio {
     const me = this.me;
     const first = !this.firstBlood;
     this.firstBlood = true;
+    const victimStreak = this.streaks.get(victim) ?? 0;
+    this.streaks.set(victim, 0);
+    this.streaks.set(killer, (this.streaks.get(killer) ?? 0) + 1);
     if (killer === me && victim !== me) {
       this.streak++;
       const now = this.time;
@@ -290,6 +298,20 @@ export class GameAudio {
     }
     if (first) {
       this.herald.say(killer === me ? 'You drew first blood!' : 'First blood is spilled!', killer.team === me.team ? 'good' : 'bad', 4);
+      return;
+    }
+    // a whole team down at once outranks everything else
+    const team = this.game.sim.units.filter((u) => u.kind === 'god' && u.team === victim.team);
+    if (team.length >= 2 && team.every((u) => !u.alive)) {
+      this.herald.say(victim.team === me.team ? 'Our team has been wiped out.' : 'The enemy team is wiped out!', victim.team === me.team ? 'bad' : 'epic', 5);
+      return;
+    }
+    if (victimStreak >= 3 && killer.team === me.team) {
+      this.herald.say(killer === me ? 'Shutdown! You ended their rampage.' : 'Shutdown! Their rampage is over.', 'good', 3);
+      return;
+    }
+    if (victim !== me && victim.team === me.team) {
+      this.herald.say('An ally has fallen.', 'bad', 1);
       return;
     }
     if (killer !== me || victim === me) return;
@@ -343,6 +365,8 @@ export class GameAudio {
     }
     this.footsteps();
     this.watchMonsters();
+    this.idleBeds();
+    this.marching();
     this.watchMatch();
     this.updateMood(dt);
     // while dead, the world is heard as if from far away
@@ -482,6 +506,72 @@ export class GameAudio {
       }
     }
     if (this.seenFlash.size > 500) this.seenFlash.clear();
+  }
+
+  /**
+   * Camps and bosses that are not fighting breathe and grumble where they
+   * wait: the nearest few, one bed per camp.
+   */
+  private idleBeds(): void {
+    const near: [Unit, number][] = [];
+    for (const u of this.game.sim.units) {
+      if (u.kind !== 'monster' || !u.alive) continue;
+      const boss = BOSSES.includes(u.name);
+      const d = this.dist(u);
+      if (d > (boss ? 55 : 32)) continue;
+      if ((u.brain as { target?: Unit | null } | null)?.target) continue;
+      near.push([u, d]);
+    }
+    near.sort((a, b) => b[0].radius - a[0].radius || a[1] - b[1]);
+    const want = new Set<Unit>();
+    for (const [u] of near) {
+      if (want.size >= 4) break;
+      // the biggest beast speaks for its camp
+      if ([...want].some((w) => Math.hypot(w.x - u.x, w.z - u.z) < 9)) continue;
+      want.add(u);
+    }
+    for (const [u, l] of this.idle) {
+      if (want.has(u)) l.setPosition(u.x, u.body.y + 1, u.z);
+      else {
+        l.stop(0.8);
+        this.idle.delete(u);
+      }
+    }
+    for (const u of want) {
+      if (this.idle.has(u)) continue;
+      const boss = BOSSES.includes(u.name);
+      const name = u.name === 'Treasure Wyrm' ? 'idle.wyrm' : u.name === 'Molten Colossus' ? 'idle.lava' : 'idle.beasts';
+      const l = this.engine.loop(name, { at: { x: u.x, y: u.body.y + 1, z: u.z }, bus: 'ambience', gain: boss ? 0.9 : 0.6, ref: boss ? 12 : 5, variant: u.id, rate: boss ? 1 : u.radius > 1.2 ? 0.85 : 1.1 });
+      if (l) this.idle.set(u, l);
+    }
+  }
+
+  /** A passing minion wave tramps along as one column, louder the bigger it is. */
+  private marching(): void {
+    const groups = new Map<string, { x: number; z: number; n: number }>();
+    for (const u of this.game.sim.units) {
+      if (u.kind !== 'minion' || !u.alive || Math.hypot(u.vx, u.vz) < 0.5 || this.dist(u) > 30) continue;
+      const g = groups.get(u.team) ?? { x: 0, z: 0, n: 0 };
+      g.x += u.x;
+      g.z += u.z;
+      g.n++;
+      groups.set(u.team, g);
+    }
+    for (const [team, l] of this.marches) {
+      const g = groups.get(team);
+      if (!g || g.n < 3) {
+        l.stop(1);
+        this.marches.delete(team);
+        continue;
+      }
+      l.setPosition(g.x / g.n, 0.5, g.z / g.n);
+      l.setGain(Math.min(0.6, 0.12 * Math.sqrt(g.n)) * this.crowd, 0.3);
+    }
+    for (const [team, g] of groups) {
+      if (g.n < 3 || this.marches.has(team)) continue;
+      const l = this.engine.loop('march', { at: { x: g.x / g.n, y: 0.5, z: g.z / g.n }, gain: Math.min(0.6, 0.12 * Math.sqrt(g.n)), ref: 6, rate: team === this.me.team ? 1 : 0.94 });
+      if (l) this.marches.set(team, l);
+    }
   }
 
   private watchMatch(): void {
