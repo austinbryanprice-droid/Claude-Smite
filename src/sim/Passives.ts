@@ -13,7 +13,7 @@ const THOR_SHOCK = 0.6;
 /** Odin's ravens: how far they see, and how close they unmask stealth. */
 const RAVEN_RANGE = 8 * WORLD_SCALE;
 const RAVEN_UNMASK = 4.5 * WORLD_SCALE;
-const ODIN_BONUS = 0.1;
+const ODIN_BONUS = 0.12;
 /** Loki: bonus from behind, and how far behind counts. */
 const LOKI_BONUS = 0.15;
 /** Anubis: allies near him who drop low get a shield, once per ally per cooldown. */
