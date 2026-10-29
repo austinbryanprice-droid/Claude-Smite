@@ -110,7 +110,9 @@ export class GodModel {
     this.air.play();
     this.air.setEffectiveWeight(0);
 
-    const castClip = clip(variant === 'melee' || this.id === 'thor' ? 'Punch_Cross' : 'Spell_Simple_Shoot');
+    // hammer and daggers swing; everyone else casts from the free hand
+    const swing = this.id === 'thor' || this.id === 'loki';
+    const castClip = clip(variant === 'melee' ? 'Punch_Cross' : swing ? 'Sword_Attack' : 'Spell_Simple_Shoot');
     this.castDuration = castClip.duration;
     for (const t of castClip.tracks) {
       const [node, prop] = t.name.split('.');
