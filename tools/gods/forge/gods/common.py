@@ -26,6 +26,25 @@ def heroic(k: float = 1.0, hands: float = 0.5) -> dict[str, float]:
     return out
 
 
+def heroic_face(k: float = 1.0) -> dict[str, float]:
+    """Stylized heroic face: a heavy brow over deep-set eyes, high cheekbones, a broad jaw."""
+    out = {
+        'forehead/forehead-nubian-incr': 0.6 * k,
+        'forehead/forehead-temple-decr': 0.4 * k,
+        'chin/chin-bones-incr': 0.5 * k,
+        'mouth/mouth-laugh-lines-in': 0.3 * k,
+    }
+    for s in ('l', 'r'):
+        out.update({
+            f'eyes/{s}-eye-push1-in': 0.5 * k,
+            f'eyes/{s}-eye-eyefold-down': 0.5 * k,
+            f'eyes/{s}-eye-bag-decr': 0.6 * k,
+            f'cheek/{s}-cheek-bones-incr': 0.4 * k,
+            f'cheek/{s}-cheek-inner-decr': 0.4 * k,
+        })
+    return out
+
+
 # ---------------------------------------------------------------- head landmarks and hair
 
 import numpy as np  # noqa: E402

@@ -11,7 +11,7 @@ from ..geo import extrude, tube, merge, look_rotation, sphere
 from ..god import God
 from ..mathx import normalize
 from ..regions import smooth
-from .common import add_boot_feet, heroic, face_fields, add_hair_head, add_skirt, head_weights
+from .common import add_boot_feet, heroic, face_fields, add_hair_head, add_skirt, head_weights, heroic_face
 
 
 class Odin(God):
@@ -20,7 +20,7 @@ class Odin(God):
     bulk = {'DEF-thigh': 1.2, 'DEF-shin': 1.15, 'DEF-upper_arm': 1.28, 'DEF-forearm': 1.22, 'DEF-spine.003': (1.1, 1.0, 1.04),
             'DEF-neck': 1.18, 'DEF-hand': 1.1, 'DEF-shoulder': 1.15}
     shape = mh.Shape(gender=1, muscle=0.85, weight=0.7, height=1.0, proportions=1.0, extra={
-        **heroic(0.9),
+        **heroic(0.9), **heroic_face(0.9),
         'nose/nose-hump-incr': 0.6, 'nose/nose-scale-vert-incr': 0.3, 'head/head-square': 0.3,
         'cheek/l-cheek-bones-incr': 0.5, 'cheek/r-cheek-bones-incr': 0.5,
         'expression/units/caucasian/eyebrows-left-down': 0.8, 'expression/units/caucasian/eyebrows-right-down': 0.8,
@@ -108,6 +108,8 @@ class Odin(God):
 
         hide = (plate_f > 0.75) | (F.bones('foot', 'toe') > 0.9) & (y < 0.06)
         hide = hide | add_boot_feet(self)
+        # skin under the helm (the heavy brow would poke through the dome)
+        hide = hide | ((F.bones('DEF-head') > 0.5) & (y > face_fields(self)['eye'][1] + 0.045))
         self.add_body(hide=hide | skirt.hide)
         self.eyes()
         self.meta['grip'] = ['R']

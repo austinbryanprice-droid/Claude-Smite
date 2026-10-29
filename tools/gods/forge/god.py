@@ -114,12 +114,28 @@ class God:
         col = np.zeros((len(self.body.verts), 4))
         col[:, 0] = np.clip(c * 60, 0, 1)  # creases
         col[:, 1] = np.clip(-c * 60, 0, 1)  # ridges
-        col[:, 2] = self.skin_region()
+        col[:, 2], col[:, 3] = self.face_paint()
         self.parts.append(export.body_part(self.body, faces, uvf, material, 'body', col))
 
-    def skin_region(self) -> np.ndarray:
-        """Blue channel of the skin data: 1 on the face (for lips/cheek tint)."""
-        return self.F.bones('DEF-head')
+    def face_paint(self):
+        """Blue and alpha of the skin data: lips, and the shadow of the eye sockets.
+
+        Painted shading, as on a stylized character: it keeps the eyes reading as
+        deep-set and the mouth as a mouth when the geometry alone is too soft.
+        """
+        V, J = self.body.verts, self.body.J
+        head = self.F.bones('DEF-head')
+        socket = np.zeros(len(V))
+        for s in ('L', 'R'):
+            e = J[f'eye.{s}____head']
+            # centered a little above and behind the eyeball: the brow casts down into the socket
+            d = np.linalg.norm((V - (e + np.array([0, 0.004, -0.006]))) * np.array([0.85, 1.15, 1.0]), axis=1)
+            socket = np.maximum(socket, 1 - np.clip((d - 0.016) / 0.02, 0, 1))
+        mouth_y = (J['eye.L____head'][1] + J['jaw____tail'][1]) / 2 - 0.05 * (J['eye.L____head'][1] - J['jaw____tail'][1])
+        m = np.array([0, mouth_y, J['oris06____head'][2]])
+        q = (V - m) / np.array([0.026, 0.011, 0.03])
+        lips = np.clip(1.4 - np.linalg.norm(q, axis=1), 0, 1) * (V[:, 2] > m[2] - 0.02)
+        return lips * head, socket * head
 
     def build(self, path) -> int:
         self.make()

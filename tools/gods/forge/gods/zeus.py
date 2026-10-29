@@ -9,7 +9,7 @@ from ..geo import Mesh, extrude, tube, merge, look_rotation
 from ..god import God
 from ..mathx import normalize
 from ..regions import smooth
-from .common import heroic, face_fields, add_hair_head, add_skirt
+from .common import heroic, face_fields, add_hair_head, add_skirt, heroic_face
 
 
 class Zeus(God):
@@ -18,7 +18,7 @@ class Zeus(God):
     bulk = {'DEF-thigh': 1.25, 'DEF-shin': 1.2, 'DEF-upper_arm': 1.3, 'DEF-forearm': 1.25, 'DEF-spine.003': (1.1, 1.0, 1.0),
             'DEF-neck': 1.15, 'DEF-hand': 1.1, 'DEF-shoulder': 1.15}
     shape = mh.Shape(gender=1, muscle=1.0, weight=0.62, height=1.0, proportions=1.0, extra={
-        **heroic(1.0),
+        **heroic(1.0), **heroic_face(1.0),
         'chin/chin-prominent-incr': 0.5, 'nose/nose-greek-incr': 0.6, 'head/head-square': 0.4,
         'expression/units/caucasian/eyebrows-left-down': 0.5, 'expression/units/caucasian/eyebrows-right-down': 0.5,
     })

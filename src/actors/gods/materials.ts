@@ -145,8 +145,13 @@ function skinMaterial(p: GodPalette): THREE.Material {
   const base = mix(color(p.skin), color(p.skinDeep), crease.mul(0.75).add(mottle.mul(0.12)));
   // warm subsurface-looking tint in creases, light catches the ridges of muscle
   const lit = base.mul(float(1).add(ridge.mul(0.22))).add(fine);
-  m.colorNode = lit;
-  m.roughnessNode = float(0.5).add(crease.mul(0.15)).sub(ridge.mul(0.12)).add(mx_noise_float(positionLocal.mul(90)).mul(0.06));
+  // painted face shading: deep eye sockets and tinted lips
+  const lips = d.z;
+  const socket = d.w;
+  const lipColor = color(p.skin).mul(vec3(0.82, 0.5, 0.48));
+  const painted = mix(mix(lit, color(p.skinDeep).mul(0.55), socket.mul(0.65)), lipColor, lips.mul(0.55));
+  m.colorNode = painted;
+  m.roughnessNode = float(0.5).add(crease.mul(0.15)).sub(ridge.mul(0.12)).add(mx_noise_float(positionLocal.mul(90)).mul(0.06)).sub(lips.mul(0.2));
   // a little warm back-scatter at grazing angles
   m.emissiveNode = color(p.skinDeep).mul(rim().mul(0.18));
   return m;

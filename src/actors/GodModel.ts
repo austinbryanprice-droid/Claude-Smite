@@ -16,6 +16,41 @@ export interface LocomotionState {
   verticalSpeed: number;
 }
 
+/**
+ * Per-god body language layered on the shared cast clip, so each god casts in
+ * character. Rotations are about model-space axes (+Y up, +Z forward, the
+ * god's right hand toward -X), in radians at full cast.
+ */
+const CAST_ACCENTS: Record<string, { bone: string; axis: [number, number, number]; angle: number }[]> = {
+  // Zeus lifts the bolt overhead and leans back
+  zeus: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: -0.2 },
+    { bone: 'DEF-upper_arm.R', axis: [0, 0, 1], angle: -2.0 },
+    { bone: 'DEF-head', axis: [1, 0, 0], angle: -0.15 },
+  ],
+  // Thor throws his weight into the swing
+  thor: [
+    { bone: 'DEF-spine002', axis: [0, 1, 0], angle: 0.3 },
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: 0.2 },
+  ],
+  // Odin levels his spear and leans back to throw
+  odin: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: -0.12 },
+    { bone: 'DEF-upper_arm.R', axis: [1, 0, 0], angle: -2.3 },
+  ],
+  // Loki lunges low with the daggers
+  loki: [
+    { bone: 'DEF-spine002', axis: [1, 0, 0], angle: 0.25 },
+    { bone: 'DEF-spine003', axis: [0, 1, 0], angle: -0.3 },
+  ],
+  // Anubis hunches over the spell, head lowered, staff raised
+  anubis: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: 0.18 },
+    { bone: 'DEF-head', axis: [1, 0, 0], angle: 0.2 },
+    { bone: 'DEF-upper_arm.R', axis: [1, 0, 0], angle: -0.8 },
+  ],
+};
+
 /** Bones the cast pose overrides (upper body only, so legs keep running). */
 const UPPER = /^DEF-(spine00[23]|neck|head|shoulder|upper_arm|forearm|hand|f_|thumb)/;
 
@@ -64,6 +99,8 @@ export class GodModel {
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpQ2 = new THREE.Quaternion();
   private readonly curl: { bone: THREE.Bone; q: THREE.Quaternion }[] = [];
+  private readonly accents: { bone: THREE.Bone; axis: THREE.Vector3; angle: number }[] = [];
+  private readonly tmpV = new THREE.Vector3();
 
   constructor(god: string | object = 'zeus', variant?: string) {
     this.id = typeof god === 'string' ? god : 'zeus';
@@ -125,6 +162,10 @@ export class GodModel {
       const b = bone(c.bone);
       const axis = new THREE.Vector3().fromArray(c.axis).normalize();
       if (b) this.curl.push({ bone: b, q: new THREE.Quaternion().setFromAxisAngle(axis, c.angle) });
+    }
+    for (const a of CAST_ACCENTS[this.id] ?? []) {
+      const b = this.bones.get(a.bone.replace(/\./g, ''));
+      if (b) this.accents.push({ bone: b, axis: new THREE.Vector3(...a.axis), angle: a.angle });
     }
 
     this.physics = new SecondaryPhysics(this.root, scene, this.asset.meta, this.bones, mats);
@@ -230,11 +271,27 @@ export class GodModel {
         this.tmpQ.set(v[0]!, v[1]!, v[2]!, v[3]!);
         c.bone.quaternion.slerp(this.tmpQ, cw);
       }
+      // ease into the accent over the first 40% of the clip and hold it
+      const k = cw * THREE.MathUtils.smoothstep(ct, 0, this.castDuration * 0.4);
+      if (this.accents.length) this.root.updateMatrixWorld(true);
+      for (const a of this.accents) this.rotateModel(a.bone, a.axis, a.angle * k);
     }
     // the weapon hand stays closed around its handle in every clip
     for (const c of this.curl) c.bone.quaternion.multiply(c.q);
     this.root.updateMatrixWorld(true);
     this.physics.update(dt);
+  }
+
+  /** Rotates a bone about an axis given in the god's model space (parents must have current world matrices). */
+  private rotateModel(bone: THREE.Object3D, axis: THREE.Vector3, angle: number): void {
+    this.root.getWorldQuaternion(this.tmpQ);
+    this.tmpV.copy(axis).applyQuaternion(this.tmpQ);
+    const parent = bone.parent!;
+    parent.getWorldQuaternion(this.tmpQ);
+    this.tmpQ2.setFromAxisAngle(this.tmpV, angle);
+    const p = this.tmpQ;
+    bone.quaternion.premultiply(p.clone().invert().multiply(this.tmpQ2).multiply(p));
+    bone.updateMatrixWorld(true);
   }
 
   private rotateWorldY(bone: THREE.Object3D, angle: number): void {

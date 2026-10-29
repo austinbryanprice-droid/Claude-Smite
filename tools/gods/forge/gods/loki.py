@@ -10,7 +10,7 @@ from ..geo import extrude, tube, merge, look_rotation
 from ..god import God
 from ..mathx import normalize
 from ..regions import smooth
-from .common import add_boot_feet, heroic, face_fields, add_hair_head, head_weights
+from .common import add_boot_feet, heroic, face_fields, add_hair_head, head_weights, heroic_face
 
 
 class Loki(God):
@@ -18,7 +18,7 @@ class Loki(God):
     height = 2.22
     bulk = {'DEF-upper_arm': 1.12, 'DEF-forearm': 1.1, 'DEF-thigh': 1.08, 'DEF-shin': 1.05, 'DEF-neck': 1.0}
     shape = mh.Shape(gender=1, muscle=0.8, weight=0.42, height=1.0, proportions=1.0, extra={
-        **heroic(0.55, hands=0.3),
+        **heroic(0.55, hands=0.3), **heroic_face(0.6),
         'chin/chin-prominent-incr': 0.4, 'nose/nose-scale-vert-incr': 0.2, 'cheek/l-cheek-bones-incr': 0.8,
         'cheek/r-cheek-bones-incr': 0.8, 'head/head-oval': 0.5,
         'expression/units/caucasian/eyebrows-left-down': 0.5, 'expression/units/caucasian/eyebrows-right-down': 0.5,
