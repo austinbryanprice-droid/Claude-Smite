@@ -91,6 +91,9 @@ const IDLE_STANCE: Record<string, { bone: string; axis: [number, number, number]
 };
 
 /** Bones the cast pose overrides (upper body only, so legs keep running). */
+/** Which upper-body overlay an action plays. */
+export type CastKind = 'basic' | 'skill';
+
 const UPPER = /^DEF-(spine00[23]|neck|head|shoulder|upper_arm|forearm|hand|f_|thumb)/;
 
 interface Loco {
@@ -128,8 +131,9 @@ export class GodModel {
   private readonly air: THREE.AnimationAction;
   private readonly asset: GodAsset;
   private readonly bones = new Map<string, THREE.Bone>();
-  private readonly cast: { bone: THREE.Bone; interp: THREE.Interpolant }[] = [];
-  private castDuration = 0.5;
+  /** Upper-body overlays: a weapon strike for basic attacks, the god's spell motion for skills. */
+  private readonly overlays: Record<CastKind, { tracks: { bone: THREE.Bone; interp: THREE.Interpolant }[]; duration: number }>;
+  private castKind: CastKind = 'skill';
   private castTime = 1e9;
   private prevCast = 0;
   private phase = 0;
@@ -221,9 +225,14 @@ export class GodModel {
 
     // hammer and daggers swing; everyone else casts from the free hand
     const swing = this.id === 'thor' || this.id === 'loki';
-    const castClip = clip(variant === 'melee' ? 'Punch_Cross' : swing ? 'Sword_Attack' : 'Spell_Simple_Shoot');
-    this.castDuration = castClip.duration;
-    this.cast.push(...this.upperTracks(castClip));
+    const overlay = (n: string) => {
+      const c = clip(n);
+      return { tracks: this.upperTracks(c), duration: c.duration };
+    };
+    this.overlays = {
+      basic: overlay(variant === 'melee' ? 'Punch_Cross' : swing ? 'Sword_Attack' : 'Punch_Jab'),
+      skill: overlay(variant === 'melee' ? 'Punch_Cross' : swing ? 'Sword_Attack' : 'Spell_Simple_Shoot'),
+    };
 
     for (const n of ['Hit_Chest', 'Hit_Head']) {
       const c = clip(n);
@@ -284,6 +293,12 @@ export class GodModel {
       if (b) out.push({ bone: b, interp: (t as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant() });
     }
     return out;
+  }
+
+  /** Starts the overlay for a basic attack or a skill; `castWeight` still blends it in and out. */
+  startCast(kind: CastKind): void {
+    this.castKind = kind;
+    this.castTime = 0;
   }
 
   /** A short upper-body recoil from a hit; `strength` 0..1. Alternates chest and head hits. */
@@ -385,16 +400,19 @@ export class GodModel {
     this.castTime += dt;
     const cw = this.castWeight;
     if (cw > 0.01) {
-      const ct = Math.min(this.castTime * 1.6, this.castDuration * 0.95);
-      for (const c of this.cast) {
+      const o = this.overlays[this.castKind];
+      const ct = Math.min(this.castTime * 1.6, o.duration * 0.95);
+      for (const c of o.tracks) {
         const v = c.interp.evaluate(ct);
         this.tmpQ.set(v[0]!, v[1]!, v[2]!, v[3]!);
         c.bone.quaternion.slerp(this.tmpQ, cw);
       }
-      // ease into the accent over the first 40% of the clip and hold it
-      const k = cw * THREE.MathUtils.smoothstep(ct, 0, this.castDuration * 0.4);
-      if (this.accents.length) this.root.updateMatrixWorld(true);
-      for (const a of this.accents) this.rotateModel(a.bone, a.axis, a.angle * k);
+      // skills only: ease into the god's accent over the first 40% of the clip and hold it
+      if (this.castKind === 'skill' && this.accents.length) {
+        const k = cw * THREE.MathUtils.smoothstep(ct, 0, o.duration * 0.4);
+        this.root.updateMatrixWorld(true);
+        for (const a of this.accents) this.rotateModel(a.bone, a.axis, a.angle * k);
+      }
     }
     // hit recoil: a quick ease in, then fade out by the end of the clip
     this.flinchTime += dt;

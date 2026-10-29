@@ -163,7 +163,11 @@ export class UnitViews {
       }
       if (e.target.kind === 'minion') this.minions.hit(e.target, e.amount);
     } else if (e.type === 'basic') {
-      this.views.get(e.unit)?.structure?.pulseFire();
+      const v = this.views.get(e.unit);
+      v?.structure?.pulseFire();
+      v?.model?.startCast('basic');
+    } else if (e.type === 'cast') {
+      this.views.get(e.unit)?.model?.startCast('skill');
     } else if (e.type === 'death') {
       const v = this.views.get(e.unit);
       if (v) v.deathTime = 0;
