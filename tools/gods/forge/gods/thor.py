@@ -128,7 +128,7 @@ class Thor(God):
         self.meta['curl'] = kit.grip_curl(self.body, 'R')
 
     def fur_patch(self, name, field, length, width, clearance, spacing, seed, flow, lift=0.7):
-        style = hairmod.Style(length=length, width=width * 1.3, flatness=0.4, segments=8, sides=8, grooves=3, lift=lift, gravity=0.5, flow=flow,
+        style = hairmod.Style(length=length, width=width * 1.3, flatness=0.4, segments=6, sides=8, grooves=3, lift=lift, gravity=0.5, flow=flow,
                               curl=0.25, curl_freq=1.0, jitter=0.35, clearance=clearance, taper=0.8, seed=seed)
         m, _ = hairmod.hair(self.body, field, spacing, style)
         self.add(name, 'fur', m, None)

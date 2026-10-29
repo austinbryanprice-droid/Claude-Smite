@@ -127,7 +127,14 @@ export class GodModel {
       mesh.material = mats.get(name) ?? mats.get('default')!;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.frustumCulled = false;
+      // cull against a fixed, generous sphere: the posed mesh (swinging weapons,
+      // cast accents) never leaves it, and it is never recomputed from bones
+      const geo = mesh.geometry;
+      if (!geo.boundingSphere) geo.computeBoundingSphere();
+      const sphere = geo.boundingSphere!.clone();
+      sphere.radius += 1.2;
+      mesh.boundingSphere = sphere;
+      mesh.frustumCulled = true;
     });
     const bone = (n: string) => this.bones.get(n.replace(/\./g, ''))!;
     this.head = bone('DEF-head');

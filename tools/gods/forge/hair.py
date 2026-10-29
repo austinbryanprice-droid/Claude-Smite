@@ -100,7 +100,7 @@ def clumps(paths: list[np.ndarray], normals: np.ndarray, style: Style, widths=No
     """Flattened tapered tubes along the paths. The flat side faces away from the skin."""
     rng = np.random.default_rng(style.seed + 7)
     meshes = []
-    sides = max(style.sides, 12) if style.grooves else style.sides
+    sides = max(style.sides, 10) if style.grooves else style.sides
     a = np.arange(sides) / sides * 2 * np.pi
     for k, path in enumerate(paths):
         K = len(path)

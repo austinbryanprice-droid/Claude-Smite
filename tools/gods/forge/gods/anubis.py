@@ -117,7 +117,7 @@ class Anubis(God):
         lo = np.array([-0.16, nk[1] - 0.1, H[2] - 0.17])
         lo[0], lo[2] = -0.19, H[2] - 0.2
         hi = np.array([0.19, H[1] + 0.36, H[2] + 0.36])
-        m = sdf.mesh(fn, lo, hi, step=0.0035, smooth=4)
+        m = sdf.mesh(fn, lo, hi, step=0.006, smooth=4)
         col = np.zeros((len(m.v), 4))
         m.col = col
         self.add('jackal', 'skin', m, head_weights(self, m.v, fall=0.12))

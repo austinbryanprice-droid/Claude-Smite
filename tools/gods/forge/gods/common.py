@@ -108,11 +108,11 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
             back = smooth(-(P[:, 2] - lm['head'][2]), -0.06, 0.08)
             return hair_len * (0.22 + 0.78 * back) * np.random.default_rng(seed).uniform(0.8, 1.15, len(P))
 
-        style = hairmod.Style(length=length, width=0.062, flatness=0.3, segments=12, sides=8, lift=0.12, gravity=0.6, flow=flow,
+        style = hairmod.Style(length=length, width=0.062, flatness=0.3, segments=6, sides=8, lift=0.12, gravity=0.6, flow=flow,
                            curl=wild, curl_freq=1.1, jitter=0.2, clearance=0.018, taper=1.2, grooves=2, seed=seed)
         m, _ = hairmod.hair(b, scalp, spacing * 0.95, style)
         # a second, fuller layer further out gives the mane volume
-        style2 = hairmod.Style(length=lambda P, N: length(P, N) * 1.15, width=0.08, flatness=0.28, segments=12, sides=8, lift=0.22,
+        style2 = hairmod.Style(length=lambda P, N: length(P, N) * 1.15, width=0.08, flatness=0.28, segments=6, sides=8, lift=0.22,
                                gravity=0.6, flow=flow, curl=wild * 1.2, curl_freq=0.9, jitter=0.25, clearance=0.034, taper=1.2, grooves=3, seed=seed + 11)
         m2, _ = hairmod.hair(b, np.minimum(scalp, smooth(-rel_z, -0.04, 0.0)), spacing * 1.4, style2)  # volume behind the hairline only
         meshes.append(m2)
@@ -134,7 +134,7 @@ def add_hair_head(god, hair_len=0.25, beard_len=0.15, mustache=True, brows=True,
             low = smooth(-(P[:, 1] - mouth[1]), 0.0, 0.05)
             return beard_len * (0.3 + 0.7 * center * (0.4 + 0.6 * low))
 
-        style = hairmod.Style(length=blen, width=0.036, flatness=0.32, segments=10, sides=8, lift=0.3, gravity=0.6, flow=bflow,
+        style = hairmod.Style(length=blen, width=0.036, flatness=0.32, segments=6, sides=8, lift=0.3, gravity=0.6, flow=bflow,
                            curl=wild * 0.8, curl_freq=1.6, jitter=0.25, clearance=0.01, tip_curl=0.2, grooves=2, seed=seed + 1)
         m, _ = hairmod.hair(b, jaw, spacing * 0.85, style)
         meshes.append(m)
