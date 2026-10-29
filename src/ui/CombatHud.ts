@@ -1,10 +1,12 @@
+import { BUFF_GLOW } from '../combat/MonsterViews';
+import { BUFF_DURATION, BUFF_KINDS, BUFFS, buffMark, type BuffKind } from '../sim/Jungle';
 import * as THREE from 'three/webgpu';
 import { SLOT_KEYS, ULTIMATE_SLOT } from '../game/loadout';
 import { MAX_LEVEL } from '../game/progression';
 import type { CCKind } from '../game/types';
 import { RECALL_TIME } from '../sim/Sim';
 import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
-import { TEAM_COLORS } from '../combat/palette';
+import { hex, TEAM_COLORS } from '../combat/palette';
 import { skillIcon } from './icons';
 import './combat.css';
 
@@ -70,6 +72,8 @@ export class CombatHud {
   private readonly xpRing: SVGCircleElement;
   private readonly points: HTMLDivElement;
   private readonly status: HTMLDivElement;
+  private readonly buffs: HTMLDivElement;
+  private buffKey = '';
   private readonly recall: HTMLDivElement;
   private readonly recallFill: HTMLDivElement;
   private readonly death: HTMLDivElement;
@@ -95,6 +99,7 @@ export class CombatHud {
     this.overlay = el('div', 'ch-overlay', this.root);
 
     const frame = el('div', 'ch-frame', this.root);
+    this.buffs = el('div', 'ch-buffs', frame);
     const top = el('div', 'ch-frame-top', frame);
     const badge = el('div', 'ch-level', top, `<svg viewBox="0 0 44 44"><circle class="ch-level-track" cx="22" cy="22" r="19"/><circle class="ch-level-xp" cx="22" cy="22" r="19"/></svg><span></span>`);
     this.levelText = badge.querySelector('span')!;
@@ -216,6 +221,8 @@ export class CombatHud {
     const frac = c.level >= MAX_LEVEL ? 1 : prog.into / prog.needed;
     this.xpRing.style.strokeDashoffset = String(119.4 * (1 - frac));
 
+    this.updateBuffs();
+
     // abilities
     const key = c.loadout.join('|') + c.level;
     if (key !== this.loadoutKey) {
@@ -259,6 +266,27 @@ export class CombatHud {
     this.updateFloaters(dt);
   }
 
+  /** Jungle buffs the player holds, each a glowing chip with a draining timer ring. */
+  private updateBuffs(): void {
+    const held = BUFF_KINDS.filter((k) => this.player.marks.has(buffMark(k)));
+    const key = held.join('|');
+    if (key !== this.buffKey) {
+      this.buffKey = key;
+      this.buffs.innerHTML = held
+        .map((k) => {
+          const b = BUFFS[k];
+          return `<div class="ch-buff" data-buff="${k}" style="--c:${hex(BUFF_GLOW[k] ?? 0xffffff)}" title="${b.name}: ${b.text}"><span>${b.name[0]}</span><i></i></div>`;
+        })
+        .join('');
+    }
+    for (const chip of this.buffs.children as HTMLCollectionOf<HTMLElement>) {
+      const m = this.player.marks.get(buffMark(chip.dataset.buff as BuffKind));
+      if (!m) continue;
+      chip.style.setProperty('--p', String(m.remaining / BUFF_DURATION));
+      chip.querySelector('i')!.textContent = String(Math.ceil(m.remaining));
+    }
+  }
+
   private project(p: THREE.Vector3): { x: number; y: number } | null {
     this.v.copy(p).project(this.camera);
     if (this.v.z > 1 || this.v.z < -1) return null;
@@ -281,7 +309,7 @@ export class CombatHud {
       const c = u.combatant;
       const dist = this.camera.position.distanceTo(head!);
       // keep the screen readable in a big fight: minion bars only up close
-      const maxDist = u.kind === 'minion' ? 45 : isStructure(u) ? 45 : 80;
+      const maxDist = u.kind === 'minion' || u.kind === 'monster' ? 45 : isStructure(u) ? 45 : 80;
       if (dist > maxDist) {
         b.el.style.display = 'none';
         continue;
@@ -295,7 +323,7 @@ export class CombatHud {
       b.shield.style.left = `${(c.health / total) * 100}%`;
       b.shield.style.width = `${(shield / total) * 100}%`;
       b.level.textContent = u.kind === 'god' ? String(c.level) : '';
-      b.marks.textContent = [...u.marks.values()].map((m) => '◆'.repeat(m.stacks)).join('');
+      b.marks.textContent = [...u.marks].filter(([k]) => !k.startsWith('buff:')).map(([, m]) => '◆'.repeat(m.stacks)).join('');
     }
     for (const [u, b] of this.bars) {
       if (seen.has(u)) continue;
@@ -305,7 +333,7 @@ export class CombatHud {
   }
 
   private makeBar(u: Unit): Bar {
-    const side = u === this.player ? 'self' : u.team === this.player.team ? 'ally' : 'enemy';
+    const side = u === this.player ? 'self' : u.team === this.player.team ? 'ally' : u.team === 'neutral' ? 'neutral' : 'enemy';
     const root = el('div', `ch-ob ch-ob-${side} ch-ob-${u.kind}`, this.overlay);
     const head = el('div', 'ch-ob-head', root);
     const level = el('span', 'ch-ob-level', head);

@@ -5,6 +5,7 @@ import { float, fract, length, mix, mx_noise_float, positionLocal, smoothstep, u
 import type { StructureKind } from '../sim/factory';
 import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
 import { MinionViews } from './MinionViews';
+import { createMonsterView, type MonsterView } from './MonsterViews';
 import { createStructureModel, type StructureModel } from './structures';
 import { MUZZLE_HEIGHT } from './Vfx';
 
@@ -67,6 +68,7 @@ interface UnitView {
   windup: number;
   /** Seconds since a destroyed structure began to rise again, or -1. */
   rebirth: number;
+  monster: MonsterView | null;
 }
 
 /**
@@ -177,6 +179,7 @@ export class UnitViews {
     let model: GodModel | null = null;
     let structure: StructureModel | null = null;
     let external = false;
+    let monster: MonsterView | null = null;
     let height = 2.45;
     if (u === this.player) {
       model = this.playerModel;
@@ -189,10 +192,15 @@ export class UnitViews {
       // drawn by the instanced crowd; this root only carries the position
       root = new THREE.Group();
       height = u.tag.endsWith('brute') ? 2.7 : 1.85;
+    } else if (u.kind === 'monster') {
+      monster = createMonsterView(u);
+      root = monster.root;
+      height = monster.height;
+      this.group.add(root);
     } else if (isStructure(u)) {
       const placed = this.mapStructure(u);
       external = !!placed;
-      structure = placed ?? createStructureModel(u.kind as StructureKind, u.team);
+      structure = placed ?? createStructureModel(u.kind as StructureKind, u.side);
       root = structure.root as THREE.Group;
       height = structure.height;
       if (!placed) {
@@ -212,7 +220,7 @@ export class UnitViews {
       if (summoned) root.scale.setScalar(0.88);
       this.group.add(root);
     }
-    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1, external, windup: 0 };
+    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1, external, windup: 0, monster };
     this.views.set(u, v);
     return v;
   }
@@ -275,6 +283,11 @@ export class UnitViews {
     if (u.kind === 'minion') {
       // the crowd poses the body (and its fall) from this root
       v.root.visible = !hidden && v.deathTime < 2.2;
+      return;
+    }
+    if (v.monster) {
+      v.root.visible = v.deathTime < 3;
+      v.monster.animate(u, dt, v.deathTime, v.wobble);
       return;
     }
     v.root.visible = !hidden && (u.alive || v.deathTime < 0.05);

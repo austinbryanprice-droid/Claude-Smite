@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import type { Team } from '../game/combatant';
+import type { Side as Team } from '../game/combatant';
 import { color, float, mix, mx_noise_float, positionLocal, sin, time, uniform, vec3 } from '../render/tsl';
 import { lathe } from '../scene/Architecture';
 import type { StructureKind } from '../sim/factory';

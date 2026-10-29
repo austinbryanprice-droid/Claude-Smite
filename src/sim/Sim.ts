@@ -1,6 +1,7 @@
-import type { BasicShot, CastError, ResolvedSkill, Team } from '../game/combatant';
+import type { BasicShot, CastError, ResolvedSkill, Side, Team } from '../game/combatant';
 import { FAVOR_REWARDS, ranked } from '../game/progression';
 import type { DamageType } from '../game/types';
+import { WISDOM_XP } from './Jungle';
 import { Passives } from './Passives';
 import {
   isStructure,
@@ -43,6 +44,8 @@ export const XP_SHARE_RANGE = 22;
 const ASSIST_WINDOW = 10;
 /** Seconds a dead minion lies on the ground before it is removed. */
 const CORPSE_TIME = 1.4;
+/** Jungle monsters collapse more slowly, so their fall can play out. */
+const MONSTER_CORPSE_TIME = 3;
 /**
  * Structures take this share of damage when no minion of the attacker's team
  * is near them (Smite's backdoor protection).
@@ -67,7 +70,7 @@ export class Sim {
 
   constructor(
     readonly terrain: SimTerrain,
-    readonly bases: Record<Team, BaseZone>,
+    readonly bases: Record<Side, BaseZone>,
     readonly rng: () => number = Math.random,
   ) {}
 
@@ -104,6 +107,7 @@ export class Sim {
   }
 
   inBase(u: Unit): boolean {
+    if (u.team === 'neutral') return false;
     const b = this.bases[u.team];
     return Math.hypot(u.x - b.x, u.z - b.z) <= b.radius;
   }
@@ -514,6 +518,14 @@ export class Sim {
       }
       case 'titan':
         break;
+      case 'monster': {
+        const b = victim.bounty;
+        if (!b) break;
+        // allies helping nearby share some of the XP
+        for (const g of enemyGods) if (g !== killer && near(g)) this.reward(g, b.xp * 0.5, 0);
+        this.reward(killer, b.xp, killer.kind === 'god' ? b.favor : 0);
+        break;
+      }
       default:
         // training dummies
         this.reward(killer, 90, FAVOR_REWARDS.minion);
@@ -522,6 +534,7 @@ export class Sim {
 
   private reward(u: Unit, xp: number, favor: number): void {
     if (u.kind !== 'god' && u.kind !== 'dummy') return;
+    if (u.marks.has('buff:wisdom')) xp *= 1 + WISDOM_XP;
     const before = u.combatant.level;
     u.combatant.gainXp(xp);
     u.combatant.gainFavor(favor);
@@ -703,6 +716,7 @@ export class Sim {
       u.vx = u.vz = 0;
       u.deadFor += dt;
       if (u.kind === 'minion' && u.deadFor >= CORPSE_TIME) this.remove(u);
+      if (u.kind === 'monster' && u.deadFor >= MONSTER_CORPSE_TIME) this.remove(u);
       return;
     }
     if (u.lifetime !== Infinity) {

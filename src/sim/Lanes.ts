@@ -104,7 +104,7 @@ export class MinionBrain implements Brain {
     let best: Unit | null = null;
     let bestScore = Infinity;
     for (const t of sim.enemiesOf(u)) {
-      if (t.kind === 'dummy' || t.kind === 'summon' || t.stealth > 0) continue;
+      if (t.kind === 'dummy' || t.kind === 'summon' || t.kind === 'monster' || t.stealth > 0) continue;
       if (isStructure(t) && t.shielded()) continue;
       const d = Math.hypot(t.x - u.x, t.z - u.z) - t.radius;
       if (d > MINION_AGGRO) continue;
