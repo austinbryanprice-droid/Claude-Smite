@@ -74,11 +74,31 @@ export function installUiSounds(engine: AudioEngine): void {
     (e) => {
       const el = target(e);
       if (!el) return;
-      const name = el.classList.contains('sm-play') ? 'ui.play' : el.matches('.sm-god, .sm-mode') ? 'ui.select' : 'ui.click';
+      const act = el.dataset.act;
+      if (act === 'node' || act === 'skill') {
+        // spending a point or swapping a skill: a chime if it worked, a buzz if the menu refused
+        engine.play('ui.click', { bus: 'ui', gain: 0.5 }, 6, 0.03);
+        setTimeout(() => {
+          const refused = !!document.querySelector('.lm-msg')?.textContent?.trim();
+          engine.play(refused ? 'ui.deny' : act === 'node' ? 'ui.point' : 'ui.select', { bus: 'ui', gain: 0.7 }, 6, 0.03);
+        }, 0);
+        return;
+      }
+      const name = el.classList.contains('sm-play') ? 'ui.play' : el.matches('.sm-god, .sm-mode, [data-act="slot"], [data-act="god"]') ? 'ui.select' : 'ui.click';
       engine.play(name, { bus: 'ui', gain: name === 'ui.play' ? 0.9 : 0.8 }, 6, 0.03);
     },
     true,
   );
+  // the loadout menu whooshes open and shut
+  new MutationObserver((records) => {
+    for (const r of records) {
+      const el = r.target as HTMLElement;
+      if (!el.classList.contains('lm')) continue;
+      const shown = el.classList.contains('show');
+      if (shown === (r.oldValue ?? '').split(' ').includes('show')) continue;
+      engine.play(shown ? 'ui.open' : 'ui.close', { bus: 'ui', gain: 0.7 }, 5, 0.1);
+    }
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
   let last: HTMLElement | null = null;
   document.addEventListener('pointerover', (e) => {
     const el = target(e);
