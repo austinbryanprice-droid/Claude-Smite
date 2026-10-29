@@ -126,6 +126,8 @@ async function main(): Promise<void> {
   let simNow = 0;
   const capture = async (frames = 8): Promise<string> => {
     renderer.setAnimationLoop(null);
+    // continue from the live clock if the loop already ran, so time never steps backwards
+    if (simNow === 0) simNow = performance.now();
     const device = (renderer.backend as unknown as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } } }).device;
     for (let i = 0; i < frames; i++) {
       frame((simNow += 1000 / 60));
