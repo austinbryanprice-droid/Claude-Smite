@@ -163,6 +163,8 @@ export interface TreeNode {
   maxRank: number;
   description: string;
   effects: readonly NodeEffect[];
+  /** A node in the same tree that must be maxed before this one takes points. */
+  requires?: string;
 }
 
 export interface SkillTree {
