@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  attribute, bool, cameraPosition, dFdx, dFdy, dot, float, floor, hash, instanceIndex, length, log2, max, mix,
+  attribute, bool, cameraPosition, dFdx, dFdy, dot, float, floor, hash, length, log2, max, mix,
   normalViewGeometry, normalize, positionLocal, positionWorld, pow, screenCoordinate, sin, smoothstep, step, texture,
   time, uniform, uv, vec3,
 } from '../render/tsl';
@@ -252,7 +252,8 @@ function growDetail(species: SpeciesName, seed: number, detail: 0 | 1): { trunk:
       const len = (tall ? 2 : 3 + rand() * 1.5) * (1.1 - t * 0.4);
       const pts = limb(at, dir, len, 4, 0.25, wob);
       const r0 = R * 0.45 * (1.1 - t * 0.5);
-      tube(trunk, pts, pts.map((_, k) => r0 * (1 - (k / (pts.length - 1)) * 0.75)), ring(5), swayOf);
+      // far away the crown hides the branches, so the low level keeps only the stem
+      if (detail) tube(trunk, pts, pts.map((_, k) => r0 * (1 - (k / (pts.length - 1)) * 0.75)), ring(5), swayOf);
       clusters.push({ center: pts[pts.length - 1]!.clone().add(new THREE.Vector3(0, 0.5, 0)), radius: tall ? 1.8 + rand() * 0.6 : 2.3 + rand() * 0.8 });
     }
     clusters.push({ center: stem[stem.length - 1]!.clone().add(new THREE.Vector3(0, 0.6, 0)), radius: tall ? 2.2 : 2.8 });
@@ -344,6 +345,24 @@ function keepUnoccluded(): any {
   return occlusionFade().mul(0.85).lessThan(noise);
 }
 
+interface Chunk {
+  /** Near instances, drawn with the detailed geometry. */
+  hi: THREE.InstancedMesh;
+  /** Far instances, drawn with the low-detail geometry. */
+  lo: THREE.InstancedMesh;
+  hiSeed: THREE.InstancedBufferAttribute;
+  loSeed: THREE.InstancedBufferAttribute;
+  /** Every instance's matrix and stable seed, in placement order. */
+  matrices: Float32Array;
+  seeds: Float32Array;
+  center: THREE.Vector3;
+  radius: number;
+  castShadow: boolean;
+  mode: 'hi' | 'lo' | 'mixed' | null;
+  /** Camera position (x, z) at the last split. */
+  splitAt: THREE.Vector2;
+}
+
 /** Instanced, chunked foliage for one map. */
 export class Foliage {
   readonly group = new THREE.Group();
@@ -351,11 +370,13 @@ export class Foliage {
   private readonly bark: THREE.MeshStandardNodeMaterial;
   private readonly leaves: THREE.MeshStandardNodeMaterial;
   readonly wind = { strength: uniform(1) };
-  private chunks: { mesh: THREE.InstancedMesh; center: THREE.Vector3; radius: number; hi: THREE.BufferGeometry; lo: THREE.BufferGeometry }[] = [];
-  /** Chunks farther than this switch to the low-detail meshes. */
+  private chunks: Chunk[] = [];
+  /** Instances farther than this use the low-detail meshes. */
   lodDistance = 40;
   /** Chunks farther than this from the camera are hidden (the fog covers the cut). */
   drawDistance = 200;
+  /** Shadow range of the current quality; chunks well beyond it stop casting. */
+  shadowDistance = Infinity;
 
   constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3, private readonly chunk = 80) {
     this.group.name = 'foliage';
@@ -375,7 +396,7 @@ export class Foliage {
   /** Wind sway shared by trunks and leaves: bends with height, phase per instance. */
   private swayNode(extraFlutter: boolean): any {
     const s = attribute('sway', 'float');
-    const phase = hash(instanceIndex).mul(6.283);
+    const phase = hash(attribute('seed', 'float')).mul(6.283);
     const t = time.mul(1.1).add(phase);
     const k = this.wind.strength.mul(s);
     let offset = vec3(sin(t).mul(0.22), 0, sin(t.mul(0.83).add(1.7)).mul(0.16)).mul(k);
@@ -392,7 +413,7 @@ export class Foliage {
     const c = texture(set.albedo, uv());
     const nr = texture(set.nr, uv());
     mat.positionNode = this.swayNode(false);
-    mat.colorNode = c.rgb.mul(mix(vec3(0.9, 0.86, 0.8), vec3(1.08, 1.0, 0.92), hash(instanceIndex.add(7))));
+    mat.colorNode = c.rgb.mul(mix(vec3(0.9, 0.86, 0.8), vec3(1.08, 1.0, 0.92), hash(attribute('seed', 'float').add(7))));
     mat.roughnessNode = nr.z;
     mat.metalnessNode = float(0);
     mat.maskNode = keepUnoccluded();
@@ -414,8 +435,9 @@ export class Foliage {
     mat.positionNode = this.swayNode(true);
 
     // Per-instance hue shift between yellow-green and blue-green.
-    const h = hash(instanceIndex);
-    const tint = mix(mix(vec3(1.0, 1.02, 0.6), vec3(0.82, 1.0, 0.84), smoothish(h)), vec3(0.7, 0.95, 1.0), smoothish(hash(instanceIndex.add(3))).mul(0.5));
+    // (a stable seed, not instanceIndex: instances move between the near and far meshes)
+    const seed = attribute('seed', 'float');
+    const tint = mix(mix(vec3(1.0, 1.02, 0.6), vec3(0.82, 1.0, 0.84), smoothish(hash(seed))), vec3(0.7, 0.95, 1.0), smoothish(hash(seed.add(3))).mul(0.5));
     const shade = attribute('shade', 'float');
     // deep, cool greens with dark crown interiors, as in the reference jungle
     const col = tex.rgb.mul(tint).mul(0.88);
@@ -442,12 +464,53 @@ export class Foliage {
 
   update(camera: THREE.Camera): void {
     const p = camera.position;
+    // long evening shadows still reach the shadowed area from a little beyond it
+    const shadowReach = this.shadowDistance + 30;
     for (const c of this.chunks) {
-      const d = Math.hypot(c.center.x - p.x, c.center.z - p.z) - c.radius;
-      c.mesh.visible = d < this.drawDistance;
-      const geo = d > this.lodDistance ? c.lo : c.hi;
-      if (c.mesh.geometry !== geo) c.mesh.geometry = geo;
+      const centre = Math.hypot(c.center.x - p.x, c.center.z - p.z);
+      const d = centre - c.radius;
+      if (d >= this.drawDistance) {
+        c.hi.visible = c.lo.visible = false;
+        continue;
+      }
+      const mode = d > this.lodDistance ? 'lo' : centre + c.radius < this.lodDistance ? 'hi' : 'mixed';
+      const moved = Math.hypot(p.x - c.splitAt.x, p.z - c.splitAt.y) > 3;
+      if (mode !== c.mode || (mode === 'mixed' && moved)) {
+        this.split(c, mode, p);
+        c.mode = mode;
+        c.splitAt.set(p.x, p.z);
+      }
+      c.hi.visible = c.hi.count > 0;
+      c.lo.visible = c.lo.count > 0;
+      c.hi.castShadow = c.lo.castShadow = c.castShadow && d < shadowReach;
     }
+  }
+
+  /** Sorts a chunk's instances into its near (detailed) and far meshes. */
+  private split(c: Chunk, mode: 'hi' | 'lo' | 'mixed', cam: THREE.Vector3): void {
+    const lod2 = this.lodDistance * this.lodDistance;
+    let nh = 0;
+    let nl = 0;
+    const hm = c.hi.instanceMatrix.array as Float32Array;
+    const lm = c.lo.instanceMatrix.array as Float32Array;
+    const hs = c.hiSeed.array as Float32Array;
+    const ls = c.loSeed.array as Float32Array;
+    for (let i = 0; i < c.seeds.length; i++) {
+      const x = c.matrices[i * 16 + 12]! - cam.x;
+      const z = c.matrices[i * 16 + 14]! - cam.z;
+      const near = mode === 'hi' || (mode === 'mixed' && x * x + z * z < lod2);
+      if (near) {
+        hm.set(c.matrices.subarray(i * 16, i * 16 + 16), nh * 16);
+        hs[nh++] = c.seeds[i]!;
+      } else {
+        lm.set(c.matrices.subarray(i * 16, i * 16 + 16), nl * 16);
+        ls[nl++] = c.seeds[i]!;
+      }
+    }
+    c.hi.count = nh;
+    c.lo.count = nl;
+    c.hi.instanceMatrix.needsUpdate = c.lo.instanceMatrix.needsUpdate = true;
+    c.hiSeed.needsUpdate = c.loSeed.needsUpdate = true;
   }
 
   /** Replaces all instances. Call once after placement (or on quality change). */
@@ -467,23 +530,48 @@ export class Foliage {
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
     const p = new THREE.Vector3();
+    let seed = 0;
     for (const [key, { variant, items }] of buckets) {
       const species = key.split(':')[0] as SpeciesName;
+      const matrices = new Float32Array(items.length * 16);
+      const seeds = new Float32Array(items.length);
+      items.forEach((it, i) => {
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.yaw);
+        m.compose(p.set(it.x, it.y, it.z), q, s.setScalar(it.scale));
+        m.toArray(matrices, i * 16);
+        seeds[i] = seed++;
+      });
       const make = (geo: THREE.BufferGeometry, lo: THREE.BufferGeometry, mat: THREE.Material) => {
-        const mesh = new THREE.InstancedMesh(geo, mat, items.length);
-        items.forEach((it, i) => {
-          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.yaw);
-          m.compose(p.set(it.x, it.y, it.z), q, s.setScalar(it.scale));
-          mesh.setMatrixAt(i, m);
+        const full = new THREE.InstancedMesh(geo, mat, items.length);
+        full.instanceMatrix.array.set(matrices);
+        full.computeBoundingSphere();
+        const sphere = full.boundingSphere!;
+        const view = (source: THREE.BufferGeometry) => {
+          // shares the vertex buffers; only the seed attribute is per mesh
+          const g = new THREE.BufferGeometry();
+          g.setIndex(source.index);
+          for (const [name, attr] of Object.entries(source.attributes)) g.setAttribute(name, attr);
+          g.boundingSphere = source.boundingSphere;
+          g.boundingBox = source.boundingBox;
+          const seedAttr = new THREE.InstancedBufferAttribute(new Float32Array(items.length), 1);
+          g.setAttribute('seed', seedAttr);
+          const mesh = new THREE.InstancedMesh(g, mat, items.length);
+          mesh.count = 0;
+          mesh.boundingSphere = sphere.clone();
+          mesh.receiveShadow = true;
+          mesh.name = key;
+          this.group.add(mesh);
+          return { mesh, seedAttr };
+        };
+        const hi = view(geo);
+        const loView = view(lo);
+        this.chunks.push({
+          hi: hi.mesh, lo: loView.mesh, hiSeed: hi.seedAttr, loSeed: loView.seedAttr, matrices, seeds,
+          center: sphere.center.clone(), radius: sphere.radius,
+          // ferns are too low and small to read in the shadow maps
+          castShadow: species !== 'fern',
+          mode: null, splitAt: new THREE.Vector2(),
         });
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.computeBoundingSphere();
-        // ferns are too low and small to read in the shadow maps
-        mesh.castShadow = species !== 'fern';
-        mesh.receiveShadow = true;
-        mesh.name = key;
-        this.group.add(mesh);
-        this.chunks.push({ mesh, center: mesh.boundingSphere!.center.clone(), radius: mesh.boundingSphere!.radius, hi: geo, lo });
       };
       if (variant.trunk) make(variant.trunk, variant.trunkLo!, this.bark);
       make(variant.leaves, variant.leavesLo, this.leaves);
