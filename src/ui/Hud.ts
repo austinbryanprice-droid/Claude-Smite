@@ -1,6 +1,18 @@
 import { QUALITY_PRESETS, type QualityName } from '../render/Quality';
 import { controlsHtml } from './StartMenu';
 
+const SENS_KEY = 'ascendant.sensitivity';
+
+function loadSensitivity(): number {
+  try {
+    const v = Number(localStorage.getItem(SENS_KEY));
+    if (v >= 0.25 && v <= 3) return v;
+  } catch {
+    /* storage unavailable */
+  }
+  return 1;
+}
+
 /** Minimal overlay: FPS, backend, quality picker, controls hint, loading screen. */
 export class Hud {
   private readonly root: HTMLDivElement;
@@ -13,7 +25,7 @@ export class Hud {
   private frames = 0;
   private acc = 0;
 
-  constructor(onQuality: (q: QualityName) => void) {
+  constructor(onQuality: (q: QualityName) => void, onSensitivity: (scale: number) => void = () => {}) {
     this.root = document.createElement('div');
     this.root.className = 'hud';
     this.root.innerHTML = `
@@ -27,14 +39,40 @@ export class Hud {
         </label>
       </div>
       <div class="hud-crosshair"></div>
-      <div class="hud-hint">Click to play &middot; WASD move &middot; Left click attack &middot; 1-4, R skills &middot; B recall &middot; K skills &amp; trees &middot; H all controls</div>
+      <div class="hud-hint"><b>Click to play</b><span>WASD move &middot; mouse aim &middot; left click attack &middot; 1&ndash;4, R skills</span><span>H controls &amp; settings &middot; Esc frees the mouse</span></div>
       <div class="hud-loading"><div class="hud-title">ASCENDANT</div><div class="hud-bar"><div></div></div><div class="hud-sub">Raising the temple&hellip;</div></div>
     `;
     document.body.appendChild(this.root);
     this.help = document.createElement('div');
     this.help.className = 'help';
-    this.help.innerHTML = `<div class="help-panel"><h3>Controls</h3>${controlsHtml()}<div class="help-foot">Press H or click to close.</div></div>`;
-    this.help.addEventListener('click', () => this.toggleHelp(false));
+    this.help.innerHTML = `<div class="help-panel"><h3>Controls</h3>${controlsHtml()}
+      <h3 class="help-gap">Settings</h3>
+      <label class="help-row">Mouse sensitivity <input class="help-sens" type="range" min="0.25" max="3" step="0.05"><span class="help-sens-val"></span></label>
+      <div class="help-actions"><button class="help-resume">Resume</button><button class="help-quit">Quit to title</button></div>
+      <div class="help-foot">Press H to close.</div></div>`;
+    this.help.addEventListener('click', (e) => {
+      if (e.target === this.help) this.toggleHelp(false);
+    });
+    this.help.addEventListener('mousedown', (e) => e.stopPropagation());
+    this.help.querySelector('.help-resume')!.addEventListener('click', () => this.toggleHelp(false));
+    this.help.querySelector('.help-quit')!.addEventListener('click', () => location.reload());
+    const sens = this.help.querySelector<HTMLInputElement>('.help-sens')!;
+    const sensVal = this.help.querySelector<HTMLSpanElement>('.help-sens-val')!;
+    const applySens = (v: number) => {
+      sens.value = String(v);
+      sensVal.textContent = `${v.toFixed(2)}x`;
+      onSensitivity(v);
+    };
+    applySens(loadSensitivity());
+    sens.addEventListener('input', () => {
+      const v = Number(sens.value);
+      applySens(v);
+      try {
+        localStorage.setItem(SENS_KEY, String(v));
+      } catch {
+        /* storage unavailable */
+      }
+    });
     document.body.appendChild(this.help);
     this.fps = this.root.querySelector('.hud-fps')!;
     this.stats = this.root.querySelector('.hud-stats')!;
