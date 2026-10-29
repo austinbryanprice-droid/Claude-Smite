@@ -249,7 +249,7 @@ export class GameAudio {
         this.voice(u, 'death', 0.85, 5);
         if (killer === me) this.engine.play('kill.confirm', { gain: 0.7 }, 5);
         const streak = this.endStreak(u, killer);
-        if (this.conquest && killer?.kind === 'god') this.announceKill(u, killer, streak);
+        if (this.conquest) this.announceDeath(u, killer, streak);
         if (u === me) {
           this.streak = 0;
           this.herald.say('You have fallen.', 'bad', 2);
@@ -292,17 +292,23 @@ export class GameAudio {
     return streak;
   }
 
-  private announceKill(victim: Unit, killer: Unit, victimStreak: number): void {
+  /**
+   * The herald on a god's death. Team wipes and fallen allies describe the
+   * victim's side, so they are called whoever landed the blow; first blood,
+   * shutdowns and the player's streaks need a god to have earned the kill.
+   */
+  private announceDeath(victim: Unit, by: Unit | null, victimStreak: number): void {
     const me = this.me;
-    const first = !this.firstBlood;
-    this.firstBlood = true;
+    const killer = by?.kind === 'god' ? by : null;
+    const first = !!killer && !this.firstBlood;
+    if (killer) this.firstBlood = true;
     if (killer === me && victim !== me) {
       this.streak++;
       const now = this.time;
       this.multi.count = now < this.multi.until ? this.multi.count + 1 : 1;
       this.multi.until = now + 10;
     }
-    if (first) {
+    if (first && killer) {
       this.herald.say(killer === me ? 'You drew first blood!' : 'First blood is spilled!', killer.team === me.team ? 'good' : 'bad', 4);
       return;
     }
@@ -312,7 +318,7 @@ export class GameAudio {
       this.herald.say(victim.team === me.team ? 'Our team has been wiped out.' : 'The enemy team is wiped out!', victim.team === me.team ? 'bad' : 'epic', 5);
       return;
     }
-    if (victimStreak >= 3 && killer.team === me.team) {
+    if (killer && victimStreak >= 3 && killer.team === me.team) {
       this.herald.say(killer === me ? 'Shutdown! You ended their rampage.' : 'Shutdown! Their rampage is over.', 'good', 3);
       return;
     }
