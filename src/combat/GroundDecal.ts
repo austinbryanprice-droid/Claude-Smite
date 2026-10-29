@@ -27,6 +27,8 @@ export class GroundDecal {
   readonly opacity = uniform(1);
   /** 0..1 fill sweep for telegraphs (how charged the cast is). */
   readonly fill = uniform(0);
+  /** 0..1 shockwave front for flashes, sweeping out from the caster. */
+  readonly wave = uniform(1);
   private readonly style = uniform(0);
   private local: Float32Array = new Float32Array(0);
   private shapeKey = '';
@@ -39,6 +41,8 @@ export class GroundDecal {
       side: THREE.DoubleSide,
     });
     const edge = attribute('edge', 'float');
+    // 0 at the origin of the shape, 1 at its far end (radius, length or range)
+    const along = attribute('along', 'float');
     const rim = smoothstep(0.82, 0.98, edge).mul(smoothstep(1.02, 0.97, edge));
     const wp = positionWorld.xz;
     const t = time;
@@ -52,13 +56,20 @@ export class GroundDecal {
     const telegraphFill = float(0.16).add(pulse.mul(edge));
     const charged = smoothstep(this.fill.add(0.02), this.fill, edge).mul(0.25);
 
+    // Flashes: a bright front sweeps outward, leaving a fading wash and crackle behind it.
+    const front = smoothstep(0.16, 0.0, abs(along.sub(this.wave))).mul(2.6);
+    const behind = smoothstep(this.wave.add(0.02), this.wave.sub(0.05), along);
+    const crackle = smoothstep(0.46, 0.5, n2).mul(smoothstep(0.54, 0.5, n2)).mul(1.8);
+    const flashBody = front.add(behind.mul(float(0.3).add(crackle).mul(float(1.15).sub(this.wave))));
+    const flashRim = behind.mul(rim);
+
     const isZone = smoothstep(0.5, 1.0, this.style).mul(smoothstep(1.5, 1.0, this.style));
     const isFlash = smoothstep(1.5, 2.0, this.style);
     const isTele = float(1).sub(isZone).sub(isFlash);
 
-    const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(1.25))).add(isFlash.mul(float(0.55).add(edge.mul(0.45))));
+    const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(1.25))).add(isFlash.mul(flashBody));
     const rimStrength = isTele.mul(2.2).add(isZone.mul(3.0)).add(isFlash.mul(2.0));
-    const intensity = body.add(rim.mul(rimStrength));
+    const intensity = body.add(rim.mul(rimStrength).mul(float(1).sub(isFlash).add(isFlash.mul(flashRim))));
     // Alpha-blended, not additive: additive light vanishes on the white marble.
     // HDR color (above 1) still feeds bloom so rims and veins glow.
     const hot = mix(this.color, this.core, smoothstep(1.2, 2.6, intensity));
@@ -105,10 +116,11 @@ export class GroundDecal {
     const key = JSON.stringify(shape);
     if (key === this.shapeKey) return;
     this.shapeKey = key;
-    const { local, edge, index } = build(shape);
+    const { local, edge, along, index } = build(shape);
     this.local = local;
     this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array((local.length / 2) * 3), 3));
     this.geometry.setAttribute('edge', new THREE.BufferAttribute(edge, 1));
+    this.geometry.setAttribute('along', new THREE.BufferAttribute(along, 1));
     this.geometry.setIndex(index);
   }
 
@@ -119,16 +131,19 @@ export class GroundDecal {
 }
 
 /** Local XZ vertices, an edge factor (0 center, 1 outline) and triangles. */
-function build(shape: DecalShape): { local: Float32Array; edge: Float32Array; index: number[] } {
+function build(shape: DecalShape): { local: Float32Array; edge: Float32Array; along: Float32Array; index: number[] } {
   const pts: number[] = [];
   const edge: number[] = [];
+  const along: number[] = [];
   const index: number[] = [];
+  // every shape's rows run from its origin (v = 0) to its far end (v = 1)
   const grid = (cols: number, rows: number, at: (u: number, v: number) => [number, number, number]) => {
     for (let r = 0; r <= rows; r++) {
       for (let c = 0; c <= cols; c++) {
         const [x, z, e] = at(c / cols, r / rows);
         pts.push(x, z);
         edge.push(e);
+        along.push(r / rows);
       }
     }
     for (let r = 0; r < rows; r++) {
@@ -179,5 +194,5 @@ function build(shape: DecalShape): { local: Float32Array; edge: Float32Array; in
       break;
     }
   }
-  return { local: new Float32Array(pts), edge: new Float32Array(edge), index };
+  return { local: new Float32Array(pts), edge: new Float32Array(edge), along: new Float32Array(along), index };
 }

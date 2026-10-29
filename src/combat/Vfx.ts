@@ -4,7 +4,8 @@ import {
 } from '../render/tsl';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
-import { isStructure, WORLD_SCALE, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
+import { isStructure, WORLD_SCALE, type Flash, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
+import { ArcView } from './Arcs';
 import { GroundDecal, type DecalShape } from './GroundDecal';
 import { paletteFor, paletteOf, type GodPalette } from './palette';
 
@@ -59,6 +60,9 @@ class ProjectileView {
   private readonly halo: THREE.Sprite;
   private readonly trail: THREE.Sprite[] = [];
   private readonly history: THREE.Vector3[] = [];
+  private readonly arc = new ArcView();
+  private lightning = false;
+  private crackle = 0;
   size = 1;
 
   constructor() {
@@ -70,7 +74,7 @@ class ProjectileView {
       this.trail.push(s);
       this.group.add(s);
     }
-    this.group.add(this.halo, this.coreSprite);
+    this.group.add(this.halo, this.coreSprite, this.arc.group);
     for (const o of [this.coreSprite, this.halo, ...this.trail]) {
       o.frustumCulled = false;
       o.renderOrder = 12;
@@ -81,6 +85,10 @@ class ProjectileView {
     this.main.value.setHex(p.vfx);
     this.hot.value.setHex(p.core);
     this.size = size;
+    this.lightning = p.element === 'lightning';
+    this.arc.setColors(p.vfx, p.core);
+    this.arc.clear();
+    this.crackle = 0;
     this.history.length = 0;
     for (let i = 0; i < TRAIL; i++) this.history.push(at.clone());
   }
@@ -100,6 +108,23 @@ class ProjectileView {
       s.position.lerpVectors(a, b, 0.5);
       s.scale.setScalar(this.size * 1.9 * (1 - i / TRAIL));
     });
+    if (this.lightning) this.crackleArcs(at, t);
+  }
+
+  /** Lightning shots crackle: fresh jagged arcs along the trail and off the head, many times a second. */
+  private crackleArcs(at: THREE.Vector3, t: number): void {
+    if (t - this.crackle < 0.045) return;
+    this.crackle = t;
+    const a = this.arc;
+    a.clear();
+    const tail = this.history[this.history.length - 1]!;
+    const w = Math.max(0.05, this.size * 0.14);
+    if (tail.distanceToSquared(at) > 0.01) a.bolt(at, tail, w, 0.35, 0.9, 3);
+    for (let i = 0; i < 2; i++) {
+      const r = this.size * (1.1 + Math.random());
+      const to = at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2 * r, (Math.random() - 0.5) * r, (Math.random() - 0.5) * 2 * r));
+      a.bolt(at, to, w * 0.6, 0.4, 0.6, 2);
+    }
   }
 }
 
@@ -113,9 +138,25 @@ class Burst {
   readonly power = uniform(1);
   life = 0.6;
   private readonly flash: THREE.Sprite;
+  /** Flat shockwave ring rolling out over the ground. */
+  private readonly ring: THREE.Mesh;
 
   constructor() {
     const fade = float(1).sub(this.age.div(0.6)).clamp(0, 1);
+    const rm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    const ringFade = float(1).sub(this.age.div(0.45)).clamp(0, 1);
+    const band = smoothstep(0, 0.5, uv().x).mul(smoothstep(1, 0.6, uv().x));
+    rm.colorNode = vec4(mix(this.main, this.hot, band.mul(0.5)).mul(float(2).add(band.mul(4))), 1);
+    rm.opacityNode = band.mul(ringFade.pow(1.4)).mul(0.9);
+    const rg = new THREE.RingGeometry(0.7, 1, 48, 1).rotateX(-Math.PI / 2);
+    // RingGeometry's uv is planar; rebuild u as the radial position across the band
+    const uvs = rg.getAttribute('uv') as THREE.BufferAttribute;
+    const ps = rg.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < ps.count; i++) uvs.setX(i, (Math.hypot(ps.getX(i), ps.getZ(i)) - 0.7) / 0.3);
+    this.ring = new THREE.Mesh(rg, rm);
+    this.ring.frustumCulled = false;
+    this.ring.renderOrder = 6;
+    this.group.add(this.ring);
     this.flash = new THREE.Sprite(glowMaterial(mix(this.main, this.hot, 0.3).mul(2.5), float(1), 1.8, false, fade.pow(1.5).mul(0.9)));
     this.flash.frustumCulled = false;
     this.group.add(this.flash);
@@ -149,8 +190,11 @@ class Burst {
     this.group.add(sparks);
   }
 
-  start(p: GodPalette, at: THREE.Vector3, power: number): void {
+  start(p: GodPalette, at: THREE.Vector3, power: number, groundY: number): void {
     this.group.position.copy(at);
+    // the ring only for hits near the ground and strong enough to shake it
+    this.ring.visible = power >= 0.75 && at.y - groundY < 2.5;
+    this.ring.position.y = groundY - at.y + 0.12;
     this.main.value.setHex(p.vfx);
     this.hot.value.setHex(p.core);
     this.seed.value = Math.random() * 100;
@@ -163,6 +207,8 @@ class Burst {
     this.age.value += dt;
     const k = Math.min(1, this.age.value / 0.18);
     this.flash.scale.setScalar((1.0 + k * 1.6) * this.power.value);
+    const r = 1 - (1 - Math.min(1, this.age.value / 0.45)) ** 3;
+    this.ring.scale.setScalar(0.3 + r * 2.6 * this.power.value);
     return this.age.value < this.life;
   }
 }
@@ -201,8 +247,24 @@ class ZoneView {
   }
 
   private readonly motes: THREE.Sprite;
+  private readonly arc = new ArcView();
+  private strikeAt = 0;
 
-  set(p: GodPalette, x: number, z: number, radius: number, fade: number, ground: Ground): void {
+  set(p: GodPalette, x: number, z: number, radius: number, fade: number, ground: Ground, t: number): void {
+    if (this.arc.group.parent !== this.group) this.group.add(this.arc.group);
+    this.arc.fade.value = fade * Math.max(0, 1 - (t - this.strikeAt) / 0.14);
+    // a lightning god's storm keeps striking somewhere inside it
+    if (p.element === 'lightning' && t - this.strikeAt > 0.22) {
+      this.strikeAt = t;
+      this.arc.setColors(p.vfx, p.core);
+      this.arc.clear();
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * radius * 0.85;
+      const sx = x + Math.sin(ang) * r;
+      const sz = z + Math.cos(ang) * r;
+      const top = new THREE.Vector3(sx + (Math.random() - 0.5) * 4, ground(sx, sz) + 16, sz + (Math.random() - 0.5) * 4);
+      this.arc.strike(top, new THREE.Vector3(sx, ground(sx, sz) + 0.1, sz), 0.4, 2, 0.12);
+    } else if (p.element !== 'lightning') this.arc.clear();
     this.decal.setColors(p.vfx, p.core);
     this.decal.opacity.value = fade;
     this.decal.place({ type: 'circle', radius }, x, z, 0);
@@ -216,10 +278,73 @@ class ZoneView {
 class FlashView {
   readonly group = new THREE.Group();
   readonly decal: GroundDecal;
-  constructor(ground: Ground) {
+  readonly arc = new ArcView();
+  lightning = false;
+  private struck = -1;
+  constructor(private readonly ground: Ground) {
     this.decal = new GroundDecal(ground);
     this.decal.setStyle('flash');
-    this.group.add(this.decal.mesh);
+    this.group.add(this.decal.mesh, this.arc.group);
+  }
+
+  reset(p: GodPalette): void {
+    this.decal.setColors(p.vfx, p.core);
+    this.lightning = p.element === 'lightning';
+    this.arc.setColors(p.vfx, p.core);
+    this.arc.clear();
+    this.struck = -1;
+  }
+
+  /** Lightning gods' shapes are struck by bolts, re-forked several times while the wave rolls out. */
+  update(f: Flash, wave: number, fade: number): void {
+    if (!this.lightning) return;
+    this.arc.fade.value = fade;
+    const step = Math.floor(f.age / 0.06);
+    if (step === this.struck || f.age > f.life * 0.6) return;
+    this.struck = step;
+    const a = this.arc;
+    a.clear();
+    const s = f.shape;
+    const g = (x: number, z: number) => this.ground(x, z);
+    const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    switch (s.type) {
+      case 'circle': {
+        const fromCaster = Math.hypot(f.owner.x - s.x, f.owner.z - s.z) < 1;
+        if (!fromCaster || s.radius < 6) {
+          // a bolt from the sky into the center
+          const top = v(s.x + (Math.random() - 0.5) * 3, g(s.x, s.z) + 18, s.z + (Math.random() - 0.5) * 3);
+          a.strike(top, v(s.x, g(s.x, s.z) + 0.1, s.z), Math.min(0.5, 0.18 + s.radius * 0.05), 3, 0.12);
+        }
+        // arcs racing over the ground out to the wave front
+        const n = s.radius > 8 ? 7 : 4;
+        const reach = Math.max(0.6, s.radius * wave);
+        for (let i = 0; i < n; i++) {
+          const ang = (i / n) * Math.PI * 2 + Math.random() * 0.8;
+          const x = s.x + Math.sin(ang) * reach;
+          const z = s.z + Math.cos(ang) * reach;
+          a.bolt(v(s.x, g(s.x, s.z) + 0.4, s.z), v(x, g(x, z) + 0.15, z), 0.12, 0.25, 0.7, 3);
+        }
+        break;
+      }
+      case 'line': {
+        const len = s.length * Math.max(0.15, wave);
+        const ex = s.x - Math.sin(s.yaw) * len;
+        const ez = s.z - Math.cos(s.yaw) * len;
+        a.strike(v(s.x, g(s.x, s.z) + 1.3, s.z), v(ex, g(ex, ez) + 1.0, ez), Math.min(0.45, s.width * 0.18), 4, 0.08);
+        break;
+      }
+      case 'cone': {
+        const half = (s.angle * Math.PI) / 360;
+        for (let i = 0; i < 4; i++) {
+          const ang = s.yaw + (Math.random() - 0.5) * 2 * half;
+          const r = s.range * Math.max(0.3, wave);
+          const x = s.x - Math.sin(ang) * r;
+          const z = s.z - Math.cos(ang) * r;
+          a.bolt(v(s.x, g(s.x, s.z) + 1.2, s.z), v(x, g(x, z) + 0.3, z), 0.16, 0.22, 0.8, 4);
+        }
+        break;
+      }
+    }
   }
 }
 
@@ -285,7 +410,7 @@ export class CombatVfx {
 
   burst(p: GodPalette, x: number, y: number, z: number, power = 1): void {
     const b = this.burstPool.take();
-    b.start(p, this.tmp.set(x, y, z), power);
+    b.start(p, this.tmp.set(x, y, z), power, this.ground(x, z));
     this.bursts.push(b);
   }
 
@@ -356,7 +481,7 @@ export class CombatVfx {
       }
       const fadeIn = Math.min(1, z.age / 0.25);
       const fadeOut = Math.min(1, Math.max(0, (z.duration + 0.4 - z.age) / 0.6));
-      v.set(paletteOf(z.owner), z.x, z.z, z.radius, fadeIn * fadeOut, this.ground);
+      v.set(paletteOf(z.owner), z.x, z.z, z.radius, fadeIn * fadeOut, this.ground, sim.time);
     }
     for (const [id, v] of this.zones) {
       if (live.has(id)) continue;
@@ -372,14 +497,18 @@ export class CombatVfx {
       let v = this.flashes.get(f.id);
       if (!v) {
         v = this.flashPool.take();
-        const p = paletteOf(f.owner);
-        v.decal.setColors(p.vfx, p.core);
+        v.reset(paletteOf(f.owner));
         const d = flashDecal(f.shape);
         v.decal.place(d.shape, d.x, d.z, d.yaw);
         this.flashes.set(f.id, v);
       }
-      const k = f.age / f.life;
-      v.decal.opacity.value = (1 - k) * (1 - k) * 1.4;
+      // the front sweeps out over the first half, then everything fades
+      const k = Math.min(1, f.age / f.life);
+      const wave = 1 - (1 - Math.min(1, k / 0.55)) ** 2;
+      const fade = k < 0.5 ? 1 : 1 - (k - 0.5) / 0.5;
+      v.decal.wave.value = wave;
+      v.decal.opacity.value = fade * 1.3;
+      v.update(f, wave, fade);
     }
     for (const [id, v] of this.flashes) {
       if (live.has(id)) continue;
