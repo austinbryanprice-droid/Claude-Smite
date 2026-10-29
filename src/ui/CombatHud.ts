@@ -78,7 +78,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
  */
 export class CombatHud {
   readonly root: HTMLDivElement;
-  private readonly slots: { tile: HTMLDivElement; icon: HTMLDivElement; cd: HTMLDivElement; cdText: HTMLSpanElement; cost: HTMLSpanElement; lock: HTMLSpanElement; skillId: string }[] = [];
+  private readonly slots: { tile: HTMLDivElement; icon: HTMLDivElement; cd: HTMLDivElement; cdText: HTMLSpanElement; cost: HTMLSpanElement; lock: HTMLSpanElement; skillId: string; wasCooling: boolean }[] = [];
   private readonly hpFill: HTMLDivElement;
   private readonly hpShield: HTMLDivElement;
   private readonly hpText: HTMLSpanElement;
@@ -151,7 +151,7 @@ export class CombatHud {
       el('span', 'ch-key', tile, SLOT_KEYS[i]);
       const cost = el('span', 'ch-cost', tile);
       const lock = el('span', 'ch-lock', tile);
-      this.slots.push({ tile, icon, cd, cdText, cost, lock, skillId: '' });
+      this.slots.push({ tile, icon, cd, cdText, cost, lock, skillId: '', wasCooling: false });
     }
     this.points = el('div', 'ch-points', frame);
 
@@ -347,6 +347,17 @@ export class CombatHud {
       const cost = locked ? 0 : c.resolveCost(i);
       slot.tile.classList.toggle('locked', locked);
       slot.tile.classList.toggle('cooling', cd > 0);
+      // a short glint the frame a skill comes off cooldown, so it reads without looking down
+      if (slot.wasCooling && cd <= 0 && !locked && p.alive) {
+        slot.tile.animate(
+          [
+            { boxShadow: '0 0 0 2px rgba(255, 236, 170, 1), 0 0 18px rgba(255, 220, 120, 0.9)', filter: 'brightness(1.8)' },
+            { boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)', filter: 'brightness(1)' },
+          ],
+          { duration: 450, easing: 'ease-out' },
+        );
+      }
+      slot.wasCooling = cd > 0;
       slot.tile.classList.toggle('nomana', !locked && cd <= 0 && c.mana < cost);
       slot.cd.style.background = cd > 0 ? `conic-gradient(rgba(5,5,10,0.78) ${(cd / total) * 360}deg, transparent 0)` : 'none';
       slot.cdText.textContent = cd > 0 ? (cd >= 1 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '';
