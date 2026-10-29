@@ -112,6 +112,9 @@ export class CombatHud {
   /** Ticks around the crosshair that flash when the player's damage lands. */
   private readonly hitmarker: HTMLElement;
   private hitAnim: Animation | null = null;
+  /** Red arcs around the crosshair pointing at whoever is hurting the player. */
+  private readonly hitDirBox: HTMLElement;
+  private readonly hitDirs = new Map<Unit, { el: HTMLElement; age: number; strength: number }>();
 
   constructor(
     private player: Unit,
@@ -122,6 +125,7 @@ export class CombatHud {
     this.vignette = el('div', 'ch-vignette', this.root);
     this.overlay = el('div', 'ch-overlay', this.root);
     this.hitmarker = el('div', 'ch-hitmarker', this.root, '<i></i><i></i><i></i><i></i>');
+    this.hitDirBox = el('div', 'ch-hitdirs', this.root);
 
     const frame = el('div', 'ch-frame', this.root);
     this.buffs = el('div', 'ch-buffs', frame);
@@ -210,7 +214,11 @@ export class CombatHud {
       case 'damage': {
         const mine = e.source === this.player || e.source?.owner === this.player;
         const onMe = e.target === this.player;
-        if (onMe) this.hurt = Math.min(1, this.hurt + 0.25 + (e.amount / this.player.combatant.stats.maxHealth) * 3);
+        if (onMe) {
+          const share = e.amount / this.player.combatant.stats.maxHealth;
+          this.hurt = Math.min(1, this.hurt + 0.25 + share * 3);
+          if (e.source && e.source !== this.player) this.markHitFrom(e.source, share);
+        }
         if (mine && !onMe) this.markHit(e.crit ? 'crit' : 'hit');
         if (!mine && !onMe) break;
         const cls = onMe ? 'taken' : e.crit ? 'crit' : e.ability ? 'ability' : 'basic';
@@ -258,6 +266,35 @@ export class CombatHud {
     );
   }
 
+  private markHitFrom(src: Unit, share: number): void {
+    let d = this.hitDirs.get(src);
+    if (!d) {
+      d = { el: el('div', 'ch-hitdir', this.hitDirBox), age: 0, strength: 0 };
+      this.hitDirs.set(src, d);
+    }
+    d.age = 0;
+    d.strength = Math.min(1, Math.max(d.strength * 0.6, 0) + 0.55 + share * 4);
+  }
+
+  /** Point each damage arc at its source, in camera space, and fade it out. */
+  private updateHitDirs(dt: number): void {
+    const p = this.player;
+    for (const [src, d] of this.hitDirs) {
+      d.age += dt;
+      const life = 1.3;
+      if (d.age >= life || !p.alive) {
+        d.el.remove();
+        this.hitDirs.delete(src);
+        continue;
+      }
+      // bearing from the player, not the camera, which trails a few units behind
+      this.v.set(src.x - p.x, 0, src.z - p.z).transformDirection(this.camera.matrixWorldInverse);
+      const angle = Math.atan2(this.v.x, -this.v.z);
+      d.el.style.transform = `rotate(${angle}rad)`;
+      d.el.style.opacity = `${d.strength * (1 - d.age / life)}`;
+    }
+  }
+
   private floater(u: Unit, html: string, cls: string): void {
     const pos = new THREE.Vector3();
     if (!this.headOf(u, pos)) pos.set(u.x, u.body.y + 2.6, u.z);
@@ -276,6 +313,7 @@ export class CombatHud {
     const low = p.alive ? Math.max(0, (35 - hpPct) / 35) : 0;
     const beat = low > 0 ? 0.75 + 0.25 * Math.sin(performance.now() / 180) : 0;
     this.vignette.style.opacity = `${Math.min(1, this.hurt * 0.9 + low * beat)}`;
+    this.updateHitDirs(dt);
     const shield = c.shieldTotal;
     this.hpFill.style.width = `${hpPct}%`;
     this.hpShield.style.left = `${hpPct}%`;

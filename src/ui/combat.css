@@ -146,3 +146,8 @@
 .ch-hitmarker i:nth-child(4) { transform: rotate(315deg) translateY(-11px); }
 .ch-hitmarker[data-kind='crit'] i { background: #ffd34a; width: 3px; }
 .ch-hitmarker[data-kind='kill'] i { background: #ff4a3a; width: 3px; height: 10px; }
+
+/* damage direction: an arc around the crosshair, rotated toward the attacker */
+.ch-hitdirs { position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 3; }
+.ch-hitdir { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
+.ch-hitdir::before { content: ''; position: absolute; left: -70px; top: -150px; width: 140px; height: 60px; border-radius: 50%; border-top: 7px solid rgba(255, 50, 30, 0.95); filter: drop-shadow(0 0 6px rgba(255, 30, 10, 0.8)); }
