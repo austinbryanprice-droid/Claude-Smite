@@ -96,7 +96,8 @@ export class Fountain {
     const flow = mx_noise_float(vec3(ju.x.mul(14).sub(time.mul(3.2)), ju.y.mul(2), 0)).mul(0.5).add(0.5);
     jetMat.colorNode = color(style.glow).mul(flow.mul(0.7).add(0.35)).mul(smoothstep(1.0, 0.75, ju.x)).mul(0.9);
     const rippleMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const rd = positionLocal.xz.length();
+    // from the circle's UVs: merging bakes each ripple's offset into its positions
+    const rd = uv().sub(0.5).length().mul(1.6);
     const wave = smoothstep(0.75, 1.0, fract(rd.mul(1.6).sub(time.mul(0.9))));
     rippleMat.colorNode = color(style.glow).mul(wave).mul(smoothstep(0.75, 0.2, rd)).mul(0.6);
     const jets = 8;
