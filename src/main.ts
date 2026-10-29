@@ -17,20 +17,40 @@ import { CombatGame } from './combat/CombatGame';
 import { GODS, godById } from './game/gods';
 import { showStartMenu, type StartChoice } from './ui/StartMenu';
 import { installErrorHandlers, showFatal } from './ui/Fatal';
+import { Announcer } from './audio/Announcer';
+import { AudioEngine } from './audio/AudioEngine';
+import { bakeAll } from './audio/bank';
+import { GameAudio } from './audio/GameAudio';
+import { Music } from './audio/music';
+import { installUiSounds, mountAudioPanel } from './ui/AudioPanel';
 
 async function main(): Promise<void> {
   installErrorHandlers();
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
-  const hud = new Hud((q) => void applyQuality(q));
+  let sensitivity = 1;
+  let applySensitivity = (v: number): void => {
+    sensitivity = v;
+  };
+  const hud = new Hud((q) => void applyQuality(q), (v) => applySensitivity(v));
   hud.progress(0.05, 'Starting renderer…');
 
   const params = new URLSearchParams(location.search);
+  // Sound starts with the first click or key press (browsers require a gesture);
+  // the bank renders in small slices while everything else loads.
+  const audio = new AudioEngine();
+  const music = new Music(audio);
+  const herald = new Announcer(audio);
+  mountAudioPanel(audio);
+  installUiSounds(audio);
+  const baked = bakeAll(audio);
+  (window as unknown as { __audio: unknown }).__audio = { audio, music, herald, baked };
   // Links with ?map= (and automated captures) skip the title screen.
   const skipMenu = params.has('map') || params.has('capture') || params.has('showcase');
   const rendering = createRenderer(document.body);
   const chosen: Promise<StartChoice> = skipMenu
     ? Promise.resolve({ mode: mapFromUrl(), god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
     : showStartMenu(GODS, rendering.then((r) => r.isWebGPU));
+  if (!skipMenu) music.play('hymn');
 
   const { renderer, isWebGPU } = await rendering;
   const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 3000);
@@ -49,6 +69,11 @@ async function main(): Promise<void> {
   const god = new GodModel();
   world.actors.add(god.root);
   const player = new PlayerController(input, world.collision, god);
+  const baseSensitivity = player.mouseSensitivity;
+  applySensitivity = (v) => {
+    player.mouseSensitivity = baseSensitivity * v;
+  };
+  applySensitivity(sensitivity);
   player.spawn(world.spawn.x, world.spawn.z, world.spawn.yaw);
   const follow = new ThirdPersonCamera(camera, player, world.collision);
   const showcase = params.has('showcase')
@@ -90,9 +115,12 @@ async function main(): Promise<void> {
   // Conquest plays a full match against bots; the arena is the training ground
   const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
+  void baked;
+  const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest');
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);
   follow.update(1 / 60);
+  hud.progress(0.9, 'Preparing shaders (the first load can take a minute)…');
   await renderer.compileAsync(world.scene, camera);
   hud.ready();
 
@@ -108,6 +136,7 @@ async function main(): Promise<void> {
     const dt = loop.tick(now);
     player.render(dt, loop.alpha);
     combat.frame(dt, loop.alpha, loop.time);
+    gameAudio.frame(dt);
     showcase?.update(dt);
     follow.update(dt);
     world.update(dt, loop.time, god.root.position);
@@ -143,7 +172,7 @@ async function main(): Promise<void> {
   };
 
   // Hooks for automated screenshots and for gameplay code during development.
-  const debug = { grading, combat, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
+  const debug = { grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
   (window as unknown as { __game: typeof debug }).__game = debug;
 }
 

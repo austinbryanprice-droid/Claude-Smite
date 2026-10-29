@@ -54,3 +54,9 @@ body:has(.mh-end.show) .hud-hint, body:has(.mh-end.show) .hud-crosshair { displa
 .fatal-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .fatal button, .sm-compat { font: inherit; color: inherit; cursor: pointer; padding: 8px 14px; background: rgba(231, 194, 122, 0.15); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 4px; }
 .sm-compat { padding: 4px 10px; font-size: 12px; margin-left: 8px; }
+.help-gap { margin-top: 16px !important; }
+.help-row { display: flex; align-items: center; gap: 10px; font-family: Georgia, serif; font-size: 14px; }
+.help-row input { flex: 1; accent-color: #e7c27a; }
+.help-sens-val { min-width: 44px; color: #ffe3a3; }
+.help-actions { display: flex; gap: 10px; margin-top: 14px; }
+.help-actions button { font: inherit; color: inherit; cursor: pointer; padding: 8px 16px; background: rgba(231, 194, 122, 0.15); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 4px; }

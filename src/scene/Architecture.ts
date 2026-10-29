@@ -79,7 +79,8 @@ export function brokenCap(radius: number, seed: number): THREE.BufferGeometry {
 
 /** Shaft whose top rim follows a broken profile matching `brokenCap`. */
 export function brokenShaft(radius: number, height: number, seed: number): THREE.BufferGeometry {
-  const geo = flutedShaft(radius, height, 20, 120, 20);
+  // four vertices per flute and a few rings are plenty: only the top edge is broken
+  const geo = flutedShaft(radius, height, 20, 80, 6);
   const n = simplex2(seed);
   const tilt = new THREE.Vector2(n(0.3, 0.7), n(1.1, 4.2)).multiplyScalar(0.25);
   const pos = geo.attributes.position as THREE.BufferAttribute;
@@ -120,8 +121,10 @@ export function roundedBox(w: number, h: number, d: number, radius: number): THR
  * A weathered stone block: rounded box with chipped corners and noise
  * displacement so no two blocks look machine-cut.
  */
-export function chippedBlock(w: number, h: number, d: number, seed: number, roughness = 0.035): THREE.BufferGeometry {
-  const geo = new THREE.BoxGeometry(w, h, d, 8, 5, 6);
+export function chippedBlock(
+  w: number, h: number, d: number, seed: number, roughness = 0.035, segments: [number, number, number] = [8, 5, 6],
+): THREE.BufferGeometry {
+  const geo = new THREE.BoxGeometry(w, h, d, ...segments);
   const n = simplex2(seed);
   const rand = rng(seed);
   const r = Math.min(w, h, d) * 0.12;
