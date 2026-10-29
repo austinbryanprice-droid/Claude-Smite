@@ -76,6 +76,8 @@ export class AudioEngine {
   private readonly settingsListeners: ((s: AudioSettings) => void)[] = [];
   private reverbIn!: GainNode;
   private readonly muffles: BiquadFilterNode[] = [];
+  private readonly airLoops = new Set<{ air: BiquadFilterNode; x: number; z: number }>();
+  private readonly airFrom = { x: 0, z: 0 };
   private musicDuck!: GainNode;
   private muffle = 0;
   private readonly raw = new Map<string, { data: Float32Array[]; loop: boolean }>();
@@ -337,6 +339,9 @@ export class AudioEngine {
     const { panner, air } = this.route(g, o);
     src.start(ctx.currentTime, Math.random() * buffer.duration);
     let alive = true;
+    // the air between loop and listener changes as either one moves
+    const spot = air && o.at ? { air, x: o.at.x, z: o.at.z } : null;
+    if (spot) this.airLoops.add(spot);
     return {
       get alive() {
         return alive;
@@ -344,7 +349,11 @@ export class AudioEngine {
       setPosition: (x, y, z) => {
         if (!panner || !alive) return;
         setPannerPos(panner, x, y, z, ctx.currentTime);
-        if (air) air.frequency.setTargetAtTime(airCutoff(this.distTo(x, z)), ctx.currentTime, 0.1);
+        if (spot) {
+          spot.x = x;
+          spot.z = z;
+          spot.air.frequency.setTargetAtTime(airCutoff(this.distTo(x, z)), ctx.currentTime, 0.1);
+        }
       },
       setGain: (v, ramp = 0.08) => {
         if (alive) g.gain.setTargetAtTime(v, ctx.currentTime, ramp);
@@ -355,6 +364,7 @@ export class AudioEngine {
       stop: (fade = 0.15) => {
         if (!alive) return;
         alive = false;
+        if (spot) this.airLoops.delete(spot);
         const t = ctx.currentTime;
         g.gain.cancelScheduledValues(t);
         g.gain.setValueAtTime(g.gain.value, t);
@@ -447,6 +457,12 @@ export class AudioEngine {
     if (!this.ctx) return;
     const l = this.ctx.listener;
     const t = this.ctx.currentTime;
+    // stationary loops (fountains, braziers) re-filter as the listener walks around them
+    if (Math.hypot(x - this.airFrom.x, z - this.airFrom.z) > 1) {
+      this.airFrom.x = x;
+      this.airFrom.z = z;
+      for (const a of this.airLoops) a.air.frequency.setTargetAtTime(airCutoff(this.distTo(a.x, a.z)), t, 0.2);
+    }
     const len = Math.hypot(fx, fz) || 1;
     if (l.positionX) {
       l.positionX.setTargetAtTime(x, t, 0.02);
