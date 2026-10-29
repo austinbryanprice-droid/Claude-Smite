@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
   abs, color, cos, dot, float, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
-  time, uv, vec3,
+  time, uniform, uv, vec3,
 } from '../../render/tsl';
 import { rng } from '../../core/random';
 import { ConquestLayout as L, type Camp, type CampKind } from '../../map/ConquestLayout';
@@ -13,7 +13,10 @@ import type { Terrain } from '../Terrain';
 import { mergeStatic } from '../structures/common';
 import type { ConquestTerrainDef } from './ConquestTerrain';
 
-const BUFF_COLOR: Partial<Record<CampKind, number>> = {
+const CAMP_LIGHT = 35;
+
+/** Glow color of each buff camp's crystal; combat matches its monsters to these. */
+export const BUFF_COLOR: Partial<Record<CampKind, number>> = {
   might: 0xff3b2a,
   wisdom: 0x3f8cff,
   swiftness: 0xffcf3a,
@@ -77,13 +80,13 @@ function lavaFloorMaterial(): THREE.MeshStandardNodeMaterial {
 }
 
 /** A rune crystal that spins in the vertex shader, so its group can stay frozen. */
-function spinningCrystal(glow: number): THREE.Mesh {
+function spinningCrystal(glow: number, strength: any): THREE.Mesh {
   const mat = new THREE.MeshBasicNodeMaterial();
   const a = time.mul(0.9);
   const p = positionLocal;
   const bob = sin(time.mul(1.7)).mul(0.12);
   mat.positionNode = vec3(p.x.mul(cos(a)).sub(p.z.mul(sin(a))), p.y.add(bob), p.x.mul(sin(a)).add(p.z.mul(cos(a))));
-  mat.colorNode = color(glow).mul(sin(time.mul(2.3)).mul(0.25).add(1.1)).mul(5);
+  mat.colorNode = color(glow).mul(sin(time.mul(2.3)).mul(0.25).add(1.1)).mul(5).mul(strength);
   const g = new THREE.OctahedronGeometry(0.42, 0);
   g.scale(1, 1.6, 1);
   return new THREE.Mesh(g, mat);
@@ -103,6 +106,8 @@ export class ConquestProps {
   private readonly rocks: THREE.BufferGeometry[];
   /** Weathered grey-green stone for the lane walls, cooler than the temple sandstone. */
   private readonly wallStone: THREE.MeshStandardNodeMaterial;
+  /** Each buff camp's crystal brightness and light, by camp id, for `setCampActive`. */
+  private readonly campGlow = new Map<string, { strength: any; light: THREE.PointLight }>();
 
   constructor(
     private readonly mats: MaterialLibrary,
@@ -125,6 +130,14 @@ export class ConquestProps {
       else this.buffCamp(c);
     }
     this.inst.build(this.group);
+  }
+
+  /** Dims a buff camp's crystal and light while its buff is taken, and relights it on respawn. */
+  setCampActive(campId: string, active: boolean): void {
+    const e = this.campGlow.get(campId);
+    if (!e) return;
+    e.strength.value = active ? 1 : 0.12;
+    e.light.intensity = active ? CAMP_LIGHT : CAMP_LIGHT * 0.1;
   }
 
   private ground(x: number, z: number): number {
@@ -253,10 +266,12 @@ export class ConquestProps {
       }
     }
     add(lathe([[0.001, 0], [1.5, 0], [1.5, 0.3], [1.25, 0.35], [1.1, 0.9], [1.3, 1.0], [0.001, 1.0]], 32), this.mats.sandstone, 0, -0.05, 0);
-    const crystal = spinningCrystal(glow);
+    const strength = uniform(1);
+    const crystal = spinningCrystal(glow, strength);
     crystal.position.y = 2.0;
     camp.add(crystal);
-    const light = new THREE.PointLight(glow, 35, 14, 2);
+    const light = new THREE.PointLight(glow, CAMP_LIGHT, 14, 2);
+    this.campGlow.set(c.id, { strength, light });
     light.position.y = 2.2;
     camp.add(light);
     this.lights.push(light);
@@ -327,14 +342,18 @@ export class ConquestProps {
     const r = this.rand;
     const R = L.radii.boss + 1.5;
     const basalt = this.mats.rock.clone();
-    basalt.colorNode = (this.mats.rock.colorNode as any).mul(vec3(0.32, 0.28, 0.27));
+    basalt.colorNode = (this.mats.rock.colorNode as any).mul(vec3(0.22, 0.19, 0.19));
+    // molten seams glow up from the spires' feet (pit space: y = 0 is the floor)
+    const seam = smoothstep(0.06, 0.0, abs(mx_noise_float(positionLocal.mul(vec3(0.9, 0.35, 0.9)))));
+    const heatUp = smoothstep(4.5, 0.0, positionLocal.y);
+    basalt.emissiveNode = mix(color(0xff2a04), color(0xff8a2a), heatUp).mul(seam.mul(heatUp).mul(4));
         for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2 + r() * 0.2;
       if (Math.cos(a) > 0.8 || Math.cos(a) < -0.8) continue;
       const x = Math.cos(a) * (R + r() * 1.5);
       const z = Math.sin(a) * (R + r() * 1.5);
       const spire = new THREE.Mesh(boulder(1.2, 7500 + i, 3), basalt);
-      spire.scale.set(1.2 + r() * 0.8, 4 + r() * 5, 1.2 + r() * 0.8);
+      spire.scale.set(1.1 + r() * 0.7, 6.5 + r() * 6, 1.1 + r() * 0.7);
       spire.position.set(x, -0.6, z);
       spire.rotation.set((r() - 0.5) * 0.3, r() * 6, (r() - 0.5) * 0.3);
       spire.castShadow = true;
@@ -352,7 +371,7 @@ export class ConquestProps {
     light.position.y = 2;
     pit.add(light);
     this.lights.push(light);
-    mergeStatic(pit);
+    mergeStatic(pit, [floor]);
     this.group.add(pit);
   }
 }

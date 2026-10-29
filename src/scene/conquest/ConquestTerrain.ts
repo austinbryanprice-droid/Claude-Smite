@@ -167,7 +167,9 @@ export function conquestTerrain(): ConquestTerrainDef {
       round: false,
       density: 0.6,
       maxHeight: 14,
-      reject: (x, z) => plaza.sample(x, z) < -0.5,
+      // no grass on the jungle wall tops: nobody walks there, the trees cover
+      // them, and sunlit tufts along the crests read as glowing fringes
+      reject: (x, z) => plaza.sample(x, z) < -0.5 || open.sample(x, z) < -3,
     },
   };
 }

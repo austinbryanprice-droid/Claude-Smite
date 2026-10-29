@@ -393,7 +393,7 @@ export class Foliage {
     // Fake subsurface: leaves glow when the sun is behind them.
     const viewDir = normalize(positionWorld.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
-    const back = pow(max(dot(viewDir, sun.negate()), float(0)), float(4)).mul(0.3).add(0.03);
+    const back = pow(max(dot(viewDir, sun), float(0)), float(4)).mul(0.3).add(0.03);
     mat.emissiveNode = col.mul(vec3(1.0, 0.92, 0.55)).mul(back).mul(shade);
     mat.name = 'leaves';
     return mat;

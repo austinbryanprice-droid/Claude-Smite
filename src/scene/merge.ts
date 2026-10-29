@@ -15,7 +15,7 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
   const visit = (o: THREE.Object3D) => {
     if (kept.has(o)) return;
     const m = o as THREE.Mesh;
-    if (m.isMesh && !Array.isArray(m.material) && (m as any).count === undefined) {
+    if (m.isMesh && !Array.isArray(m.material) && !(m as THREE.InstancedMesh).isInstancedMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) {
       const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(inv.clone().multiply(m.matrixWorld));
       let e = byMat.get(m.material);
       if (!e) byMat.set(m.material, (e = { geos: [], cast: false }));

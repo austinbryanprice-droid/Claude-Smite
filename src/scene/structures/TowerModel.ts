@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { rng } from '../../core/random';
 import type { Team } from '../../map/ConquestLayout';
+import { dot, mix, vec3 } from '../../render/tsl';
 import { columnCapital, flutedShaft, roundedBox } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
 import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
@@ -58,7 +59,12 @@ export class TowerModel implements StructureModel {
     this.seed = seed;
     const style = TEAM_STYLE[team];
     const tm = teamMats ?? new TeamMaterials(lib, style);
-    const { material: stone, damage } = crackedStone(lib.sandstone, style.glow);
+    // pale, sun-bleached limestone rather than orange sandstone, so the gold
+    // trim and team colors carry the tower
+    const limestone = lib.sandstone.clone() as THREE.MeshStandardNodeMaterial;
+    const sand = lib.sandstone.colorNode as any;
+    limestone.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.7).mul(vec3(1.08, 1.02, 0.92));
+    const { material: stone, damage } = crackedStone(limestone, style.glow);
     this.damage = damage;
     const add = (parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0) => {
       const mesh = new THREE.Mesh(g, m);
@@ -92,20 +98,24 @@ export class TowerModel implements StructureModel {
         p.rotation.set(sz * lean, 0, -sx * lean);
       }
     }
-    // Arrow-slit windows glowing faintly from inside.
-    for (const [x, z, ry] of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]] as const) {
-      const w = add(this.upper, new THREE.PlaneGeometry(0.28, 1.1), tm.crystal, x * (wt / 2 + 0.18), 5.0, z * (wt / 2 + 0.18));
-      w.rotation.y = ry;
-      w.castShadow = false;
+    // A glowing team frieze under the top band, studded with gold.
+    add(this.upper, frustum(wt + 0.12, wt + 0.1, y1 - 0.75, y1 - 0.55), tm.runes).castShadow = false;
+    for (const [x, z] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+      for (let i = -2; i <= 2; i++) {
+        const along = i * 0.55;
+        add(this.upper, new THREE.SphereGeometry(0.07, 8, 6), tm.trim, x * (wt / 2 + 0.1) + z * along, y1 - 0.65, z * (wt / 2 + 0.1) + x * along).castShadow = false;
+      }
     }
 
-    // Banners front and back, hanging just off the tapered faces.
-    for (const sz of [1, -1]) {
-      const g = new THREE.PlaneGeometry(1.5, 3.2, 4, 10);
-      g.translate(0, -1.6, 0);
-      const b = add(this.upper, g, tm.banner, 0, 5.95, sz * (wt / 2 + 0.22));
-      b.rotation.set(sz * lean, sz > 0 ? 0 : Math.PI, 0);
-      const rod = add(this.upper, new THREE.CylinderGeometry(0.05, 0.05, 1.8, 8).rotateZ(Math.PI / 2), tm.trim, 0, 5.98, sz * (wt / 2 + 0.24));
+    // Team banners on all four faces, hanging just off the taper.
+    for (const [x, z] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+      const g = new THREE.PlaneGeometry(1.4, 3.0, 4, 10);
+      g.translate(0, -1.5, 0);
+      const b = add(this.upper, g, tm.banner, x * (wt / 2 + 0.22), 5.55, z * (wt / 2 + 0.22));
+      // yaw to face outward, then lean back with the tapered wall
+      b.rotation.set(-lean, Math.atan2(x, z), 0, 'YXZ');
+      const rod = add(this.upper, new THREE.CylinderGeometry(0.05, 0.05, 1.7, 8).rotateZ(Math.PI / 2), tm.trim, x * (wt / 2 + 0.24), 5.58, z * (wt / 2 + 0.24));
+      rod.rotation.y = Math.atan2(x, z);
       rod.castShadow = false;
     }
 

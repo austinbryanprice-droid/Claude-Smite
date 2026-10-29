@@ -3,7 +3,7 @@ import { GodModel, type LocomotionState } from '../../actors/GodModel';
 import type { Team } from '../../map/ConquestLayout';
 import { lathe } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
-import { clamp01, crackedStone, ease, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
 import type { StructureModel } from './TowerModel';
 
 /** Seconds from `attack()` to the moment the slam lands. */
@@ -84,6 +84,7 @@ export class TitanModel implements StructureModel {
     this.rubble = new Rubble(6.5, 30, [marble, lib.marble, lib.bronze], 700);
     this.rubble.group.position.y = DAIS_TOP;
     this.root.add(this.rubble.group);
+    mergeStatic(this.root, [this.body, this.shield, this.rubble.group]);
   }
 
   setShielded(on: boolean): void {

@@ -86,8 +86,9 @@ export function shieldMesh(radius: number, height: number, glow: number): THREE.
   const fres = pow(float(1).sub(abs(dot(normalView, viewDir))), float(2.5));
   const bands = sin(positionLocal.y.mul(5).sub(time.mul(2.5))).mul(0.5).add(0.5);
   const hex = mx_noise_float(positionLocal.mul(2.2).add(vec3(0, time.mul(0.4), 0))).mul(0.5).add(0.5);
-  const a = fres.mul(0.9).add(bands.mul(0.05)).add(smoothstep(0.62, 0.7, hex).mul(0.08));
-  mat.colorNode = color(glow).mul(a).mul(2.2);
+  // a faint rim and drifting hex sparkle, so the structure inside stays readable
+  const a = fres.mul(0.55).add(bands.mul(0.02)).add(smoothstep(0.64, 0.7, hex).mul(0.05));
+  mat.colorNode = color(glow).mul(a).mul(1.1);
   const geo = new THREE.SphereGeometry(1, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
   geo.scale(radius, height, radius);
   const m = new THREE.Mesh(geo, mat);

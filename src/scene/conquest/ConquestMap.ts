@@ -63,6 +63,7 @@ export class ConquestMap implements MapContent {
    */
   readonly structures = new Map<string, StructureModel>();
   private readonly fountains: Fountain[] = [];
+  private readonly props: ConquestProps;
 
   constructor(
     readonly materials: MaterialLibrary,
@@ -75,9 +76,9 @@ export class ConquestMap implements MapContent {
     this.foliage = new Foliage(materials.textures, sunDirection);
     this.group.add(this.foliage.group);
     this.buildStructures();
-    const props = new ConquestProps(materials, terrain, collision, def);
-    this.group.add(props.group);
-    this.fires.push(...props.fires);
+    this.props = new ConquestProps(materials, terrain, collision, def);
+    this.group.add(this.props.group);
+    this.fires.push(...this.props.fires);
     for (const g of [this.dynamic, this.group]) g.traverse((o) => {
       if ((o as THREE.PointLight).isPointLight) this.lights.push(o as THREE.PointLight);
     });
@@ -112,6 +113,11 @@ export class ConquestMap implements MapContent {
       this.fires.push(...f.fires);
       this.group.add(f.group);
     }
+  }
+
+  /** Dims a buff camp's crystal while its buff is taken; camp ids come from `ConquestLayout.camps`. */
+  setCampActive(campId: string, active: boolean): void {
+    this.props.setCampActive(campId, active);
   }
 
   applyQuality(q: QualitySettings): void {
