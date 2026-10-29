@@ -23,6 +23,7 @@ import { paletteFor } from './palette';
 import type { StructureModel } from './structures';
 import { UnitViews } from './UnitViews';
 import { BuffAuras } from './BuffAuras';
+import { monsterWarmup } from './MonsterViews';
 import { CombatVfx } from './Vfx';
 
 const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'] as const;
@@ -70,6 +71,8 @@ export class CombatGame implements Updatable {
   private readonly views: UnitViews;
   private readonly vfx: CombatVfx;
   private readonly auras = new BuffAuras();
+  /** Monsters drawn out of sight for the first frames, so their shaders compile during loading. */
+  private warm: { group: THREE.Group; frames: number } | null = null;
   private setCampActive: ((id: string, active: boolean) => void) | null = null;
   private readonly campLit = new Map<string, boolean>();
   private readonly hud: CombatHud;
@@ -166,6 +169,8 @@ export class CombatGame implements Updatable {
       this.match = new Match(this.sim, godById('zeus')!);
       // build the bots' jungle paths while the map loads, not mid-match
       this.match.nav.warm();
+      // and compile the jungle's shaders now, not when the first camp grows
+      this.warmup(world.actors);
       this.match.addGod(this.player);
       this.addTeam('order', GODS.filter((g) => g.id !== mine.id), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
       this.addTeam('chaos', GODS, ROLES, [0, 1, 2, 3, 4]);
@@ -185,6 +190,21 @@ export class CombatGame implements Updatable {
     this.sim.add(this.bot);
     this.sim.teleport(this.bot, 0, -24, Math.PI);
     this.sim.drainEvents();
+  }
+
+  /**
+   * Draw one of every monster far below the map for the first few frames.
+   * Culling is off so they are drawn (and their pipelines built) even though
+   * nothing on screen shows them; the loader's shader pre-compile picks them up too.
+   */
+  private warmup(parent: THREE.Object3D): void {
+    if (!this.match) return;
+    const group = new THREE.Group();
+    group.position.y = -500;
+    for (const root of monsterWarmup()) group.add(root);
+    group.traverse((o) => (o.frustumCulled = false));
+    parent.add(group);
+    this.warm = { group, frames: 3 };
   }
 
   private addTeam(team: 'order' | 'chaos', gods: readonly GodDef[], roles: readonly BotRole[], spots: readonly number[]): void {
@@ -230,6 +250,10 @@ export class CombatGame implements Updatable {
 
   frame(dt: number, alpha: number, time: number): void {
     const input = this.deps.input;
+    if (this.warm && --this.warm.frames <= 0) {
+      this.warm.group.removeFromParent();
+      this.warm = null;
+    }
     this.updateAim();
 
     if (input.wasPressed('KeyK')) this.toggleMenu();
