@@ -4,7 +4,7 @@ import type { Team } from '../../map/ConquestLayout';
 import { dot, mix, vec3 } from '../../render/tsl';
 import { columnCapital, flutedShaft, roundedBox } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
-import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
 
 /** What every structure view exposes to the combat code. */
 export interface StructureModel {
@@ -75,9 +75,10 @@ export class TowerModel implements StructureModel {
       return mesh;
     };
     this.root.name = `tower-${team}`;
+    const marble = agedMarble(lib);
 
     // Plinth: two stepped slabs.
-    add(this.root, roundedBox(5.6, 0.5, 5.6, 0.08), lib.marble, 0, 0.25);
+    add(this.root, roundedBox(5.6, 0.5, 5.6, 0.08), marble, 0, 0.25);
     add(this.root, roundedBox(4.7, 0.42, 4.7, 0.06), stone, 0, 0.71);
     this.root.add(this.upper);
 
@@ -94,7 +95,7 @@ export class TowerModel implements StructureModel {
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
         const half = (wb + wt) / 4 + 0.05;
-        const p = add(this.upper, roundedBox(0.42, y1 - y0 + 0.1, 0.42, 0.05), lib.marble, sx * half, (y0 + y1) / 2, sz * half);
+        const p = add(this.upper, roundedBox(0.42, y1 - y0 + 0.1, 0.42, 0.05), marble, sx * half, (y0 + y1) / 2, sz * half);
         p.rotation.set(sz * lean, 0, -sx * lean);
       }
     }
@@ -120,18 +121,18 @@ export class TowerModel implements StructureModel {
     }
 
     // Crown: slab, four columns, entablature and pyramid roof.
-    add(this.upper, roundedBox(4.5, 0.45, 4.5, 0.06), lib.marble, 0, y1 + 0.22);
+    add(this.upper, roundedBox(4.5, 0.45, 4.5, 0.06), marble, 0, y1 + 0.22);
     const colH = 2.5;
     const cy = y1 + 0.45;
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        add(this.upper, flutedShaft(0.2, colH, 12, 36, 6), lib.marble, sx * 1.75, cy, sz * 1.75);
+        add(this.upper, flutedShaft(0.2, colH, 12, 36, 6), marble, sx * 1.75, cy, sz * 1.75);
         const cap = add(this.upper, columnCapital(0.2), tm.trim, sx * 1.75, cy + colH - 0.05, sz * 1.75);
         cap.scale.setScalar(1.1);
       }
     }
     const top = cy + colH + 0.45;
-    add(this.upper, roundedBox(4.6, 0.4, 4.6, 0.06), lib.marble, 0, top - 0.2);
+    add(this.upper, roundedBox(4.6, 0.4, 4.6, 0.06), marble, 0, top - 0.2);
     add(this.upper, frustum(4.75, 4.7, top - 0.02, top + 0.16), tm.trim);
     const roof = new THREE.ConeGeometry(3.25, 2.1, 4, 1);
     roof.rotateY(Math.PI / 4);
@@ -154,7 +155,7 @@ export class TowerModel implements StructureModel {
 
     this.shield = shieldMesh(4.4, this.height + 1, style.glow);
     this.root.add(this.shield);
-    this.rubble = new Rubble(4.2, 22, [stone, lib.marble, lib.sandstone], 300 + seed);
+    this.rubble = new Rubble(4.2, 22, [stone, marble, lib.sandstone], 300 + seed);
     this.root.add(this.rubble.group);
     mergeStatic(this.upper, [this.crystal]);
     mergeStatic(this.root, [this.upper, this.shield, this.rubble.group]);

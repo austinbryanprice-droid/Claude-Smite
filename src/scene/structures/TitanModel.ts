@@ -3,7 +3,7 @@ import { GodModel, type LocomotionState } from '../../actors/GodModel';
 import type { Team } from '../../map/ConquestLayout';
 import { lathe } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
-import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
 import type { StructureModel } from './TowerModel';
 
 /** Seconds from `attack()` to the moment the slam lands. */
@@ -33,13 +33,13 @@ export class TitanModel implements StructureModel {
   constructor(lib: MaterialLibrary, team: Team, teamMats?: TeamMaterials) {
     const style = TEAM_STYLE[team];
     const tm = teamMats ?? new TeamMaterials(lib, style);
-    const { material: marble, damage } = crackedStone(lib.marble, style.glow);
+    const { material: marble, damage } = crackedStone(agedMarble(lib), style.glow);
     this.damage = damage;
     this.root.name = `titan-${team}`;
 
     const dais = new THREE.Mesh(lathe([
       [0.001, 0], [7.2, 0], [7.2, 0.35], [6.6, 0.35], [6.6, 0.7], [6.0, 0.7], [6.0, DAIS_TOP], [0.001, DAIS_TOP],
-    ], 96), lib.marble);
+    ], 96), agedMarble(lib));
     dais.castShadow = true;
     dais.receiveShadow = true;
     this.root.add(dais);
@@ -81,7 +81,7 @@ export class TitanModel implements StructureModel {
     this.root.add(this.light);
     this.shield = shieldMesh(7.6, this.height + 1.5, style.glow);
     this.root.add(this.shield);
-    this.rubble = new Rubble(6.5, 30, [marble, lib.marble, lib.bronze], 700);
+    this.rubble = new Rubble(6.5, 30, [marble, agedMarble(lib), lib.bronze], 700);
     this.rubble.group.position.y = DAIS_TOP;
     this.root.add(this.rubble.group);
     mergeStatic(this.root, [this.body, this.shield, this.rubble.group]);
