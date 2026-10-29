@@ -124,6 +124,7 @@ export class ConquestMap implements MapContent {
 
   applyQuality(q: QualitySettings): void {
     const density = q.name === 'low' ? 0.45 : q.name === 'medium' ? 0.7 : 1;
+    this.foliage.shadowDistance = q.shadowDistance;
     this.foliage.drawDistance = q.name === 'low' ? 110 : q.name === 'medium' ? 150 : q.name === 'high' ? 200 : 260;
     this.foliage.setInstances(this.placeFoliage(density));
   }
