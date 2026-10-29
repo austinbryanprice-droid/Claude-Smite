@@ -42,6 +42,14 @@ describe.each(GODS.map((g) => [g.name, g] as const))('%s data', (_, god) => {
         for (const e of node.effects) if (e.type === 'skill') expect(ids.has(e.skill), `${node.id} -> ${e.skill}`).toBe(true);
   });
 
+  it('fills a 3-3-3-1 talent grid, with each keystone gated on a tier-3 node', () => {
+    for (const tree of god.trees) {
+      expect([1, 2, 3, 4].map((t) => tree.nodes.filter((n) => n.tier === t).length)).toEqual([3, 3, 3, 1]);
+      const key = tree.nodes.find((n) => n.tier === 4)!;
+      expect(tree.nodes.find((n) => n.id === key.requires)?.tier).toBe(3);
+    }
+  });
+
   it('has unique node ids across its trees', () => {
     const ids = god.trees.flatMap((t) => t.nodes.map((n) => n.id));
     expect(new Set(ids).size).toBe(ids.length);

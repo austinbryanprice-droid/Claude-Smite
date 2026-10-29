@@ -46,22 +46,32 @@ export class Fountain {
     inlay.alphaTest = 0.5;
     add(new THREE.RingGeometry(R - 0.32, R - 0.2, 160).rotateX(-Math.PI / 2), inlay, 0, 0.625).castShadow = false;
 
-    // Water: deep team-tinted pool with drifting ripples and a glowing core.
+    // Water: deep team-tinted pool with drifting ripples and a glowing core,
+    // a stylized caustic web on top and a pale shallow band with foam at the rim.
     const water = new THREE.MeshStandardNodeMaterial();
     const p = positionWorld.xz;
     const r1 = mx_noise_float(vec3(p.mul(0.6), time.mul(0.35)));
     const r2 = mx_noise_float(vec3(p.mul(1.7).add(9), time.mul(0.6)));
-    const nrm = normalize(vec3(r1.mul(0.12).add(r2.mul(0.06)), 1, r2.mul(0.12).sub(r1.mul(0.06))));
+    const nrm = normalize(vec3(r1.mul(0.18).add(r2.mul(0.09)), 1, r2.mul(0.18).sub(r1.mul(0.09))));
     water.normalNode = transformNormalToView(nrm);
     const d = uv().sub(0.5).length().mul(2);
     const viewDir = normalize(positionView.negate());
     const fres = pow(float(1).sub(abs(dot(transformNormalToView(nrm), viewDir))), float(3));
-    const deep = mix(color(style.glow).mul(0.5), color(0x06141f), smoothstep(0.0, 1.0, d));
+    const glow = color(style.glow);
+    const shallow = smoothstep(0.8, 0.98, d);
+    const deep = mix(mix(glow.mul(0.5), color(0x06141f), smoothstep(0.0, 0.8, d)), glow.mul(0.45).add(0.06), shallow);
     water.colorNode = deep;
     water.roughnessNode = float(0.04);
     water.metalnessNode = float(0);
-    const caustic = smoothstep(0.55, 0.9, mx_noise_float(vec3(p.mul(0.9), time.mul(0.5))).mul(0.5).add(0.5));
-    water.emissiveNode = color(style.glow).mul(float(1).sub(d).mul(0.9).add(caustic.mul(0.25)).add(fres.mul(0.2))).mul(0.9);
+    // caustics: the zero crossings of two drifting noise fields make a thin bright web
+    const c1 = smoothstep(0.92, 1.0, float(1).sub(abs(mx_noise_float(vec3(p.mul(0.75), time.mul(0.45))))));
+    const c2 = smoothstep(0.92, 1.0, float(1).sub(abs(mx_noise_float(vec3(p.mul(1.3).add(4), time.mul(0.6).add(2))))));
+    const caustic = c1.max(c2.mul(0.7));
+    // a wavering line of foam just inside the rim
+    const foam = smoothstep(0.025, 0.0, abs(d.sub(0.955).sub(r2.mul(0.015)))).mul(r1.mul(0.4).add(0.7));
+    water.emissiveNode = glow.mul(float(1).sub(d).mul(0.9).add(fres.mul(0.2))).mul(0.9)
+      .add(glow.mul(0.6).add(0.25).mul(caustic.mul(0.45)))
+      .add(vec3(0.75, 0.9, 1.0).mul(foam.mul(0.6)));
     const pool = new THREE.Mesh(new THREE.CircleGeometry(R - 0.55, 96).rotateX(-Math.PI / 2), water);
     pool.position.y = 0.4;
     pool.receiveShadow = true;

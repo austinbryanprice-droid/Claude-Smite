@@ -11,6 +11,7 @@ export type AllocationError =
   | 'maxRank'
   | 'noPoints'
   | 'tierLocked'
+  | 'needsPrereq'
   | 'notAllocated'
   | 'wouldBreakTier';
 
@@ -39,7 +40,14 @@ export function pointsInTree(index: TreeIndex, alloc: Allocation, treeId: string
   return total;
 }
 
-/** Every allocated node's tier requirement is met by points in lower tiers of its tree. */
+/** True when the node has no prerequisite, or that prerequisite is maxed. */
+export function prereqMet(index: TreeIndex, alloc: Allocation, node: TreeNode): boolean {
+  if (!node.requires) return true;
+  const req = index.node.get(node.requires);
+  return !!req && (alloc[node.requires] ?? 0) >= req.node.maxRank;
+}
+
+/** Every allocated node's tier requirement and prerequisite are met. */
 export function isValidAllocation(index: TreeIndex, alloc: Allocation, budget: number): boolean {
   if (pointsSpent(alloc) > budget) return false;
   for (const [id, r] of Object.entries(alloc)) {
@@ -48,6 +56,7 @@ export function isValidAllocation(index: TreeIndex, alloc: Allocation, budget: n
     if (!entry || r < 0 || r > entry.node.maxRank) return false;
     const need = TIER_REQUIREMENT[entry.node.tier];
     if (pointsInTree(index, alloc, entry.tree.id, entry.node.tier) < need) return false;
+    if (!prereqMet(index, alloc, entry.node)) return false;
   }
   return true;
 }
@@ -66,6 +75,7 @@ export function addPoint(
   if (pointsInTree(index, alloc, entry.tree.id, entry.node.tier) < TIER_REQUIREMENT[entry.node.tier]) {
     return { ok: false, error: 'tierLocked' };
   }
+  if (!prereqMet(index, alloc, entry.node)) return { ok: false, error: 'needsPrereq' };
   return { ok: true, alloc: { ...alloc, [nodeId]: rank + 1 } };
 }
 

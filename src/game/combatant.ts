@@ -162,6 +162,17 @@ export class Combatant {
     return null;
   }
 
+  /** Refunds every point, or just one tree's. A respec, so base only. */
+  resetTrees(treeId?: string): 'notInBase' | null {
+    if (!this.inBase) return 'notInBase';
+    const keep: Record<string, number> = {};
+    if (treeId) {
+      for (const [id, r] of Object.entries(this.allocation)) if (this.trees.node.get(id)?.tree.id !== treeId) keep[id] = r;
+    }
+    this.setAllocation(keep);
+    return null;
+  }
+
   swap(slot: number, skillId: string): LoadoutError | null {
     const r = swapSkill(this.god, this.loadout, slot, skillId, this.inBase);
     if (!r.ok) return r.error;

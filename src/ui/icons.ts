@@ -1,5 +1,5 @@
 import { hex, paletteFor } from '../combat/palette';
-import type { SkillDef } from '../game/types';
+import type { Keystone, SkillDef, StatKey, TreeNode } from '../game/types';
 
 /**
  * Procedural skill icons: a glyph for what the skill does, drawn over a
@@ -55,6 +55,13 @@ const GLYPHS = {
   skull: '<path d="M32 6 C16 6 10 18 10 28 C10 36 16 40 18 42 V52 H46 V42 C48 40 54 36 54 28 C54 18 48 6 32 6 Z"/><circle cx="23" cy="28" r="6" fill="#07060a" stroke="none"/><circle cx="41" cy="28" r="6" fill="#07060a" stroke="none"/><path d="M26 52 V58 M32 52 V58 M38 52 V58" stroke-width="3"/>',
   poison: '<path d="M26 4 L32 30 H20 Z"/><path d="M14 32 H38" stroke-width="5" stroke-linecap="round"/><path d="M26 34 V46" stroke-width="5" stroke-linecap="round"/><path d="M46 30 C46 30 38 42 38 48 A8 8 0 0 0 54 48 C54 42 46 30 46 30 Z"/>',
   anvil: '<path d="M8 18 H48 Q58 18 58 26 H44 L40 34 H24 L20 26 H8 Z"/><path d="M22 34 H42 L46 52 H18 Z"/>',
+  // talent glyphs for stat nodes
+  sword: '<path d="M44 6 H58 V20 L26 46 L18 38 Z"/><path d="M12 36 L28 52" stroke-width="5" stroke-linecap="round"/><path d="M18 46 L8 56" stroke-width="6" stroke-linecap="round"/>',
+  star: '<path d="M32 4 L38 24 H58 L42 36 L48 56 L32 44 L16 56 L22 36 L6 24 H26 Z"/>',
+  heart: '<path d="M32 56 C10 40 6 28 10 18 C14 8 28 8 32 20 C36 8 50 8 54 18 C58 28 54 40 32 56 Z"/>',
+  drop: '<path d="M32 6 C32 6 14 30 14 40 A18 18 0 0 0 50 40 C50 30 32 6 32 6 Z"/>',
+  target: '<circle cx="32" cy="32" r="21" stroke-width="4" fill="none"/><circle cx="32" cy="32" r="11" stroke-width="4" fill="none"/><circle cx="32" cy="32" r="4"/><path d="M32 2 V14 M32 50 V62 M2 32 H14 M50 32 H62" stroke-width="3"/>',
+  hourglass: '<path d="M16 6 H48 M16 58 H48" stroke-width="5" stroke-linecap="round"/><path d="M20 8 H44 L34 32 L44 56 H20 L30 32 Z" stroke-width="3" fill="none"/><path d="M24 54 H40 L32 42 Z M26 14 H38 L32 24 Z"/>',
 } as const;
 
 /** Themed glyphs by skill name, first match wins; the rest fall back to their targeting shape. */
@@ -119,16 +126,68 @@ export function glyphFor(skill: SkillDef): Glyph {
 
 export function skillIcon(godId: string, skill: SkillDef): string {
   const p = paletteFor(godId);
+  return iconSvg(hex(p.vfx), hex(p.core), glyphFor(skill), skill.kind === 'ultimate');
+}
+
+const STAT_GLYPHS: Partial<Record<StatKey, Glyph>> = {
+  strength: 'sword',
+  intelligence: 'star',
+  maxHealth: 'heart',
+  healthRegen: 'heal',
+  maxMana: 'orb',
+  manaRegen: 'orb',
+  physicalProtection: 'shield',
+  magicalProtection: 'shield',
+  damageReduction: 'anvil',
+  ccReduction: 'chain',
+  cooldownReduction: 'hourglass',
+  critChance: 'target',
+  lifesteal: 'drop',
+  damageBonus: 'nova',
+  bonusAttackSpeed: 'spin',
+  bonusMoveSpeed: 'dash',
+  physicalPenFlat: 'line',
+  physicalPenPct: 'line',
+  magicalPenFlat: 'line',
+  magicalPenPct: 'line',
+};
+
+const KEYSTONE_GLYPHS: Record<Keystone['type'], Glyph> = {
+  stackingDamage: 'buff',
+  empoweredBasicAfterSkill: 'sword',
+  executeBelow: 'skull',
+  shieldOnHardCC: 'shield',
+  auraProtection: 'ally',
+  abilityLifesteal: 'drop',
+  speedOnTakedown: 'wings',
+  ultimateRefundOnTakedown: 'hourglass',
+};
+
+/**
+ * Talent icons: nodes that tune a skill wear that skill's icon, stat nodes a
+ * stat glyph in the tree's accent color, and keystones a gold frame.
+ */
+export function talentIcon(godId: string, node: TreeNode, skills: readonly SkillDef[], accent: string): string {
+  const first = node.effects[0];
+  if (first?.type === 'skill') {
+    const skill = skills.find((s) => s.id === first.skill);
+    if (skill) return skillIcon(godId, { ...skill, kind: 'regular' });
+  }
+  if (first?.type === 'keystone') return iconSvg('#ffb43a', '#fff4cf', KEYSTONE_GLYPHS[first.keystone.type] ?? 'crown', true);
+  const glyph = (first?.type === 'stat' && STAT_GLYPHS[first.stat]) || 'buff';
+  return iconSvg(accent, '#fff6e2', glyph, false);
+}
+
+function iconSvg(vfx: string, core: string, glyph: Glyph, gold: boolean): string {
   const id = `g${Math.random().toString(36).slice(2, 8)}`;
-  const ult = skill.kind === 'ultimate';
-  const frame = ult
+  const frame = gold
     ? `<rect x="2" y="2" width="60" height="60" rx="8" fill="none" stroke="url(#${id}f)" stroke-width="4"/>`
     : `<rect x="1.5" y="1.5" width="61" height="61" rx="8" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>`;
   return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <defs>
       <radialGradient id="${id}b" cx="50%" cy="42%" r="70%">
-        <stop offset="0" stop-color="${hex(p.vfx)}" stop-opacity="0.95"/>
-        <stop offset="0.55" stop-color="${hex(p.vfx)}" stop-opacity="0.35"/>
+        <stop offset="0" stop-color="${vfx}" stop-opacity="0.95"/>
+        <stop offset="0.55" stop-color="${vfx}" stop-opacity="0.35"/>
         <stop offset="1" stop-color="#07060a"/>
       </radialGradient>
       <linearGradient id="${id}f" x1="0" y1="0" x2="1" y2="1">
@@ -140,7 +199,7 @@ export function skillIcon(godId: string, skill: SkillDef): string {
       </filter>
     </defs>
     <rect width="64" height="64" rx="9" fill="url(#${id}b)"/>
-    <g fill="${hex(p.core)}" stroke="${hex(p.core)}" filter="url(#${id}g)">${GLYPHS[glyphFor(skill)]}</g>
+    <g fill="${core}" stroke="${core}" filter="url(#${id}g)">${GLYPHS[glyph]}</g>
     ${frame}
   </svg>`;
 }

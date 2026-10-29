@@ -157,7 +157,9 @@ export function agedMarble(lib: MaterialLibrary): THREE.MeshStandardNodeMaterial
     m = lib.marble.clone() as THREE.MeshStandardNodeMaterial;
     const base = lib.marble.colorNode as any;
     const grime = mx_noise_float(positionWorld.mul(0.9)).mul(0.5).add(0.5);
-    m.colorNode = base.mul(vec3(0.8, 0.76, 0.68)).mul(mix(float(0.82), float(1.0), grime));
+    // weathered, warm and a step darker than fresh marble, so it doesn't glare
+    // white under the sun the way polished stone would
+    m.colorNode = base.mul(vec3(0.66, 0.63, 0.58)).mul(mix(float(0.78), float(1.0), grime));
     aged.set(lib, m);
   }
   return m;

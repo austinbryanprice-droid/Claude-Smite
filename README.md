@@ -38,4 +38,6 @@ npm run build
 
 URL options: `?map=conquest` or `?map=arena` skip the title screen (`&god=thor` picks the god), `?quality=low|medium|high|ultra`, `?webgl` forces WebGL 2.
 
+The title screen's god face cards are baked from the real models into `public/portraits/` by `node tools/portraits/bake.mjs` (needs Playwright and a running `vite preview`); re-run it after god model changes.
+
 Design notes are in `docs/design.md`.

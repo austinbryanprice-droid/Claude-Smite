@@ -13,8 +13,8 @@ export interface StartChoice {
 const STORAGE_KEY = 'ascendant.start';
 
 const MODES: { id: GameMode; name: string; text: string }[] = [
-  { id: 'conquest', name: 'Conquest', text: '5v5 against bots on the three-lane map. Destroy the enemy Titan to win. About 15–20 minutes.' },
-  { id: 'arena', name: 'Training ground', text: 'The temple with training posts and one enemy Thor. Free god swaps and level shortcuts in the K menu.' },
+  { id: 'conquest', name: 'Conquest', text: '5v5 against bots. Destroy the enemy Titan to win. About 15–20 minutes.' },
+  { id: 'arena', name: 'Training ground', text: 'Training posts and one enemy Thor. Swap gods and levels freely with K.' },
 ];
 
 const ROLE_NAMES: Record<string, string> = { solo: 'Solo', jungle: 'Jungle', mid: 'Mid', carry: 'Carry', support: 'Support' };
@@ -70,17 +70,16 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
   root.innerHTML = `
     <div class="sm-panel">
       <div class="sm-title">ASCENDANT</div>
+      <div class="sm-gods">${gods.map((g) => `<button class="sm-god" data-god="${g.id}"><img src="${import.meta.env.BASE_URL}portraits/${g.id}.jpg" alt="" onerror="this.remove()"><span class="sm-face"><b>${g.name}</b><span>${ROLE_NAMES[g.role] ?? g.role} &middot; ${g.attackRange}</span></span></button>`).join('')}</div>
       <div class="sm-cols">
         <div class="sm-col">
           <h3>Mode</h3>
           <div class="sm-modes">${MODES.map((m) => `<button class="sm-mode" data-mode="${m.id}"><b>${m.name}</b><span>${m.text}</span></button>`).join('')}</div>
-          <h3>Controls</h3>
-          ${controlsHtml()}
+          <div class="sm-detail"></div>
         </div>
         <div class="sm-col">
-          <h3>God</h3>
-          <div class="sm-gods">${gods.map((g) => `<button class="sm-god" data-god="${g.id}"><b>${g.name}</b><span>${ROLE_NAMES[g.role] ?? g.role} &middot; ${g.attackRange}</span></button>`).join('')}</div>
-          <div class="sm-detail"></div>
+          <h3>Controls</h3>
+          ${controlsHtml()}
         </div>
       </div>
       <div class="sm-foot">
@@ -103,7 +102,7 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
       <div class="sm-skills">${skills
         .map((s, i) => `<div class="sm-skill" title="${s.description.replace(/"/g, '&quot;')}"><div class="sm-ico">${skillIcon(def.id, s)}</div><div class="sm-k">${keys[i]}</div><div class="sm-sn">${s.name}</div></div>`)
         .join('')}</div>
-      <div class="sm-tip">${mode === 'conquest' ? 'You start in mid lane with four allied bots; the other four gods fill solo, duo and jungle. Go wherever you like.' : 'Swap gods and jump levels from the K menu while standing at the fountain.'} Swap skills from the pool and spend tree points with K at your fountain.</div>`;
+      <div class="sm-tip">${mode === 'conquest' ? 'You start mid with four allied bots in the other lanes. Go wherever you like.' : 'Swap gods and jump levels with K at the fountain.'} Press K at your fountain to swap skills and spend tree points.</div>`;
   };
   render();
 

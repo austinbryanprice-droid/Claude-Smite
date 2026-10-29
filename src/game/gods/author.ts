@@ -101,7 +101,21 @@ export function node(
   return { id, name, tier, maxRank, description, effects };
 }
 
-/** Prefixes node ids with the tree id so ids are unique per god. */
+/**
+ * Prefixes node ids with the tree id so ids are unique per god. Nodes are
+ * laid out three to a tier in the order given; the keystone sits under the
+ * middle tier-3 node and needs it maxed first.
+ */
 export function tree(id: string, name: string, theme: string, nodes: TreeNode[]): SkillTree {
-  return { id, name, theme, nodes: nodes.map((n) => ({ ...n, id: `${id}.${n.id}` })) };
+  const middle = nodes.filter((n) => n.tier === 3)[1];
+  return {
+    id,
+    name,
+    theme,
+    nodes: nodes.map((n) => ({
+      ...n,
+      id: `${id}.${n.id}`,
+      ...(n.tier === 4 && middle ? { requires: `${id}.${middle.id}` } : {}),
+    })),
+  };
 }
