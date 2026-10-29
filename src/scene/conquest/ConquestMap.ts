@@ -139,7 +139,8 @@ export class ConquestMap implements MapContent {
       const z = (rand() * 2 - 1) * E;
       const lane = this.def.laneDistance(x, z);
       const path = this.def.pathDistance(x, z);
-      if (!((lane > 0.6 && lane < 4.5) || (path > 0.4 && path < 3.5))) continue;
+      // off every paved surface, and close to at least one of them
+      if (lane < 0.6 || path < 0.4 || (lane > 4.5 && path > 3.5)) continue;
       if (this.def.plazaDistance(x, z) < 2) continue;
       if (L.camps.some((c) => Math.hypot(x - c.at[0], z - c.at[1]) < (c.team === null ? L.radii.boss : L.radii.camp) + 1)) continue;
       // drifts of flowers rather than an even sprinkle
