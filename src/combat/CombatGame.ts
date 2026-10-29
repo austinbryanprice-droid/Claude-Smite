@@ -427,7 +427,8 @@ export class CombatGame implements Updatable {
       const rx = t.x - u.x;
       const rz = t.z - u.z;
       const along = rx * dir.x + rz * dir.z;
-      if (along <= 0 || along > range * 2.5) continue;
+      // the melee arc test below already rejects enemies behind, and keeps ones overlapping the player
+      if ((!melee && along <= 0) || along > range * 2.5) continue;
       let inRange: boolean;
       let key = along;
       if (melee) {
