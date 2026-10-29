@@ -113,6 +113,7 @@ export class CombatGame implements Updatable {
     };
 
     this.vfx = new CombatVfx(this.groundAt);
+    this.vfx.targets = () => (this.match ? [...this.match.brains].map(([s, b]) => [s, b.current] as const) : []);
     world.vfx.add(this.vfx.group);
     this.shapeDecal = new GroundDecal(this.groundAt);
     this.rangeDecal = new GroundDecal(this.groundAt);
@@ -236,6 +237,7 @@ export class CombatGame implements Updatable {
     this.views.frame(this.sim.units, dt, alpha, time);
     this.matchHud?.frame(dt, this.sim.units, input.isDown('Tab'));
     if (this.match?.winner) this.hud.setVisible(false);
+    this.vfx.player = this.player;
     this.vfx.frame(this.sim, dt, time);
     this.updatePreview();
     this.hud.setPreview(this.preview?.slot ?? null);
