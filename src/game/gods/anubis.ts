@@ -9,14 +9,14 @@ export const anubis: GodDef = {
   role: 'support',
   attackRange: 'ranged',
   base: {
-    maxHealth: 620,
+    maxHealth: 650,
     healthRegen: 2.4,
     maxMana: 320,
     manaRegen: 1.6,
     physicalProtection: 21,
     magicalProtection: 30,
     attackSpeed: 0.95,
-    attackPower: 40,
+    attackPower: 43,
     moveSpeed: 370,
   },
   growth: {
@@ -55,7 +55,7 @@ export const anubis: GodDef = {
       targeting: { type: 'cone', range: 7, angle: 50 },
       cooldown: [12, 11.5, 11, 10.5, 10],
       cost: [55, 60, 65, 70, 75],
-      effects: [dmg([20, 32, 44, 56, 68], 'intelligence', 0.15, 'magical', 5, 0.5)],
+      effects: [dmg([20, 35, 50, 60, 75], 'intelligence', 0.15, 'magical', 5, 0.5)],
     },
     {
       id: 'anubis.mummify',
@@ -66,7 +66,7 @@ export const anubis: GodDef = {
       targeting: { type: 'line', range: 9, width: 1.4 },
       cooldown: [14, 13.5, 13, 12.5, 12],
       cost: 65,
-      effects: [dmg([60, 90, 120, 150, 180], 'intelligence', 0.5, 'magical'), cc('stun', [1, 1.1, 1.2, 1.3, 1.4])],
+      effects: [dmg([65, 95, 130, 160, 195], 'intelligence', 0.5, 'magical'), cc('stun', [1, 1.1, 1.2, 1.3, 1.4])],
     },
     {
       id: 'anubis.scales-of-maat',
@@ -79,7 +79,7 @@ export const anubis: GodDef = {
       cost: 70,
       effects: [
         heal([60, 90, 120, 150, 180], 'intelligence', 0.4, 'alliesAndSelf'),
-        dmg([60, 90, 120, 150, 180], 'intelligence', 0.4, 'magical'),
+        dmg([65, 95, 130, 160, 195], 'intelligence', 0.4, 'magical'),
       ],
     },
     {
@@ -91,7 +91,7 @@ export const anubis: GodDef = {
       targeting: { type: 'projectile', range: 10, radius: 0.7, speed: 35 },
       cooldown: [16, 15, 14, 13, 12],
       cost: 60,
-      effects: [dmg([50, 75, 100, 125, 150], 'intelligence', 0.35, 'magical'), cc('pull', 0.6)],
+      effects: [dmg([55, 80, 110, 135, 160], 'intelligence', 0.35, 'magical'), cc('pull', 0.6)],
     },
     {
       id: 'anubis.sand-step',
@@ -139,7 +139,7 @@ export const anubis: GodDef = {
       targeting: { type: 'line', range: 12, width: 2 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [dmg([45, 60, 75, 90, 105], 'intelligence', 0.25, 'magical', 6, 0.5), slow(0.3, 1)],
+      effects: [dmg([50, 65, 80, 95, 115], 'intelligence', 0.25, 'magical', 6, 0.5), slow(0.3, 1)],
     },
     {
       id: 'anubis.sandstorm',
@@ -150,7 +150,7 @@ export const anubis: GodDef = {
       targeting: { type: 'ground', range: 10, radius: 6 },
       cooldown: [100, 95, 90, 85, 80],
       cost: 100,
-      effects: [dmg([40, 55, 70, 85, 100], 'intelligence', 0.2, 'magical', 5, 1), cc('blind', 2), slow(0.35, 2)],
+      effects: [dmg([45, 60, 75, 90, 110], 'intelligence', 0.2, 'magical', 5, 1), cc('blind', 2), slow(0.35, 2)],
     },
     {
       id: 'anubis.judgment',

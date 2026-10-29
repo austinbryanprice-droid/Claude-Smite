@@ -1,6 +1,22 @@
 import { ULTIMATE_SLOT } from '../game/loadout';
 import type { Sim } from './Sim';
+import type { SkillDef } from '../game/types';
 import { WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
+
+/**
+ * What a bot uses a skill for. Offense hits enemies; escape gets away (pure
+ * stealth or movement, or any dash when fleeing); sustain heals or shields.
+ */
+export type SkillRole = 'offense' | 'escape' | 'sustain';
+
+export function skillRole(skill: SkillDef): SkillRole {
+  const e = skill.effects;
+  const hurts = e.some((x) => x.kind === 'damage' || x.kind === 'cc' || x.kind === 'debuff' || x.kind === 'mark');
+  if (hurts) return 'offense';
+  if (e.some((x) => (x.kind === 'heal' || x.kind === 'shield') && x.target !== 'enemies')) return 'sustain';
+  if (e.some((x) => x.kind === 'stealth' || x.kind === 'movement')) return 'escape';
+  return 'offense';
+}
 
 export interface BotOptions {
   /** Where the bot holds ground when it has nothing to fight. */
@@ -43,12 +59,16 @@ export class GodBot implements Brain {
     const c = u.combatant;
     const hp = c.health / c.stats.maxHealth;
 
-    if (hp < 0.25) this.retreating = true;
+    // back off earlier when the fight is lopsided
+    const odds = this.odds();
+    if (hp < 0.25 || (hp < 0.4 && odds < 0)) this.retreating = true;
     if (this.retreating) {
       if (hp > 0.95 || c.inBase && hp > 0.9) this.retreating = false;
       else {
         if (u.recall > 0) return;
         const threat = sim.enemiesOf(u).some((t) => (t.kind === 'god' || t.kind === 'minion') && Math.hypot(t.x - u.x, t.z - u.z) < 15);
+        const hunted = sim.enemiesOf(u).some((t) => t.kind === 'god' && Math.hypot(t.x - u.x, t.z - u.z) < 14);
+        if (hunted) this.flee();
         if (this.options.recall && !threat && !c.inBase && sim.startRecall(u)) return;
         this.moveToward(u.home, 1.5);
         return;
@@ -94,6 +114,40 @@ export class GodBot implements Brain {
     }
   }
 
+  /** Allied gods minus enemy gods within fighting distance. */
+  private odds(): number {
+    const { u, sim } = this;
+    let n = 0;
+    for (const t of sim.units) {
+      if (t.kind !== 'god' || !t.alive || t === u || Math.hypot(t.x - u.x, t.z - u.z) > 16) continue;
+      n += t.team === u.team ? 1 : t.stealth > 0 ? 0 : -1;
+    }
+    return n;
+  }
+
+  /** Spend escape and sustain skills on the way out, aimed toward home. */
+  private flee(): void {
+    const { u, sim } = this;
+    const c = u.combatant;
+    for (const s of [0, 1, 2, 3, ULTIMATE_SLOT]) {
+      if (c.canCast(s) !== null) continue;
+      const cast = c.resolve(s);
+      const role = skillRole(cast.skill);
+      const dash = cast.targeting.type === 'dash' || cast.targeting.type === 'leap';
+      if (role === 'offense' && !dash) continue;
+      if (dash) {
+        const dx = u.home.x - u.x;
+        const dz = u.home.z - u.z;
+        const d = Math.hypot(dx, dz) || 1;
+        u.aim.x = u.x + (dx / d) * 10;
+        u.aim.z = u.z + (dz / d) * 10;
+        u.body.yaw = Math.atan2(-dx, -dz);
+      }
+      sim.cast(u, s);
+      return;
+    }
+  }
+
   private pickTarget(): Unit | null {
     const { u, sim, options } = this;
     let best: Unit | null = null;
@@ -113,7 +167,14 @@ export class GodBot implements Brain {
   private tryCast(dist: number, target: Unit): void {
     const { u, sim } = this;
     const c = u.combatant;
-    const slots = [0, 1, 2, 3, ULTIMATE_SLOT].filter((s) => c.canCast(s) === null && reachOf(u, s) + target.radius >= dist);
+    const hp = c.health / c.stats.maxHealth;
+    const slots = [0, 1, 2, 3, ULTIMATE_SLOT].filter((s) => {
+      if (c.canCast(s) !== null) return false;
+      const role = skillRole(c.resolve(s).skill);
+      if (role === 'escape') return false;
+      if (role === 'sustain') return hp < 0.65;
+      return reachOf(u, s) + target.radius >= dist;
+    });
     if (!slots.length) return;
     const targetHp = target.combatant.health / target.combatant.stats.maxHealth;
     const ult = slots.includes(ULTIMATE_SLOT) && targetHp < 0.6 ? ULTIMATE_SLOT : undefined;

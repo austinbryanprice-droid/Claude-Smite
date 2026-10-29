@@ -44,7 +44,7 @@ export const odin: GodDef = {
       targeting: { type: 'line', range: 6, width: 1.4 },
       cooldown: [10, 9.5, 9, 8.5, 8],
       cost: [50, 55, 60, 65, 70],
-      effects: [dmg([70, 115, 160, 205, 250], 'strength', 0.6, 'physical')],
+      effects: [dmg([75, 125, 175, 220, 270], 'strength', 0.6, 'physical')],
     },
     {
       id: 'odin.ravens',
@@ -56,7 +56,7 @@ export const odin: GodDef = {
       cooldown: [14, 13.5, 13, 12.5, 12],
       cost: 55,
       effects: [
-        dmg([50, 80, 110, 140, 170], 'strength', 0.4, 'physical'),
+        dmg([55, 85, 120, 150, 185], 'strength', 0.4, 'physical'),
         debuff('physicalProtection', [8, 11, 14, 17, 20], 4),
         debuff('magicalProtection', [8, 11, 14, 17, 20], 4),
       ],
@@ -84,7 +84,7 @@ export const odin: GodDef = {
       targeting: { type: 'dash', distance: 6, width: 1.4 },
       cooldown: [14, 13, 12, 11, 10],
       cost: 55,
-      effects: [move('dash', 6), dmg([60, 95, 130, 165, 200], 'strength', 0.5, 'physical'), slow(0.3, 2)],
+      effects: [move('dash', 6), dmg([65, 105, 140, 180, 215], 'strength', 0.5, 'physical'), slow(0.3, 2)],
     },
     {
       id: 'odin.gungnir-sweep',
@@ -95,7 +95,7 @@ export const odin: GodDef = {
       targeting: { type: 'cone', range: 4.5, angle: 120 },
       cooldown: [13, 12.5, 12, 11.5, 11],
       cost: 60,
-      effects: [dmg([70, 110, 150, 190, 230], 'strength', 0.55, 'physical'), cc('knockback', 0.4)],
+      effects: [dmg([75, 120, 160, 205, 250], 'strength', 0.55, 'physical'), cc('knockback', 0.4)],
     },
     {
       id: 'odin.wisdom',
@@ -128,7 +128,7 @@ export const odin: GodDef = {
       targeting: { type: 'ground', range: 6, radius: 2 },
       cooldown: [20, 19, 18, 17, 16],
       cost: 75,
-      effects: [summon('einherjar', 8), dmg([20, 30, 40, 50, 60], 'strength', 0.15, 'physical', 8, 1)],
+      effects: [summon('einherjar', 8), dmg([20, 30, 45, 55, 65], 'strength', 0.15, 'physical', 8, 1)],
     },
     {
       id: 'odin.ring-of-spears',
@@ -139,7 +139,7 @@ export const odin: GodDef = {
       targeting: { type: 'ground', range: 6, radius: 6 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [dmg([100, 150, 200, 250, 300], 'strength', 0.6, 'physical'), cc('root', 1)],
+      effects: [dmg([110, 160, 215, 270, 325], 'strength', 0.6, 'physical'), cc('root', 1)],
     },
     {
       id: 'odin.valhallas-call',
@@ -165,7 +165,7 @@ export const odin: GodDef = {
       targeting: { type: 'self', radius: 200 },
       cooldown: [120, 115, 110, 105, 100],
       cost: 100,
-      effects: [dmg([100, 140, 180, 220, 260], 'strength', 0.5, 'true')],
+      effects: [dmg([110, 150, 195, 240, 280], 'strength', 0.5, 'true')],
     },
   ],
   trees: [

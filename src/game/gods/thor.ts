@@ -44,7 +44,7 @@ export const thor: GodDef = {
       targeting: { type: 'projectile', range: 11, radius: 0.9, speed: 30, pierce: true },
       cooldown: [12, 11.5, 11, 10.5, 10],
       cost: [55, 60, 65, 70, 75],
-      effects: [dmg([60, 100, 140, 180, 220], 'strength', 0.55, 'physical', 2)],
+      effects: [dmg([55, 95, 130, 170, 205], 'strength', 0.55, 'physical', 2)],
     },
     {
       id: 'thor.tempest-leap',
@@ -55,7 +55,7 @@ export const thor: GodDef = {
       targeting: { type: 'leap', range: 8, radius: 2.4 },
       cooldown: [16, 15, 14, 13, 12],
       cost: 60,
-      effects: [move('leap', 8), dmg([70, 110, 150, 190, 230], 'strength', 0.6, 'physical'), slow(0.25, 2)],
+      effects: [move('leap', 8), dmg([65, 105, 140, 180, 215], 'strength', 0.6, 'physical'), slow(0.25, 2)],
     },
     {
       id: 'thor.mjolnir-slam',
@@ -66,7 +66,7 @@ export const thor: GodDef = {
       targeting: { type: 'cone', range: 4, angle: 70 },
       cooldown: [14, 13.5, 13, 12.5, 12],
       cost: 65,
-      effects: [dmg([80, 125, 170, 215, 260], 'strength', 0.7, 'physical'), cc('stun', 1)],
+      effects: [dmg([75, 120, 160, 200, 245], 'strength', 0.7, 'physical'), cc('stun', 1)],
     },
     {
       id: 'thor.berserker-spin',
@@ -77,7 +77,7 @@ export const thor: GodDef = {
       targeting: { type: 'self', radius: 3 },
       cooldown: [10, 9.5, 9, 8.5, 8],
       cost: [50, 55, 60, 65, 70],
-      effects: [dmg([30, 50, 70, 90, 110], 'strength', 0.3, 'physical', 3, 0.33)],
+      effects: [dmg([30, 45, 65, 85, 105], 'strength', 0.3, 'physical', 3, 0.33)],
     },
     {
       id: 'thor.lightning-dash',
@@ -88,7 +88,7 @@ export const thor: GodDef = {
       targeting: { type: 'dash', distance: 7, width: 1.6 },
       cooldown: [15, 14, 13, 12, 11],
       cost: 55,
-      effects: [move('dash', 7), dmg([40, 70, 100, 130, 160], 'strength', 0.4, 'physical'), cc('knockback', 0.4)],
+      effects: [move('dash', 7), dmg([40, 65, 95, 120, 150], 'strength', 0.4, 'physical'), cc('knockback', 0.4)],
     },
     {
       id: 'thor.thunder-guard',
@@ -124,7 +124,7 @@ export const thor: GodDef = {
       targeting: { type: 'projectile', range: 9, radius: 0.6, speed: 50 },
       cooldown: [15, 14.5, 14, 13.5, 13],
       cost: 60,
-      effects: [dmg([50, 80, 110, 140, 170], 'strength', 0.45, 'physical'), cc('root', 1.2)],
+      effects: [dmg([45, 75, 105, 130, 160], 'strength', 0.45, 'physical'), cc('root', 1.2)],
     },
     {
       id: 'thor.anvil-of-dawn',
@@ -135,7 +135,7 @@ export const thor: GodDef = {
       targeting: { type: 'leap', range: 40, radius: 4 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [move('leap', 40), dmg([150, 220, 290, 360, 430], 'strength', 1, 'physical'), cc('stun', 1.2)],
+      effects: [move('leap', 40), dmg([140, 205, 275, 340, 405], 'strength', 1, 'physical'), cc('stun', 1.2)],
     },
     {
       id: 'thor.worldbreaker',
@@ -146,7 +146,7 @@ export const thor: GodDef = {
       targeting: { type: 'line', range: 14, width: 3 },
       cooldown: [90, 85, 80, 75, 70],
       cost: 100,
-      effects: [dmg([200, 280, 360, 440, 520], 'strength', 1.1, 'physical'), cc('knockup', 1)],
+      effects: [dmg([190, 265, 340, 415, 490], 'strength', 1.1, 'physical'), cc('knockup', 1)],
     },
     {
       id: 'thor.thunder-god',
@@ -158,7 +158,7 @@ export const thor: GodDef = {
       cooldown: [100, 95, 90, 85, 80],
       cost: 100,
       effects: [
-        dmg([80, 120, 160, 200, 240], 'strength', 0.5, 'physical'),
+        dmg([75, 115, 150, 190, 225], 'strength', 0.5, 'physical'),
         buff('damageBonus', [0.15, 0.18, 0.21, 0.24, 0.27], 8),
         buff('bonusMoveSpeed', 0.2, 8),
         heal([60, 90, 120, 150, 180], 'strength', 0.4),
