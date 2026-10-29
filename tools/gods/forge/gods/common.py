@@ -205,8 +205,15 @@ def add_cloth_panel(god, name, material, top, front=True, width=0.3, length=0.5,
     return m
 
 
+def _pleat(a):
+    """Knife-pleat profile: broad flat faces with sharp folds, instead of a soft sine wave."""
+    x = np.sin(a)
+    return np.sign(x) * np.abs(x) ** 0.45
+
+
 def add_skirt(god, name, material, top, length, flare=0.08, pleats=20, depth=0.008, clearance=0.025, rows=8, seg=48):
     """A pleated cloth skirt wrapped around the hips, flaring toward the hem."""
+    seg = max(seg, pleats * 8)  # enough columns that each pleat has a crisp fold and a shadowed valley
     from ..geo import lathe
     b = god.body
     P = b.verts[b.used]
@@ -229,7 +236,7 @@ def add_skirt(god, name, material, top, length, flare=0.08, pleats=20, depth=0.0
     # never narrower than the row above (hangs over the buttocks and thighs)
     rad = np.maximum.accumulate(rad, axis=0)
     t = np.linspace(0, 1, rows)[:, None]
-    rad = rad + clearance + flare * t ** 1.3 + np.sin(ang[None] * pleats) * depth * (0.3 + t)
+    rad = rad + clearance + flare * t ** 1.3 + _pleat(ang[None] * pleats) * depth * 1.8 * (0.3 + t)
     v = np.zeros((rows, seg, 3))
     v[..., 0] = rad * np.sin(ang)[None]
     v[..., 1] = ys[:, None]

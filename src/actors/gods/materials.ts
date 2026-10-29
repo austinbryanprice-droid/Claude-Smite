@@ -33,7 +33,7 @@ export interface GodPalette {
 const PALETTES: Record<string, GodPalette> = {
   zeus: {
     skin: 0xc48a66, skinDeep: 0x7a3a2a, gold: 0xf7c450, steel: 0xc8d2dc, cloth: 0x2457c8, clothDeep: 0x0d1f5c,
-    cloth2: 0xeee4d0, leather: 0x5a3420, hair: 0xaab4c4, hairTip: 0xf2f4f8, fur: 0xd8d0c0, glow: 0x6fd8ff,
+    cloth2: 0xe2d6bc, leather: 0x5a3420, hair: 0xaab4c4, hairTip: 0xf2f4f8, fur: 0xd8d0c0, glow: 0x6fd8ff,
     eye: 0x8fe8ff, gem: 0x39b8ff,
   },
   thor: {
@@ -52,7 +52,7 @@ const PALETTES: Record<string, GodPalette> = {
     eye: 0x9dff7a, gem: 0x3dff7a,
   },
   anubis: {
-    skin: 0x2a2018, skinDeep: 0x0c0806, gold: 0xf2b84a, steel: 0x2a3e8a, cloth: 0xf0e6d0, clothDeep: 0x9a8a6a,
+    skin: 0x2a2018, skinDeep: 0x0c0806, gold: 0xf2b84a, steel: 0x2a3e8a, cloth: 0xe6dac0, clothDeep: 0x8a7a5a,
     cloth2: 0x1c3f9a, leather: 0x3a2412, hair: 0x14100c, hairTip: 0x2a2018, fur: 0x1e1712, glow: 0xffa040,
     eye: 0xffb050, gem: 0x2fd0c0,
   },
@@ -182,12 +182,15 @@ function metalMaterial(base: number, trim: number, opts: { engrave?: boolean; da
 }
 
 function clothMaterial(c: number, deep: number, trim: number, opts: { pattern?: boolean } = {}): THREE.Material {
-  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.82, sheen: 0.8, sheenRoughness: 0.45, side: THREE.DoubleSide });
-  m.sheenColor = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.35);
+  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.82, sheen: 0.45, sheenRoughness: 0.5, side: THREE.DoubleSide });
+  m.sheenColor = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.25);
   const v = uv();
-  const weave = mx_noise_float(positionLocal.mul(vec3(260, 260, 260))).mul(0.06);
-  const folds = mx_fractal_noise_float(positionLocal.mul(6), 2).mul(0.5).add(0.5);
-  let col: any = mix(color(deep), color(c), folds.mul(0.5).add(0.45)).add(weave);
+  const weave = mx_noise_float(positionLocal.mul(vec3(260, 260, 260))).mul(0.03);
+  // painted drape: long vertical folds plus a little broad variation
+  const drape = mx_fractal_noise_float(positionLocal.mul(vec3(10, 1.6, 10)), 2).mul(0.5).add(0.5);
+  const broad = mx_fractal_noise_float(positionLocal.mul(4), 2).mul(0.5).add(0.5);
+  const folds = smoothstep(0.2, 0.8, drape.mul(0.7).add(broad.mul(0.3)));
+  let col: any = mix(color(deep), color(c), folds.mul(0.65).add(0.35)).add(weave);
   if (opts.pattern) {
     // gold embroidered border: along uv edges (cloth panels have 0..1 uv)
     const ex = min(v.x, float(1).sub(v.x));
