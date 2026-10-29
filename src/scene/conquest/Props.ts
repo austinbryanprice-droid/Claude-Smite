@@ -129,8 +129,13 @@ export class ConquestProps {
     const streaks = mx_noise_float(vec3(positionWorld.x.mul(3), positionWorld.y.mul(0.4), positionWorld.z.mul(3))).mul(0.5).add(0.5);
     this.ruinMarble.colorNode = mix(marble.mul(mix(float(0.42), float(0.62), streaks)).mul(vec3(0.95, 0.97, 0.9)), vec3(0.1, 0.16, 0.05), moss);
     this.hoardGold = mats.gold.clone() as THREE.MeshStandardNodeMaterial;
+    // loose coins: dark gaps between them and a rougher, duller surface than polished trim,
+    // so a heap reads as a pile instead of one glowing blob
+    const coins = mx_noise_float(positionWorld.mul(6.5)).mul(0.5).add(0.5);
+    this.hoardGold.colorNode = (mats.gold.colorNode as any).mul(mix(float(0.35), float(0.85), smoothstep(0.25, 0.6, coins)));
+    this.hoardGold.roughnessNode = mix(float(0.55), float(0.32), coins);
     const glint = pow(mx_noise_float(positionWorld.mul(9)).mul(0.5).add(0.5), float(18));
-    this.hoardGold.emissiveNode = color(0xffd37a).mul(glint.mul(2.5));
+    this.hoardGold.emissiveNode = color(0xffd37a).mul(glint.mul(1.2));
     this.wallStone = mats.sandstone.clone() as THREE.MeshStandardNodeMaterial;
     const sand = mats.sandstone.colorNode as any;
     this.wallStone.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.8).mul(vec3(0.78, 0.88, 0.76));
