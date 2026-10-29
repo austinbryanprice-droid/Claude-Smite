@@ -331,7 +331,8 @@ export function renderRecipe(recipe: Recipe, seed: number): Float32Array[] {
     const r = rngFor(seed + v * 7919);
     let b = recipe.make(r, v);
     b = normalize(dcBlock(b), recipe.peak ?? 0.9);
-    if (!recipe.loop) b = declick(b, 0.5, 12);
+    // loops get a crossfaded seam so they never click when they wrap
+    b = recipe.loop ? loopable(b, 0.2) : declick(b, 0.5, 12);
     out.push(b);
   }
   return out;

@@ -406,11 +406,14 @@ export class Music {
     // background tabs throttle timers to ~1 Hz, so look further ahead there
     const ahead = document.hidden ? 1.6 : 0.35;
     const beatLen = 60 / p.song.bpm;
+    const barLen = p.song.beats * beatLen;
     while (p.nextBar < ctx.currentTime + ahead) {
+      // after a stall (a frozen tab, a long hitch) skip the bars that already went by
+      const late = p.nextBar + barLen < ctx.currentTime;
       const notes: Note[] = [];
       const chord = CHORDS[p.song.chords[p.bar]!]!;
-      p.song.write(p.bar, p.loop, chord, notes);
-      for (const n of notes) this.note(n.inst, n.midi, p.nextBar + n.beat * beatLen, (n.dur ?? 0) * beatLen, n.gain, p.layers[n.layer], n.pan);
+      if (!late) p.song.write(p.bar, p.loop, chord, notes);
+      for (const n of notes) if (p.nextBar + n.beat * beatLen >= ctx.currentTime - 0.02) this.note(n.inst, n.midi, p.nextBar + n.beat * beatLen, (n.dur ?? 0) * beatLen, n.gain, p.layers[n.layer], n.pan);
       p.nextBar += p.song.beats * beatLen;
       p.bar++;
       if (p.bar >= p.song.chords.length) {

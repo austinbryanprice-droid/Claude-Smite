@@ -25,6 +25,8 @@ function check(name: string, recipe: Recipe): number {
     expect(Math.abs(sum / b.length), `${name} DC`).toBeLessThan(0.05);
     expect(Math.sqrt(energy / b.length), `${name} rms`).toBeGreaterThan(0.002);
     expect(b.length / RATE, `${name} length`).toBeLessThan(15);
+    // loops must wrap without a jump (a click every time they repeat)
+    if (recipe.loop) expect(Math.abs(b[b.length - 1]! - b[0]!), `${name} loop seam`).toBeLessThan(0.08);
     samples += b.length;
   }
   return samples;
