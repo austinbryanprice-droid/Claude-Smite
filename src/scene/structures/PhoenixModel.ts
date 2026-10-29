@@ -6,7 +6,7 @@ import type { Team } from '../../map/ConquestLayout';
 import { lathe } from '../Architecture';
 import { Fire } from '../Effects';
 import type { MaterialLibrary } from '../Materials';
-import { clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
 import type { StructureModel } from './TowerModel';
 
 /** One feather: a long, flat, pointed blade along +Y from its root. */
@@ -25,7 +25,7 @@ function feather(length: number, width: number): THREE.BufferGeometry {
  */
 export class PhoenixModel implements StructureModel {
   readonly root = new THREE.Group();
-  readonly height = 8.2;
+  readonly height = 9.4;
   readonly muzzle = new THREE.Object3D();
   private readonly bird = new THREE.Group();
   private readonly wings: THREE.Group[] = [];
@@ -37,12 +37,14 @@ export class PhoenixModel implements StructureModel {
   private shot = 0;
   private destroyed = 0;
   private rebirth = 1;
-  private readonly birdY = 4.7;
+  private readonly birdY = 5.3;
+  /** The bird is modeled small and scaled up so it dominates its pedestal. */
+  private readonly birdScale = 1.45;
 
   constructor(lib: MaterialLibrary, team: Team, teamMats?: TeamMaterials) {
     const style = TEAM_STYLE[team];
     const tm = teamMats ?? new TeamMaterials(lib, style);
-    const { material: stone, damage } = crackedStone(lib.marble, style.glow);
+    const { material: stone, damage } = crackedStone(agedMarble(lib), style.glow);
     this.damage = damage;
     const add = (parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0) => {
       const mesh = new THREE.Mesh(g, m);
@@ -62,6 +64,9 @@ export class PhoenixModel implements StructureModel {
       [0.001, 1.0], [1.55, 1.0], [1.55, 1.15], [1.35, 1.25], [1.25, 2.3], [1.45, 2.45], [1.5, 2.6], [0.001, 2.6],
     ], 48), stone);
     add(this.root, new THREE.TorusGeometry(1.42, 0.08, 10, 48).rotateX(Math.PI / 2), tm.trim, 0, 2.5);
+    // gilded lips on the top step and the drum's foot
+    add(this.root, new THREE.TorusGeometry(2.7, 0.06, 8, 96).rotateX(Math.PI / 2), tm.trim, 0, 1.05);
+    add(this.root, new THREE.TorusGeometry(1.55, 0.06, 8, 64).rotateX(Math.PI / 2), tm.trim, 0, 1.15);
     add(this.root, lathe([
       [0.001, 2.55], [0.7, 2.6], [1.5, 2.85], [1.95, 3.25], [2.0, 3.35], [1.85, 3.3], [1.4, 3.0], [0.001, 2.95],
     ], 48), lib.bronze);
@@ -78,12 +83,15 @@ export class PhoenixModel implements StructureModel {
     const flow = mx_noise_float(vec3(positionLocal.x.mul(1.8), positionLocal.y.mul(1.8).sub(time.mul(1.4)), positionLocal.z.mul(1.8))).mul(0.5).add(0.5);
     const burn = pow(tip.mul(flow.mul(0.6).add(0.6)), float(1.3)).clamp(0, 1);
     const fireCol = mix(color(style.fire.low), color(style.fire.high), flow.mul(0.45));
-    birdMat.colorNode = mix(color(team === 'order' ? 0xd9a441 : 0x3a1a14), fireCol, burn.mul(0.6));
-    birdMat.metalnessNode = float(1).sub(burn);
-    birdMat.roughnessNode = float(0.28);
-    birdMat.emissiveNode = fireCol.mul(burn.mul(3).add(0.15)).mul(this.heat);
+    // gold stays gold until the flame takes over, so the two hues never mix into a pastel
+    const flameW = smoothstep(0.28, 0.7, burn);
+    birdMat.colorNode = mix(color(team === 'order' ? 0xe0a838 : 0x3a1a14), fireCol, flameW);
+    birdMat.metalnessNode = float(1).sub(flameW);
+    birdMat.roughnessNode = float(0.3);
+    birdMat.emissiveNode = fireCol.mul(flameW.mul(3.5).add(burn.mul(0.4))).mul(this.heat);
 
     this.bird.position.y = this.birdY;
+    this.bird.scale.setScalar(this.birdScale);
     this.root.add(this.bird);
     // body and neck along +Z
     const body = lathe([[0.001, -1.0], [0.3, -0.85], [0.55, -0.35], [0.6, 0.1], [0.45, 0.55], [0.26, 0.9], [0.001, 1.05]], 24);
@@ -118,6 +126,13 @@ export class PhoenixModel implements StructureModel {
         f.rotation.set(-0.15 - t * 0.5, 0, -sx * (0.35 + t * 1.15));
         f.position.set(sx * t * 0.9, t * 0.15, -t * 0.35);
       }
+      // a shorter row of covert feathers over the wing's root, so it reads full rather than spiky
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6;
+        const f = add(wing, feather(0.8 + Math.sin(t * Math.PI) * 0.5, 0.5), birdMat);
+        f.rotation.set(-0.1 - t * 0.45, 0, -sx * (0.45 + t * 1.05));
+        f.position.set(sx * t * 0.75, 0.05 + t * 0.12, 0.12 - t * 0.3);
+      }
     }
     // tail: long trailing feathers fanned behind and down
     for (let i = 0; i < 5; i++) {
@@ -125,7 +140,7 @@ export class PhoenixModel implements StructureModel {
       f.rotation.set(-2.0 - Math.abs(i - 2) * 0.05, 0, (i - 2) * 0.22);
     }
 
-    this.shield = shieldMesh(4.6, this.height + 0.8, style.glow);
+    this.shield = shieldMesh(4.8, this.height + 0.8, style.glow);
     this.root.add(this.shield);
     this.rubble = new Rubble(3.2, 12, [stone, lib.bronze], 500);
     this.rubble.group.position.y = 1.0;
@@ -167,7 +182,7 @@ export class PhoenixModel implements StructureModel {
   private applyLife(): void {
     const life = ease(this.rebirth);
     this.bird.visible = life > 0.02;
-    this.bird.scale.setScalar(Math.max(0.02, life));
+    this.bird.scale.setScalar(Math.max(0.02, life) * this.birdScale);
     this.fire.strength.value = 0.35 + 0.65 * life;
   }
 

@@ -1,13 +1,13 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, color, dot, float, mix, mx_noise_float, normalize, positionView, positionWorld, pow, sin, smoothstep,
-  time, transformNormalToView, uv, vec3,
+  abs, atan, color, dot, float, fract, mix, mx_noise_float, normalize, positionLocal, positionView, positionWorld, pow, sin,
+  smoothstep, step, time, transformNormalToView, uv, vec3,
 } from '../../render/tsl';
 import type { Team } from '../../map/ConquestLayout';
 import { flutedShaft, lathe } from '../Architecture';
 import { Fire } from '../Effects';
 import type { MaterialLibrary } from '../Materials';
-import { mergeStatic, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, mergeStatic, TEAM_STYLE, TeamMaterials } from './common';
 
 /**
  * A team's fountain: a wide marble basin of glowing healing water around a
@@ -31,13 +31,20 @@ export class Fountain {
       return mesh;
     };
     const R = radius - 1.2;
+    const marble = agedMarble(lib);
 
     // Basin rim: a low molded marble ring with a gold lip.
     add(lathe([
       [R - 0.9, -0.2], [R + 0.7, -0.2], [R + 0.75, 0.15], [R + 0.6, 0.3], [R + 0.62, 0.55], [R + 0.4, 0.62],
       [R - 0.5, 0.62], [R - 0.6, 0.5], [R - 0.6, 0.0], [R - 0.9, -0.2],
-    ], 128), lib.marble);
+    ], 128), marble);
     add(new THREE.TorusGeometry(R + 0.05, 0.05, 8, 128).rotateX(Math.PI / 2), tm.trim, 0, 0.64);
+    // a dashed rune inlay along the rim's top, like the jungle camps' floors
+    const inlay = new THREE.MeshBasicNodeMaterial();
+    inlay.colorNode = color(style.glow).mul(sin(time.mul(1.1)).mul(0.15).add(1)).mul(1.4);
+    inlay.opacityNode = step(0.4, fract(atan(positionLocal.z, positionLocal.x).mul(90 / (2 * Math.PI))));
+    inlay.alphaTest = 0.5;
+    add(new THREE.RingGeometry(R - 0.32, R - 0.2, 160).rotateX(-Math.PI / 2), inlay, 0, 0.625).castShadow = false;
 
     // Water: deep team-tinted pool with drifting ripples and a glowing core.
     const water = new THREE.MeshStandardNodeMaterial();
@@ -64,7 +71,7 @@ export class Fountain {
     add(lathe([
       [0.001, 0], [2.2, 0], [2.2, 0.5], [1.6, 0.6], [0.9, 0.7], [0.75, 1.8], [1.8, 2.2], [2.3, 2.45], [2.2, 2.6],
       [1.6, 2.5], [0.55, 2.55], [0.5, 3.6], [1.2, 3.9], [1.45, 4.05], [1.35, 4.15], [0.4, 4.15], [0.35, 4.9], [0.001, 4.95],
-    ], 64), lib.marble);
+    ], 64), marble);
     add(new THREE.TorusGeometry(2.25, 0.06, 8, 64).rotateX(Math.PI / 2), tm.trim, 0, 2.5);
     add(new THREE.TorusGeometry(1.4, 0.05, 8, 64).rotateX(Math.PI / 2), tm.trim, 0, 4.08);
     const crystalGeo = new THREE.OctahedronGeometry(0.45, 0);
@@ -81,6 +88,37 @@ export class Fountain {
       sheet.position.y = top - h / 2;
       sheet.renderOrder = 12;
       this.group.add(sheet);
+    }
+
+    // Arcing jets from the lower bowl's rim out into the pool, each landing in a ripple.
+    const jetMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const ju = uv();
+    const flow = mx_noise_float(vec3(ju.x.mul(14).sub(time.mul(3.2)), ju.y.mul(2), 0)).mul(0.5).add(0.5);
+    jetMat.colorNode = color(style.glow).mul(flow.mul(0.7).add(0.35)).mul(smoothstep(1.0, 0.75, ju.x)).mul(0.9);
+    const rippleMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const rd = positionLocal.xz.length();
+    const wave = smoothstep(0.75, 1.0, fract(rd.mul(1.6).sub(time.mul(0.9))));
+    rippleMat.colorNode = color(style.glow).mul(wave).mul(smoothstep(0.75, 0.2, rd)).mul(0.6);
+    const jets = 8;
+    const rippleGeo = new THREE.CircleGeometry(0.8, 32).rotateX(-Math.PI / 2);
+    for (let i = 0; i < jets; i++) {
+      const a = (i / jets) * Math.PI * 2 + Math.PI / jets;
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const pts: THREE.Vector3[] = [];
+      for (let k = 0; k <= 12; k++) {
+        const t = k / 12;
+        const r = 2.3 + t * 3.4;
+        // a parabola from the rim (y 2.5) over a 3.3 m crest down to the water (y 0.4)
+        const y = 2.5 + 3.3 * t - 5.4 * t * t;
+        pts.push(dir.clone().multiplyScalar(r).setY(Math.max(0.4, y)));
+      }
+      const jet = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.07, 6, false), jetMat);
+      jet.renderOrder = 12;
+      this.group.add(jet);
+      const ripple = new THREE.Mesh(rippleGeo, rippleMat);
+      ripple.position.copy(dir.clone().multiplyScalar(5.7)).setY(0.42);
+      ripple.renderOrder = 11;
+      this.group.add(ripple);
     }
 
     // Healing light column.
@@ -102,10 +140,10 @@ export class Fountain {
       const a = (i / posts) * Math.PI * 2 + Math.PI / posts;
       const x = Math.cos(a) * (radius + 1.6);
       const z = Math.sin(a) * (radius + 1.6);
-      add(lathe([[0.001, 0], [0.6, 0], [0.6, 0.3], [0.45, 0.4], [0.001, 0.4]], 24), lib.marble, x, 0, z);
-      add(flutedShaft(0.3, 2.2, 12, 36, 6), lib.marble, x, 0.4, z);
+      add(lathe([[0.001, 0], [0.6, 0], [0.6, 0.3], [0.45, 0.4], [0.001, 0.4]], 24), marble, x, 0, z);
+      add(flutedShaft(0.3, 2.2, 12, 36, 6), marble, x, 0.4, z);
       add(lathe([[0.001, 0], [0.25, 0], [0.55, 0.25], [0.62, 0.42], [0.5, 0.4], [0.001, 0.25]], 24), tm.trim, x, 2.6, z);
-      const fire = new Fire(new THREE.Vector3(x, 2.95, z), 0.7, i * 3.1 + (team === 'order' ? 0 : 50), 16, style.fire);
+      const fire = new Fire(new THREE.Vector3(x, 2.95, z), 0.85, i * 3.1 + (team === 'order' ? 0 : 50), 16, style.fire);
       this.fires.push(fire);
       this.group.add(fire.group);
     }
