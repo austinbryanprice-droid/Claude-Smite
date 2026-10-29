@@ -189,6 +189,22 @@ describe('skill shapes', () => {
     expect(sim.drainEvents().filter((e) => e.type === 'death')).toHaveLength(1);
   });
 
+  it('All-Seeing Eye keeps revealing after the primed hit lands', () => {
+    const sim = setup();
+    const o = god(sim, odin, 'order', 0, 0, 5);
+    const far = target(sim, 0, -60);
+    castAt(sim, o, 'odin.all-seeing-eye', 0, -10);
+    run(sim, 0.1);
+    sim.strike(o, far, 10, 'physical');
+    far.stealth = 3;
+    run(sim, 0.1);
+    expect(far.stealth).toBe(0);
+    run(sim, 6);
+    far.stealth = 3;
+    run(sim, 0.1);
+    expect(far.stealth).toBeGreaterThan(0);
+  });
+
   it('cones hit inside the arc and miss behind the caster', () => {
     const sim = setup();
     const l = god(sim, loki, 'order', 0, 0);

@@ -74,6 +74,8 @@ export class Sim {
   private landing: { at: number; owner: Unit; cast: ResolvedSkill; x: number; z: number; r: number }[] = [];
   /** Skill effects waiting on a marked god for the caster's next hit (see SkillDef.primes). */
   private readonly primed = new Map<Unit, { owner: Unit; cast: ResolvedSkill; mark: string }>();
+  /** Gods a priming skill revealed, and until when; outlasts the primed hit itself. */
+  private readonly revealed = new Map<Unit, number>();
   private events: SimEvent[] = [];
   time = 0;
 
@@ -471,6 +473,7 @@ export class Sim {
         if (t.team !== owner.team && t.kind === 'god') {
           t.marks.set(primes.mark, { stacks: 1, remaining: primes.duration });
           this.primed.set(t, { owner, cast, mark: primes.mark });
+          this.revealed.set(t, Math.max(this.revealed.get(t) ?? 0, this.time + primes.duration));
         }
         continue;
       }
@@ -758,10 +761,11 @@ export class Sim {
     this.stepZones(dt);
     this.stepPending();
     this.stepLanding();
-    // a primed god can't hide while the mark holds
-    for (const [t, p] of this.primed) {
-      if (t.marks.has(p.mark)) t.stealth = 0;
-      else this.primed.delete(t);
+    for (const [t, p] of this.primed) if (!t.marks.has(p.mark)) this.primed.delete(t);
+    // a revealed god can't hide for the full duration, even after the primed hit lands
+    for (const [t, until] of this.revealed) {
+      if (this.time < until) t.stealth = 0;
+      else this.revealed.delete(t);
     }
     this.passives.step();
     for (const f of this.flashes) f.age += dt;
