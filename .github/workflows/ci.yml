@@ -1,0 +1,22 @@
+# Typecheck, unit tests and build on every pull request, so a broken change
+# is caught before it merges and auto-deploys to the live link.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      # shared runners are slower than a dev box; some match simulations run several seconds
+      - run: npx vitest run --testTimeout=30000
+      - run: npx vite build
