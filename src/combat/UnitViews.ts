@@ -10,6 +10,15 @@ import { createStructureModel, type StructureModel } from './structures';
 import { MUZZLE_HEIGHT } from './Vfx';
 
 /** A wooden training post with a straw body and a painted target shield. */
+/** Seconds a fallen god stays on the ground before it is hidden. */
+const GOD_CORPSE = 2.8;
+
+/** How far a fallen god has sunk into the ground, in the last second before it is hidden. */
+function godSink(deathTime: number): number {
+  const t = Math.max(0, deathTime - (GOD_CORPSE - 1));
+  return t * t * 0.9;
+}
+
 function buildDummy(): THREE.Group {
   const g = new THREE.Group();
   const wood = new THREE.MeshStandardNodeMaterial({ color: 0x6b4426, roughness: 0.8 });
@@ -148,7 +157,10 @@ export class UnitViews {
   onEvent(e: SimEvent): void {
     if (e.type === 'damage') {
       const v = this.views.get(e.target);
-      if (v && !v.structure) v.wobbleVel += Math.min(6, 1.5 + e.amount / 40);
+      if (v && !v.structure) {
+        v.wobbleVel += Math.min(6, 1.5 + e.amount / 40);
+        v.model?.flinch(0.35 + e.amount / 150);
+      }
       if (e.target.kind === 'minion') this.minions.hit(e.target, e.amount);
     } else if (e.type === 'basic') {
       this.views.get(e.unit)?.structure?.pulseFire();
@@ -242,10 +254,11 @@ export class UnitViews {
       if (v.deathTime < 0) v.deathTime = 0;
       v.deathTime += dt;
     } else v.deathTime = -1;
+    if (v.model) v.model.deathTime = v.deathTime;
 
     if (u === this.player) {
-      v.root.visible = u.alive;
-      v.root.position.y += v.lift;
+      v.root.visible = u.alive || v.deathTime < GOD_CORPSE;
+      v.root.position.y += v.lift - godSink(v.deathTime);
       return;
     }
 
@@ -290,8 +303,9 @@ export class UnitViews {
       v.monster.animate(u, dt, v.deathTime, v.wobble);
       return;
     }
-    v.root.visible = !hidden && (u.alive || v.deathTime < 0.05);
+    v.root.visible = !hidden && (u.alive || v.deathTime < (v.model ? GOD_CORPSE : 0.05));
     if (!v.model) return;
+    v.root.position.y -= godSink(v.deathTime);
     const speed = Math.hypot(u.vx, u.vz);
     if (speed > 0.1) {
       const sin = Math.sin(u.body.yaw);

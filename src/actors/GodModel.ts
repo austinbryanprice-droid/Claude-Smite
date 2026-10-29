@@ -117,6 +117,8 @@ export class GodModel {
   readonly leftHand: THREE.Object3D;
   /** 0..1 blend toward the cast pose; gameplay sets it every frame. */
   castWeight = 0;
+  /** Seconds since this god died, or negative while alive; gameplay sets it every frame. */
+  deathTime = -1;
   readonly height: number;
   readonly id: string;
 
@@ -142,6 +144,13 @@ export class GodModel {
     return this.bones.get('DEF-spine002')!;
   }
   private airWeight = 0;
+  private readonly death: THREE.AnimationAction;
+  private deathWeight = 0;
+  private readonly flinches: { bone: THREE.Bone; interp: THREE.Interpolant }[][] = [];
+  private flinchClip = 0;
+  private flinchTime = 1e9;
+  private flinchDuration = 0.4;
+  private flinchStrength = 0;
   private readonly physics: SecondaryPhysics;
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpQ2 = new THREE.Quaternion();
@@ -203,15 +212,23 @@ export class GodModel {
     this.air.play();
     this.air.setEffectiveWeight(0);
 
+    this.death = this.mixer.clipAction(clip('Death01'));
+    this.death.setLoop(THREE.LoopOnce, 1);
+    this.death.clampWhenFinished = true;
+    this.death.timeScale = 0;
+    this.death.play();
+    this.death.setEffectiveWeight(0);
+
     // hammer and daggers swing; everyone else casts from the free hand
     const swing = this.id === 'thor' || this.id === 'loki';
     const castClip = clip(variant === 'melee' ? 'Punch_Cross' : swing ? 'Sword_Attack' : 'Spell_Simple_Shoot');
     this.castDuration = castClip.duration;
-    for (const t of castClip.tracks) {
-      const [node, prop] = t.name.split('.');
-      if (prop !== 'quaternion' || !UPPER.test(node!)) continue;
-      const b = this.bones.get(node!);
-      if (b) this.cast.push({ bone: b, interp: (t as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant() });
+    this.cast.push(...this.upperTracks(castClip));
+
+    for (const n of ['Hit_Chest', 'Hit_Head']) {
+      const c = clip(n);
+      this.flinchDuration = Math.min(this.flinchDuration, c.duration);
+      this.flinches.push(this.upperTracks(c));
     }
 
     for (const c of this.asset.meta.curl ?? []) {
@@ -257,6 +274,26 @@ export class GodModel {
     });
   }
 
+  /** Upper-body rotation tracks of a clip, sampled by hand for overlays. */
+  private upperTracks(clip: THREE.AnimationClip): { bone: THREE.Bone; interp: THREE.Interpolant }[] {
+    const out: { bone: THREE.Bone; interp: THREE.Interpolant }[] = [];
+    for (const t of clip.tracks) {
+      const [node, prop] = t.name.split('.');
+      if (prop !== 'quaternion' || !UPPER.test(node!)) continue;
+      const b = this.bones.get(node!);
+      if (b) out.push({ bone: b, interp: (t as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant() });
+    }
+    return out;
+  }
+
+  /** A short upper-body recoil from a hit; `strength` 0..1. Alternates chest and head hits. */
+  flinch(strength: number): void {
+    if (this.deathTime >= 0) return;
+    this.flinchClip = (this.flinchClip + 1) % this.flinches.length;
+    this.flinchTime = 0;
+    this.flinchStrength = THREE.MathUtils.clamp(strength, 0, 1);
+  }
+
   /** Dev: hold one clip (by name) instead of locomotion; null resumes. */
   debugClip(name: string | null, time = 0): void {
     this.held?.stop();
@@ -294,20 +331,31 @@ export class GodModel {
     this.phase = (this.phase + dt * playRate / THREE.MathUtils.lerp(lo.action.getClip().duration, hi.action.getClip().duration, t) * (backward ? -1 : 1) + 1) % 1;
     this.airWeight += ((s.grounded ? 0 : 1) - this.airWeight) * (1 - Math.exp(-dt * 12));
     const ground = 1 - this.airWeight;
+    // dying: the fall takes over the whole body within a few frames
+    this.deathWeight = this.deathTime >= 0 ? Math.min(1, this.deathWeight + dt * 8) : 0;
+    const alive = 1 - this.deathWeight;
+    this.death.setEffectiveWeight(this.deathWeight);
+    this.death.time = Math.max(0, Math.min(this.deathTime, this.death.getClip().duration - 1e-3));
     for (const l of this.loco) {
       const w = l === lo ? (lo === hi ? 1 : 1 - t) : l === hi ? t : 0;
-      l.action.setEffectiveWeight(w * move * ground);
+      l.action.setEffectiveWeight(w * move * ground * alive);
       l.action.time = this.phase * l.action.getClip().duration;
       l.action.timeScale = 0;
     }
-    this.idle.setEffectiveWeight((1 - move) * ground * (this.held ? 0 : 1));
+    this.idle.setEffectiveWeight((1 - move) * ground * (this.held ? 0 : 1) * alive);
     if (this.held) {
       for (const l of this.loco) l.action.setEffectiveWeight(0);
       this.air.setEffectiveWeight(0);
     }
     this.idle.timeScale = 1;
-    this.air.setEffectiveWeight(this.airWeight);
+    this.air.setEffectiveWeight(this.airWeight * alive);
     this.mixer.update(dt);
+    if (alive <= 0) {
+      for (const c of this.curl) c.bone.quaternion.multiply(c.q);
+      this.root.updateMatrixWorld(true);
+      this.physics.update(dt);
+      return;
+    }
 
     // strafing: legs turn toward the movement direction, the torso keeps aiming
     const strafeYaw = speed > 0.5 ? Math.atan2(s.localDir.x, Math.max(0.25, Math.abs(s.localDir.y))) * (backward ? -0.6 : 0.6) : 0;
@@ -347,6 +395,17 @@ export class GodModel {
       const k = cw * THREE.MathUtils.smoothstep(ct, 0, this.castDuration * 0.4);
       if (this.accents.length) this.root.updateMatrixWorld(true);
       for (const a of this.accents) this.rotateModel(a.bone, a.axis, a.angle * k);
+    }
+    // hit recoil: a quick ease in, then fade out by the end of the clip
+    this.flinchTime += dt;
+    if (this.flinchTime < this.flinchDuration && cw < 0.5) {
+      const ft = this.flinchTime;
+      const fw = this.flinchStrength * THREE.MathUtils.smoothstep(ft, 0, 0.06) * (1 - THREE.MathUtils.smoothstep(ft, this.flinchDuration * 0.45, this.flinchDuration));
+      for (const c of this.flinches[this.flinchClip]!) {
+        const v = c.interp.evaluate(ft);
+        this.tmpQ.set(v[0]!, v[1]!, v[2]!, v[3]!);
+        c.bone.quaternion.slerp(this.tmpQ, fw);
+      }
     }
     // the weapon hand stays closed around its handle in every clip
     for (const c of this.curl) c.bone.quaternion.multiply(c.q);
