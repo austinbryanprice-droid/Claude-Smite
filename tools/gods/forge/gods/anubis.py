@@ -135,7 +135,43 @@ class Anubis(God):
         trim.append(kit.ring_around(H + np.array([0, -0.03, 0.17]) * S, normalize(np.array([0, 0.05, 1.0])), 0.046 * S, 0.007, seg=24, sides=6, rx=0.9, rz=1.1))
         tm = merge(trim)
         self.add('jackal_trim', 'gold', tm, 'DEF-head')
+        self.nemes(H, S)
         del up, J
+
+    def nemes(self, H, S):
+        """Striped headcloth: hugs the back of the skull behind the ears and flares
+        out over the shoulders, with lappets falling in front of the collar."""
+        from ..geo import Mesh
+        rows, cols = 14, 29
+        u = np.linspace(0, 1, cols)  # across, left lappet .. back .. right lappet
+        t = np.linspace(0, 1, rows)  # top .. hem
+        a = (u - 0.5) * np.radians(230)
+        U, T = np.meshgrid(u, t)
+        A = np.meshgrid(a, t)[0]
+        side = np.abs(A) / np.radians(115)  # 0 at the back, 1 at the lappets
+        drop = 0.36 + 0.1 * side ** 2  # lappets hang lower than the back
+        y = H[1] + 0.05 * S - T * drop
+        # tight around the skull, flaring to the shoulders, a little fuller at the back
+        r = (0.098 * S + 0.13 * np.clip(T - 0.15, 0, 1) ** 1.2) * (1 + 0.12 * (1 - side))
+        # lappets tuck in toward the chest at the bottom
+        r = r - 0.05 * side ** 3 * np.clip(T - 0.4, 0, 1)
+        cz = H[2] - 0.005 * S
+        x = r * np.sin(A)
+        z = cz - r * np.cos(A) * (1 - 0.15 * side)
+        # soft folds along the cloth
+        rr = 1 + 0.035 * np.sin(A * 9) * np.clip(T, 0.2, 1)
+        x, z = x * rr, cz + (z - cz) * rr
+        P = np.stack([x, y, z], axis=-1).reshape(-1, 3)
+        idx = np.arange(rows * cols).reshape(rows, cols)
+        q0, q1, q2, q3 = idx[:-1, :-1].ravel(), idx[:-1, 1:].ravel(), idx[1:, 1:].ravel(), idx[1:, :-1].ravel()
+        f = np.concatenate([np.stack([q0, q2, q1], 1), np.stack([q0, q3, q2], 1)])
+        uv = np.stack([U.ravel(), 1 - T.ravel()], axis=1)
+        m = Mesh(P, f, uv=uv)
+        self.add('nemes', 'stripes', m, head_weights(self, m.v, fall=0.12))
+        # gold fillet along the top edge
+        top = P[idx[0]] + np.array([0, 0.004, 0])
+        band = tube(top, np.full(cols, 0.008), 6)
+        self.add('nemes_band', 'gold', band, 'DEF-head')
 
     def staff(self):
         center, along, across, palm = kit.hand_frame(self.body, 'R')

@@ -202,6 +202,21 @@ function clothMaterial(c: number, deep: number, trim: number, opts: { pattern?: 
   return m;
 }
 
+/** Striped headcloth (a nemes): bands of cloth and gold along uv.y, gold-trimmed hem. */
+function stripesMaterial(c: number, trim: number): THREE.Material {
+  const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.7, sheen: 0.5, sheenRoughness: 0.4, side: THREE.DoubleSide });
+  m.sheenColor = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.4);
+  const v = uv();
+  const weave = mx_noise_float(positionLocal.mul(vec3(240, 240, 240))).mul(0.05);
+  const band = smoothstep(0.42, 0.5, fract(v.y.mul(9))).mul(float(1).sub(smoothstep(0.92, 1.0, fract(v.y.mul(9)))));
+  const hem = float(1).sub(smoothstep(0.03, 0.045, min(v.x, float(1).sub(v.x)))).max(smoothstep(0.95, 0.965, v.y));
+  const t = max(band, hem);
+  m.colorNode = mix(color(c).add(weave), color(trim), t);
+  m.metalnessNode = t.mul(0.9);
+  m.roughnessNode = mix(float(0.7), float(0.28), t);
+  return m;
+}
+
 function leatherMaterial(c: number, trim: number): THREE.Material {
   const m = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.6, clearcoat: 0.15, clearcoatRoughness: 0.5 });
   const e = edge();
@@ -274,6 +289,7 @@ function buildMaterials(id: string, variant?: string): Map<string, THREE.Materia
   m.set('clothplain', clothMaterial(p.cloth, p.clothDeep, p.gold));
   m.set('cloth2', clothMaterial(p.cloth2, new THREE.Color(p.cloth2).multiplyScalar(0.55).getHex(), p.gold, { pattern: true }));
   m.set('leather', leatherMaterial(p.leather, p.gold));
+  m.set('stripes', stripesMaterial(p.cloth2, p.gold));
   m.set('hair', hairMaterial(p.hair, p.hairTip));
   m.set('fur', hairMaterial(p.fur, new THREE.Color(p.fur).lerp(new THREE.Color(0xffe8c8), 0.3).getHex()));
   m.set('glow', glowMaterial(p.glow));
