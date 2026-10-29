@@ -75,6 +75,7 @@ export const loki: GodDef = {
       description: 'Coat your weapons in venom. For 6 seconds, attacks poison and slow.',
       tags: ['damage', 'cc', 'buff'],
       targeting: { type: 'self' },
+      imbue: 6,
       cooldown: [14, 13.5, 13, 12.5, 12],
       cost: 50,
       effects: [buff('bonusAttackSpeed', 0.15, 6), dmg([10, 15, 25, 30, 35], 'strength', 0.08, 'physical', 4, 1), slow(0.15, 1)],

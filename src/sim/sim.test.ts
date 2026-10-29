@@ -311,6 +311,30 @@ describe('basic attacks', () => {
     expect(damaged(run(sim, 0.5), t)).toHaveLength(1);
   });
 
+  it('Poison Blade makes basics poison and slow, refreshing rather than stacking', () => {
+    const sim = setup();
+    const l = god(sim, loki, 'order', 0, 0);
+    const t = target(sim, 0, -8);
+    const speed = t.combatant.moveSpeed;
+    castAt(sim, l, 'loki.poison-blade', 0, -8);
+    l.aim.x = 0;
+    l.aim.z = -8;
+    sim.drainEvents();
+    // the cast alone poisons nobody
+    expect(damaged(run(sim, 1.5), t)).toHaveLength(0);
+    sim.basic(l);
+    const first = run(sim, 0.3);
+    expect(damaged(first, t)).toHaveLength(2); // the shot and the first poison tick
+    expect(t.combatant.moveSpeed).toBeLessThan(speed);
+    run(sim, 0.6);
+    expect(sim.basic(l)).toBe(true);
+    // a second shot restarts the poison (shot + 4 ticks) instead of adding a second one
+    expect(damaged(run(sim, 4.2), t)).toHaveLength(1 + 4);
+    // once the blade wears off, basics are plain again
+    sim.basic(l);
+    expect(damaged(run(sim, 3), t)).toHaveLength(1);
+  });
+
   it('a melee swing hits enemies in front and misses those behind', () => {
     const sim = setup();
     const o = god(sim, odin, 'order', 0, 0);
