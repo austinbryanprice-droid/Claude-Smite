@@ -19,13 +19,19 @@ export interface TerrainDef {
   mask(x: number, z: number): readonly [number, number, number, number];
 }
 
+/** Grid cells per side of one terrain tile. */
+const TILE_CELLS = 64;
+
 /**
  * Heightfield terrain built from a map's `TerrainDef`: grass, dirt, paved and
  * rock layers blended by a splat mask and by slope. Heights live on the CPU
  * too, so movement and prop placement can query them.
+ *
+ * The mesh is split into tiles so the camera and each shadow cascade only
+ * draw the tiles they can see, instead of the whole map every pass.
  */
 export class Terrain {
-  readonly mesh: THREE.Mesh;
+  readonly root = new THREE.Group();
   readonly size: number;
   private readonly segments: number;
   private readonly heights: Float32Array;
@@ -41,10 +47,66 @@ export class Terrain {
     this.mask = this.generateMask();
     const geometry = this.buildGeometry();
     const material = this.buildMaterial(textures);
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.name = 'terrain';
-    this.mesh.receiveShadow = true;
-    this.mesh.castShadow = true;
+    this.root.name = 'terrain';
+    for (const tile of this.tiles(geometry)) {
+      const mesh = new THREE.Mesh(tile, material);
+      mesh.name = 'terrain-tile';
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      this.root.add(mesh);
+    }
+    geometry.dispose();
+  }
+
+  /**
+   * Cuts the full grid into square tiles that share their edge vertices.
+   * Normals come from the full grid, so there are no seams between tiles.
+   */
+  private tiles(full: THREE.BufferGeometry): THREE.BufferGeometry[] {
+    const pos = full.getAttribute('position') as THREE.BufferAttribute;
+    const nrm = full.getAttribute('normal') as THREE.BufferAttribute;
+    const r = this.res;
+    const n = Math.ceil(this.segments / TILE_CELLS);
+    const out: THREE.BufferGeometry[] = [];
+    for (let tj = 0; tj < n; tj++) {
+      for (let ti = 0; ti < n; ti++) {
+        const i0 = Math.floor((ti * this.segments) / n);
+        const i1 = Math.floor(((ti + 1) * this.segments) / n);
+        const j0 = Math.floor((tj * this.segments) / n);
+        const j1 = Math.floor(((tj + 1) * this.segments) / n);
+        const w = i1 - i0 + 1;
+        const h = j1 - j0 + 1;
+        const p = new Float32Array(w * h * 3);
+        const q = new Float32Array(w * h * 3);
+        for (let j = 0; j < h; j++) {
+          for (let i = 0; i < w; i++) {
+            const src = (j0 + j) * r + (i0 + i);
+            const dst = (j * w + i) * 3;
+            p[dst] = pos.getX(src); p[dst + 1] = pos.getY(src); p[dst + 2] = pos.getZ(src);
+            q[dst] = nrm.getX(src); q[dst + 1] = nrm.getY(src); q[dst + 2] = nrm.getZ(src);
+          }
+        }
+        // same winding as PlaneGeometry: a, b, d and b, c, d per cell
+        const idx: number[] = [];
+        for (let j = 0; j < h - 1; j++) {
+          for (let i = 0; i < w - 1; i++) {
+            const a = j * w + i;
+            const b = (j + 1) * w + i;
+            const c = (j + 1) * w + i + 1;
+            const d = j * w + i + 1;
+            idx.push(a, b, d, b, c, d);
+          }
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(q, 3));
+        g.setIndex(idx);
+        g.computeBoundingSphere();
+        g.computeBoundingBox();
+        out.push(g);
+      }
+    }
+    return out;
   }
 
   private generateHeights(): Float32Array {
@@ -95,7 +157,6 @@ export class Terrain {
     }
     geo.deleteAttribute('uv');
     geo.computeVertexNormals();
-    geo.computeBoundingSphere();
     return geo;
   }
 
