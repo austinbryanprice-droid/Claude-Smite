@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {
-  attribute, cameraPosition, dFdx, dFdy, dot, float, hash, instanceIndex, log2, max, mix, normalViewGeometry,
-  normalize, positionLocal, positionWorld, pow, sin, texture, time, uniform, uv, vec3,
+  attribute, bool, cameraPosition, dFdx, dFdy, dot, float, floor, hash, instanceIndex, length, log2, max, mix,
+  normalViewGeometry, normalize, positionLocal, positionWorld, pow, screenCoordinate, sin, smoothstep, step, texture,
+  time, uniform, uv, vec3,
 } from '../render/tsl';
 import { rng } from '../core/random';
 import type { TextureLibrary } from './Materials';
@@ -312,6 +313,37 @@ export interface FoliageInstance {
   scale: number;
 }
 
+/** The player's position, so foliage between the camera and them can fade out (y below -1000 turns it off). */
+export const occlusionFocus = uniform(new THREE.Vector3(0, -1e4, 0));
+
+/** 0..1: how much a fragment sits in the cone from the camera to the player's chest. */
+function occlusionFade(): any {
+  const target = occlusionFocus.add(vec3(0, 1.2, 0));
+  const ab = target.sub(cameraPosition);
+  const ap = positionWorld.sub(cameraPosition);
+  const along = dot(ap, ab).div(max(dot(ab, ab), float(1e-4)));
+  const t = along.clamp(0, 1);
+  const d = length(ap.sub(ab.mul(t)));
+  const radius = mix(float(0.8), float(2.4), t);
+  // fade everything up to and around the player, but not the foliage behind them
+  const reach = float(1).add(float(0.9).div(max(length(ab), float(1))));
+  return float(1).sub(smoothstep(radius.mul(0.55), radius, d))
+    .mul(float(1).sub(smoothstep(float(1), reach, along)))
+    .mul(smoothstep(0.02, 0.08, along))
+    .mul(step(-1000, occlusionFocus.y));
+}
+
+/**
+ * False for fragments that hide the player: inside a cone from the camera to
+ * the player's chest, foliage is screen-door dithered away (temporal AA turns
+ * the stipple into a soft see-through). Shadows are not affected.
+ */
+function keepUnoccluded(): any {
+  const noise = hash(floor(screenCoordinate.x).add(floor(screenCoordinate.y).mul(4093)));
+  // keep a sparse stipple so the leaves still hint at where the bush is
+  return occlusionFade().mul(0.85).lessThan(noise);
+}
+
 /** Instanced, chunked foliage for one map. */
 export class Foliage {
   readonly group = new THREE.Group();
@@ -363,6 +395,8 @@ export class Foliage {
     mat.colorNode = c.rgb.mul(mix(vec3(0.9, 0.86, 0.8), vec3(1.08, 1.0, 0.92), hash(instanceIndex.add(7))));
     mat.roughnessNode = nr.z;
     mat.metalnessNode = float(0);
+    mat.maskNode = keepUnoccluded();
+    mat.maskShadowNode = bool(true);
     mat.name = 'bark';
     return mat;
   }
@@ -396,6 +430,8 @@ export class Foliage {
     const sun = uniform(this.sunDirection);
     const back = pow(max(dot(viewDir, sun), float(0)), float(4)).mul(0.3).add(0.03);
     mat.emissiveNode = col.mul(vec3(1.0, 0.92, 0.55)).mul(back).mul(shade);
+    mat.maskNode = keepUnoccluded();
+    mat.maskShadowNode = bool(true);
     mat.name = 'leaves';
     return mat;
 

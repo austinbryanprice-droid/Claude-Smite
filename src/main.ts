@@ -139,7 +139,7 @@ async function main(): Promise<void> {
     gameAudio.frame(dt);
     showcase?.update(dt);
     follow.update(dt);
-    world.update(dt, loop.time, god.root.position);
+    world.update(dt, loop.time, player.model.root.position);
     post.render();
     input.endFrame();
     hud.frame(dt);
