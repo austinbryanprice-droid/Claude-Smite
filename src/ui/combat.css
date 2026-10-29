@@ -88,3 +88,12 @@
 .ch-num-taken { color: #ff5a4a; font-size: 18px; }
 .ch-num-heal { color: #8ff07a; font-size: 16px; }
 .ch-num-reward { color: #ffe3a3; font-size: 14px; letter-spacing: 0.06em; }
+
+/* red edges: a pulse on every hit taken, a slow heartbeat at low health */
+.ch-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(170, 15, 15, 0.5) 70%, rgba(130, 0, 0, 0.9) 100%);
+}

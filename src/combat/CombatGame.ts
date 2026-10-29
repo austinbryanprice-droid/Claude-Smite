@@ -14,7 +14,7 @@ import { dummyUnit, godUnit, summonUnit } from '../sim/factory';
 import { LaneBot, ROLES, spawnPoint, type BotRole } from '../sim/LaneBot';
 import { conquestBases, Match } from '../sim/Match';
 import { Sim, type BaseZone, type SimTerrain } from '../sim/Sim';
-import { Unit, WORLD_SCALE, type Body } from '../sim/Unit';
+import { isStructure, Unit, WORLD_SCALE, type Body, type SimEvent } from '../sim/Unit';
 import { CombatHud } from '../ui/CombatHud';
 import { LoadoutMenu } from '../ui/LoadoutMenu';
 import { MatchHud } from '../ui/MatchHud';
@@ -41,6 +41,8 @@ export interface CombatDeps {
   input: Input;
   player: PlayerController;
   camera: THREE.PerspectiveCamera;
+  /** Adds camera shake (0..1 trauma). */
+  shake?: (amount: number) => void;
 }
 
 /** Until the Conquest scene lands, a match on another map follows its ground but ignores its walls. */
@@ -227,6 +229,7 @@ export class CombatGame implements Updatable {
       this.views.onEvent(e);
       this.hud.onEvent(e);
       this.matchHud?.onEvent(e);
+      this.feel(e);
       if ((e.type === 'levelUp' || e.type === 'reward' || e.type === 'recall') && e.unit === this.player) this.menu.refresh();
     }
 
@@ -291,6 +294,34 @@ export class CombatGame implements Updatable {
 
     if (!input.isMouseDown(0)) this.suppressBasic = false;
     if (!this.preview && !this.suppressBasic && input.locked && input.isMouseDown(0) && u.alive) this.sim.basic(u);
+  }
+
+  /** Camera shake for the hits the player should feel: their own pain and big blasts nearby. */
+  private feel(e: SimEvent): void {
+    const shake = this.deps.shake;
+    if (!shake) return;
+    const me = this.player;
+    const near = (x: number, z: number, r: number) => Math.max(0, 1 - Math.hypot(x - me.x, z - me.z) / r);
+    switch (e.type) {
+      case 'damage':
+        if (e.target === me && e.amount > 0) shake(Math.min(0.45, 0.12 + (e.amount / me.combatant.stats.maxHealth) * 2.5));
+        break;
+      case 'impact':
+        if (e.big) shake(0.3 * near(e.x, e.z, 16));
+        break;
+      case 'basic':
+        if (e.unit.kind === 'titan') shake(0.5 * near(e.unit.x, e.unit.z, 30));
+        break;
+      case 'cast':
+        if (e.unit === me && e.cast.slot === ULTIMATE_SLOT) shake(0.25);
+        break;
+      case 'death':
+        if (isStructure(e.unit)) shake(0.8 * near(e.unit.x, e.unit.z, 60));
+        else if (e.unit.kind === 'god') shake(e.killer === me || e.unit === me ? 0.4 : 0.25 * near(e.unit.x, e.unit.z, 25));
+        break;
+      default:
+        break;
+    }
   }
 
   private castSlot(slot: number): void {

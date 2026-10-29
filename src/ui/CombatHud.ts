@@ -81,12 +81,17 @@ export class CombatHud {
   private readonly v = new THREE.Vector3();
   private loadoutKey = '';
 
+  /** Red screen edges: pulse on damage taken, linger at low health. */
+  private readonly vignette: HTMLElement;
+  private hurt = 0;
+
   constructor(
     private player: Unit,
     private readonly camera: THREE.Camera,
     private readonly headOf: (u: Unit, out: THREE.Vector3) => THREE.Vector3 | null,
   ) {
     this.root = el('div', 'combat-hud', document.body);
+    this.vignette = el('div', 'ch-vignette', this.root);
     this.overlay = el('div', 'ch-overlay', this.root);
 
     const frame = el('div', 'ch-frame', this.root);
@@ -155,6 +160,7 @@ export class CombatHud {
       case 'damage': {
         const mine = e.source === this.player || e.source?.owner === this.player;
         const onMe = e.target === this.player;
+        if (onMe) this.hurt = Math.min(1, this.hurt + 0.25 + (e.amount / this.player.combatant.stats.maxHealth) * 3);
         if (!mine && !onMe) break;
         const cls = onMe ? 'taken' : e.crit ? 'crit' : e.ability ? 'ability' : 'basic';
         this.floater(e.target, `${Math.round(e.amount)}${e.crit ? '!' : ''}`, `ch-num ch-num-${cls}`);
@@ -194,6 +200,10 @@ export class CombatHud {
 
     // resources and level
     const hpPct = (c.health / s.maxHealth) * 100;
+    this.hurt = Math.max(0, this.hurt - dt * 2.2);
+    const low = p.alive ? Math.max(0, (35 - hpPct) / 35) : 0;
+    const beat = low > 0 ? 0.75 + 0.25 * Math.sin(performance.now() / 180) : 0;
+    this.vignette.style.opacity = `${Math.min(1, this.hurt * 0.9 + low * beat)}`;
     const shield = c.shieldTotal;
     this.hpFill.style.width = `${hpPct}%`;
     this.hpShield.style.left = `${hpPct}%`;
