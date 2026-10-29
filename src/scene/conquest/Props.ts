@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, color, cos, float, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
-  time, vec3,
+  abs, color, cos, dot, float, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
+  time, uv, vec3,
 } from '../../render/tsl';
 import { rng } from '../../core/random';
 import { ConquestLayout as L, type Camp, type CampKind } from '../../map/ConquestLayout';
@@ -50,17 +50,29 @@ function mat4(x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, s = 1): T
   return new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), tmpQ, new THREE.Vector3(s, s, s));
 }
 
-/** Glowing molten rock with crust that drifts slowly. */
-function lavaMaterial(): THREE.MeshStandardNodeMaterial {
+/**
+ * Scorched basalt floor veined with glowing cracks and a few molten pools,
+ * fading out at its rim so it sits in the ground like a decal.
+ */
+function lavaFloorMaterial(): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial();
   const p = positionWorld.xz;
-  const flow = mx_fractal_noise_float(vec3(p.mul(0.35), time.mul(0.12)), 3, 2, 0.5).mul(0.5).add(0.5);
-  const cracks = smoothstep(0.08, 0.0, abs(mx_noise_float(vec3(p.mul(0.9), time.mul(0.05)))));
-  const hot = smoothstep(0.45, 0.75, flow).max(cracks);
-  mat.colorNode = mix(color(0x1a0f0c), color(0x3a1408), hot);
-  mat.roughnessNode = mix(float(0.85), float(0.4), hot);
+  const d = uv().sub(0.5).length().mul(2);
+  const warp = mx_noise_float(vec3(p.mul(0.12), 3.1)).mul(1.5);
+  const veins = smoothstep(0.035, 0.0, abs(mx_noise_float(vec3(p.mul(0.32).add(warp), time.mul(0.03)))));
+  const fine = smoothstep(0.025, 0.0, abs(mx_noise_float(vec3(p.mul(1.1), 7.0)))).mul(0.45);
+  const flow = mx_fractal_noise_float(vec3(p.mul(0.22), time.mul(0.1)), 3, 2, 0.5).mul(0.5).add(0.5);
+  const pools = smoothstep(0.76, 0.86, flow);
+  // hotter toward the pit's middle, cooling to plain scorched rock at the rim
+  const heat = smoothstep(0.95, 0.25, d);
+  const hot = veins.max(fine).mul(heat).max(pools.mul(heat));
+  mat.colorNode = mix(mix(color(0x1c1512), color(0x2c211b), flow), color(0x3a1408), hot);
+  mat.roughnessNode = mix(float(0.9), float(0.45), hot);
   mat.metalnessNode = float(0);
-  mat.emissiveNode = mix(color(0xff3a06), color(0xffb347), pow(hot, float(2))).mul(hot.mul(6));
+  mat.emissiveNode = mix(color(0xff2a04), color(0xffa040), pow(hot, float(2))).mul(hot.mul(3.5));
+  mat.transparent = true;
+  mat.depthWrite = false;
+  mat.opacityNode = smoothstep(1.0, 0.78, d.add(warp.mul(0.08)));
   return mat;
 }
 
@@ -89,6 +101,8 @@ export class ConquestProps {
   private readonly rand = rng(5150);
   private readonly blocks: THREE.BufferGeometry[];
   private readonly rocks: THREE.BufferGeometry[];
+  /** Weathered grey-green stone for the lane walls, cooler than the temple sandstone. */
+  private readonly wallStone: THREE.MeshStandardNodeMaterial;
 
   constructor(
     private readonly mats: MaterialLibrary,
@@ -99,6 +113,9 @@ export class ConquestProps {
     this.group.name = 'props';
     this.blocks = Array.from({ length: 6 }, (_, i) => chippedBlock(1.5, 0.75, 0.85, 6000 + i));
     this.rocks = Array.from({ length: 5 }, (_, i) => boulder(1, 6100 + i, 3));
+    this.wallStone = mats.sandstone.clone() as THREE.MeshStandardNodeMaterial;
+    const sand = mats.sandstone.colorNode as any;
+    this.wallStone.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.8).mul(vec3(0.78, 0.88, 0.76));
     this.laneWalls();
     this.braziers();
     for (const c of L.camps) {
@@ -114,7 +131,7 @@ export class ConquestProps {
     return this.terrain.heightAt(x, z);
   }
 
-  /** Low, broken sandstone walls at the foot of the jungle walls along every lane. */
+  /** Low, broken mossy stone walls at the foot of the jungle walls along every lane. */
   private laneWalls(): void {
     const r = this.rand;
     for (const lane of L.lanes) {
@@ -149,12 +166,12 @@ export class ConquestProps {
             const h = Math.max(1, courses - (r() < 0.3 ? 1 : 0));
             for (let c = 0; c < h; c++) {
               const g = this.blocks[Math.floor(r() * this.blocks.length)]!;
-              this.inst.add(g, this.mats.sandstone, mat4(x, g0 - 0.06 + 0.375 + c * 0.76, z, (r() - 0.5) * 0.04, yaw + (r() - 0.5) * 0.08 + (c % 2) * 0.04, (r() - 0.5) * 0.04));
+              this.inst.add(g, this.wallStone, mat4(x, g0 - 0.06 + 0.375 + c * 0.76, z, (r() - 0.5) * 0.04, yaw + (r() - 0.5) * 0.08 + (c % 2) * 0.04, (r() - 0.5) * 0.04));
             }
             if (r() < 0.06) {
               const tx = x + dz * side * 1.2;
               const tz = z - dx * side * 1.2;
-              this.inst.add(this.blocks[0]!, this.mats.sandstone, mat4(tx, this.ground(tx, tz) + 0.25, tz, r() * 0.5, r() * 3, r() * 0.5));
+              this.inst.add(this.blocks[0]!, this.wallStone, mat4(tx, this.ground(tx, tz) + 0.25, tz, r() * 0.5, r() * 3, r() * 0.5));
             }
           }
         }
@@ -311,8 +328,7 @@ export class ConquestProps {
     const R = L.radii.boss + 1.5;
     const basalt = this.mats.rock.clone();
     basalt.colorNode = (this.mats.rock.colorNode as any).mul(vec3(0.32, 0.28, 0.27));
-    const lava = lavaMaterial();
-    for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2 + r() * 0.2;
       if (Math.cos(a) > 0.8 || Math.cos(a) < -0.8) continue;
       const x = Math.cos(a) * (R + r() * 1.5);
@@ -326,22 +342,12 @@ export class ConquestProps {
       pit.add(spire);
       this.collision.addCircle(cx + x, cz + z, 1.6);
     }
-    // lava pools in the outer ring, clear of the fighting space
-    for (let i = 0; i < 5; i++) {
-      const a = Math.PI / 2 * (i % 2 ? 1 : -1) + (r() - 0.5) * 1.6;
-      const d = R - 3.2;
-      const pool = new THREE.Mesh(new THREE.CircleGeometry(2.2 + r() * 1.0, 32).rotateX(-Math.PI / 2), lava);
-      pool.position.set(Math.cos(a) * d, 0.06, Math.sin(a) * d);
-      pool.scale.set(1.4, 1, 0.8);
-      pool.rotation.y = r() * 6;
-      pit.add(pool);
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.22, 6, 32).rotateX(Math.PI / 2), basalt);
-      rim.position.copy(pool.position);
-      rim.scale.set(1.4 * (pool.geometry as THREE.CircleGeometry).parameters.radius / 1.6, 0.5, 0.8 * (pool.geometry as THREE.CircleGeometry).parameters.radius / 1.6);
-      rim.rotation.y = pool.rotation.y;
-      rim.castShadow = true;
-      pit.add(rim);
-    }
+    // the whole pit floor is cracked, glowing basalt
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(R + 1.5, 64).rotateX(-Math.PI / 2), lavaFloorMaterial());
+    floor.position.y = 0.05;
+    floor.receiveShadow = true;
+    floor.renderOrder = 1;
+    pit.add(floor);
     const light = new THREE.PointLight(0xff5a1a, 60, 26, 2);
     light.position.y = 2;
     pit.add(light);

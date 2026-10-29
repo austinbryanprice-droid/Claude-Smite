@@ -135,13 +135,14 @@ export class Grass {
     const tipGreen = mix(vec3(0.22, 0.47, 0.07), vec3(0.4, 0.55, 0.11), smoothstep(0.6, 0.97, variation));
     const col = mix(base, tipGreen, pow(h, float(0.9)));
     mat.colorNode = col;
-    mat.roughnessNode = float(0.55).add(h.mul(0.15));
+    // rough enough that blades on sunward ridges don't flare with specular
+    mat.roughnessNode = float(0.82).add(h.mul(0.1));
     mat.metalnessNode = float(0);
     mat.aoNode = mix(float(0.55), float(1), smoothstep(0.0, 0.6, h));
     // Fake subsurface: blades glow when the sun is behind them.
     const viewDir = normalize(pos.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
-    const back = pow(dot(viewDir, sun.negate()).max(0), float(3)).mul(h).mul(0.22);
+    const back = pow(dot(viewDir, sun.negate()).max(0), float(3)).mul(h).mul(0.1);
     mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(1.0);
     return mat;
   }

@@ -77,11 +77,11 @@ export class PhoenixModel implements StructureModel {
     const tip = smoothstep(0.4, 2.4, positionLocal.y.abs().add(positionLocal.z.abs().mul(0.6)));
     const flow = mx_noise_float(vec3(positionLocal.x.mul(1.8), positionLocal.y.mul(1.8).sub(time.mul(1.4)), positionLocal.z.mul(1.8))).mul(0.5).add(0.5);
     const burn = pow(tip.mul(flow.mul(0.6).add(0.6)), float(1.3)).clamp(0, 1);
-    const fireCol = mix(color(style.fire.low), color(style.fire.high), flow);
+    const fireCol = mix(color(style.fire.low), color(style.fire.high), flow.mul(0.45));
     birdMat.colorNode = mix(color(team === 'order' ? 0xd9a441 : 0x3a1a14), fireCol, burn.mul(0.6));
     birdMat.metalnessNode = float(1).sub(burn);
     birdMat.roughnessNode = float(0.28);
-    birdMat.emissiveNode = fireCol.mul(burn.mul(6).add(0.15)).mul(this.heat);
+    birdMat.emissiveNode = fireCol.mul(burn.mul(3).add(0.15)).mul(this.heat);
 
     this.bird.position.y = this.birdY;
     this.root.add(this.bird);

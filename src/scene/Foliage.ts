@@ -380,11 +380,12 @@ export class Foliage {
 
     // Per-instance hue shift between yellow-green and blue-green.
     const h = hash(instanceIndex);
-    const tint = mix(mix(vec3(1.12, 1.08, 0.62), vec3(0.95, 1.05, 0.9), smoothish(h)), vec3(0.78, 1.0, 1.02), smoothish(hash(instanceIndex.add(3))).mul(0.5));
+    const tint = mix(mix(vec3(1.0, 1.02, 0.6), vec3(0.82, 1.0, 0.84), smoothish(h)), vec3(0.7, 0.95, 1.0), smoothish(hash(instanceIndex.add(3))).mul(0.5));
     const shade = attribute('shade', 'float');
-    const col = tex.rgb.mul(tint).mul(1.15);
+    // deep, cool greens with dark crown interiors, as in the reference jungle
+    const col = tex.rgb.mul(tint).mul(0.88);
     mat.colorNode = col;
-    mat.aoNode = shade;
+    mat.aoNode = shade.mul(shade);
     // Normals come from the cluster shape and must not flip on back faces.
     mat.normalNode = normalViewGeometry;
     mat.roughnessNode = float(0.62);
