@@ -327,14 +327,18 @@ export class ConquestProps {
     const r = this.rand;
     const R = L.radii.boss + 1.5;
     const basalt = this.mats.rock.clone();
-    basalt.colorNode = (this.mats.rock.colorNode as any).mul(vec3(0.32, 0.28, 0.27));
+    basalt.colorNode = (this.mats.rock.colorNode as any).mul(vec3(0.22, 0.19, 0.19));
+    // molten seams glow up from the spires' feet (pit space: y = 0 is the floor)
+    const seam = smoothstep(0.06, 0.0, abs(mx_noise_float(positionLocal.mul(vec3(0.9, 0.35, 0.9)))));
+    const heatUp = smoothstep(4.5, 0.0, positionLocal.y);
+    basalt.emissiveNode = mix(color(0xff2a04), color(0xff8a2a), heatUp).mul(seam.mul(heatUp).mul(4));
         for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2 + r() * 0.2;
       if (Math.cos(a) > 0.8 || Math.cos(a) < -0.8) continue;
       const x = Math.cos(a) * (R + r() * 1.5);
       const z = Math.sin(a) * (R + r() * 1.5);
       const spire = new THREE.Mesh(boulder(1.2, 7500 + i, 3), basalt);
-      spire.scale.set(1.2 + r() * 0.8, 4 + r() * 5, 1.2 + r() * 0.8);
+      spire.scale.set(1.1 + r() * 0.7, 6.5 + r() * 6, 1.1 + r() * 0.7);
       spire.position.set(x, -0.6, z);
       spire.rotation.set((r() - 0.5) * 0.3, r() * 6, (r() - 0.5) * 0.3);
       spire.castShadow = true;
