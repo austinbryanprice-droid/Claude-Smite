@@ -6,7 +6,7 @@
 import { Announcer } from '../audio/Announcer';
 import { AudioEngine } from '../audio/AudioEngine';
 import { bakeAll, jobs } from '../audio/bank';
-import { Music } from '../audio/music';
+import { Music, type SongName } from '../audio/music';
 import { GODS } from '../game/gods';
 import { mountAudioPanel } from '../ui/AudioPanel';
 import './soundboard.css';
@@ -41,8 +41,12 @@ root.innerHTML = `
   <p class="sb-note">Every sound in the game, made in code. Click to play (loops play for three seconds). <span class="sb-status">Rendering sounds…</span></p>
   <div class="sb-music">
     <button data-music="hymn">Title hymn</button>
+    <button data-music="dawn">Match opening (calm)</button>
+    <button data-music="dawn" data-fight="1">Match opening (skirmish)</button>
     <button data-music="battle">Battle theme (calm)</button>
     <button data-music="battle" data-fight="1">Battle theme (fighting)</button>
+    <button data-music="siege">Late game (calm)</button>
+    <button data-music="siege" data-fight="1">Late game (fighting)</button>
     <button data-sting="victory">Victory</button>
     <button data-sting="defeat">Defeat</button>
     <button data-stop="1">Stop music</button>
@@ -64,7 +68,7 @@ root.addEventListener('click', (e) => {
   const d = b.dataset;
   if (d.music) {
     fight = d.fight ? 1 : 0;
-    music.play(d.music as 'hymn' | 'battle');
+    music.play(d.music as SongName);
   } else if (d.sting) music.sting(d.sting as 'victory' | 'defeat');
   else if (d.stop) music.stop();
   else if (d.say) herald.say(d.say, d.mood as 'good');

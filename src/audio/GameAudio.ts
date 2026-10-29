@@ -13,7 +13,10 @@ import { isStructure, type Projectile, type SimEvent, type Unit, type Zone } fro
 import type { Announcer } from './Announcer';
 import type { AudioEngine, LoopHandle } from './AudioEngine';
 import { skillPart, skillSound } from './bank';
-import type { Music } from './music';
+import type { Music, SongName } from './music';
+
+/** A match's music only ever moves forward: dawn, then battle, then the siege. */
+const PHASES: SongName[] = ['dawn', 'battle', 'siege'];
 
 const SLOT_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'];
 
@@ -56,6 +59,7 @@ export class GameAudio {
   private streak = 0;
   private multi = { count: 0, until: 0 };
   private titanWarnAt = -999;
+  private phase = 0;
   private ended = false;
   private time = 0;
 
@@ -70,7 +74,7 @@ export class GameAudio {
     game.sim.listeners.push((e) => this.onEvent(e));
     window.addEventListener('keydown', (e) => this.onKey(e));
     engine.onUnlock(() => this.startAmbience());
-    this.music.play('battle');
+    this.music.play(this.conquest ? 'dawn' : 'battle');
   }
 
   private get me(): Unit {
@@ -595,6 +599,13 @@ export class GameAudio {
       const base = L.bases.find((b) => b.team === this.me.team)!;
       this.engine.play('wave.horn', { at: { x: base.titan[0], z: base.titan[1] }, gain: m.wave === 1 ? 1 : 0.6, ref: 30 }, 4);
     }
+    if (this.conquest && !m.winner) {
+      const want = PHASES.indexOf(this.songFor(m));
+      if (want > this.phase) {
+        this.phase = want;
+        this.music.play(PHASES[want]!);
+      }
+    }
     if (m.winner && !this.ended) {
       this.ended = true;
       const won = m.winner === this.me.team;
@@ -603,6 +614,17 @@ export class GameAudio {
         this.herald.say(won ? 'Victory! The enemy Titan has fallen.' : 'Defeat. Our Titan has fallen.', won ? 'epic' : 'bad', 9);
       }, 1800);
     }
+  }
+
+  /**
+   * Which theme the match has reached: the calm dawn until the first blood
+   * or the third minute, the battle theme after, and the siege once a Titan
+   * stands exposed or the war passes fifteen minutes.
+   */
+  private songFor(m: NonNullable<CombatGame['match']>): SongName {
+    if (m.time > 15 * 60 || Object.values(m.titans).some((t) => t.alive && !t.shielded())) return 'siege';
+    if (this.firstBlood || m.time > 180) return 'battle';
+    return 'dawn';
   }
 
   private updateMood(dt: number): void {

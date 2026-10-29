@@ -128,7 +128,7 @@ interface Inst {
   sustain: boolean;
 }
 
-const INST: Record<string, Inst> = {
+export const INST: Record<string, Inst> = {
   'mus.pad.lo': { ref: 45, sustain: true },
   'mus.pad.hi': { ref: 57, sustain: true },
   'mus.choir': { ref: 57, sustain: true },
@@ -174,7 +174,7 @@ export const INSTRUMENTS: Record<string, Recipe> = {
 // Harmony
 
 /** Chords as MIDI notes, root first. D minor and friends. */
-const CHORDS: Record<string, number[]> = {
+export const CHORDS: Record<string, number[]> = {
   Dm: [50, 53, 57],
   Bb: [46, 50, 53],
   F: [41, 45, 48],
@@ -282,7 +282,82 @@ const BATTLE: Song = {
   },
 };
 
-const SONGS = { hymn: HYMN, battle: BATTLE } as const;
+/** The opening minutes of a match: dawn over the battlefield, light and hopeful, before the armies meet. */
+const DAWN: Song = {
+  bpm: 76,
+  beats: 4,
+  chords: ['Dm', 'Dm', 'F', 'F', 'C', 'C', 'Dm', 'Dm', 'Bb', 'Bb', 'F', 'F', 'Gm', 'Gm', 'Asus', 'A'],
+  write(bar, loop, ch, out) {
+    // -- base: open strings, a slow harp and the high choir
+    if (bar % 2 === 0) {
+      for (const n of up(ch, 12)) out.push({ inst: 'mus.pad.hi', midi: n, beat: 0, dur: 8, gain: 0.2, layer: 'base' });
+      out.push({ inst: 'mus.bass', midi: ch[0]! - 12, beat: 0, dur: 8, gain: 0.32, layer: 'base' });
+      if (loop >= 1) out.push({ inst: 'mus.choir.hi', midi: ch[2]! + 12, beat: 0, dur: 8, gain: 0.12, layer: 'base' });
+    }
+    const arp = [ch[0]! + 12, ch[2]! + 12, ch[1]! + 24, ch[2]! + 12];
+    arp.forEach((n, i) => out.push({ inst: n >= 69 ? 'mus.harp.hi' : 'mus.harp', midi: n, beat: i, gain: 0.22, layer: 'base', pan: i % 2 ? 0.35 : -0.35 }));
+    out.push({ inst: 'mus.frame', beat: 0, gain: 0.16, layer: 'base' });
+    if (bar % 8 === 0) out.push({ inst: 'mus.bell', midi: ch[0]! + 36, beat: 0, gain: 0.14, layer: 'base' });
+    // a plucked tune over the second half
+    const tune: Record<number, [number, number][]> = {
+      8: [[74, 0], [72, 1], [70, 2], [69, 3]],
+      9: [[70, 0], [74, 2]],
+      10: [[72, 0], [69, 1], [65, 2], [69, 3]],
+      11: [[72, 0], [77, 2]],
+      12: [[74, 0], [70, 1], [67, 2], [70, 3]],
+      13: [[74, 0], [72, 2]],
+      14: [[69, 0], [67, 1], [69, 2], [73, 3]],
+      15: [[74, 0]],
+    };
+    for (const [m, b] of tune[bar] ?? []) out.push({ inst: 'mus.harp.hi', midi: m, beat: b, gain: 0.3, layer: 'base', pan: 0.1 });
+
+    // -- battle: the first skirmishes stir a light pulse
+    out.push({ inst: 'mus.taiko', beat: 0, gain: 0.5, layer: 'battle' }, { inst: 'mus.taiko.hi', beat: 2.5, gain: 0.35, layer: 'battle' });
+    for (let i = 0; i < 8; i++) out.push({ inst: 'mus.stac', midi: i % 2 ? ch[2]! : ch[0]!, beat: i * 0.5, gain: 0.22, layer: 'battle', pan: -0.2 });
+    if (bar % 2 === 0) out.push({ inst: 'mus.horn.lo', midi: ch[0]!, beat: 0, dur: 2, gain: 0.22, layer: 'battle' });
+  },
+};
+
+/**
+ * The late game: a Titan stands exposed or the war has dragged on. Darker
+ * (the flat sixth, Eb, leans on the D minor), faster, and heavier underneath.
+ */
+const SIEGE: Song = {
+  bpm: 112,
+  beats: 4,
+  chords: ['Dm', 'Dm', 'Eb', 'Eb', 'Dm', 'Dm', 'C', 'A', 'Gm', 'Gm', 'Eb', 'Eb', 'Bb', 'C', 'Asus', 'A'],
+  write(bar, _loop, ch, out) {
+    // -- base: low strings, a pulsing bass and tolling bells, even when nobody is fighting
+    if (bar % 2 === 0 || bar >= 14) for (const n of ch) out.push({ inst: 'mus.pad.lo', midi: n, beat: 0, dur: bar >= 14 ? 4 : 8, gain: 0.3, layer: 'base' });
+    for (let i = 0; i < 8; i++) out.push({ inst: 'mus.bass', midi: ch[0]! - 12, beat: i * 0.5, dur: 0.4, gain: i % 2 ? 0.22 : 0.34, layer: 'base' });
+    for (let i = 0; i < 8; i++) out.push({ inst: 'mus.stac', midi: [ch[0]!, ch[0]!, ch[1]!, ch[0]!][i % 4]!, beat: i * 0.5, gain: 0.2, layer: 'base', pan: 0.25 });
+    out.push({ inst: 'mus.taiko', beat: 0, gain: 0.55, layer: 'base' }, { inst: 'mus.taiko', beat: 2, gain: 0.4, layer: 'base' });
+    out.push({ inst: 'mus.frame', beat: 1, gain: 0.22, layer: 'base' }, { inst: 'mus.frame', beat: 3, gain: 0.22, layer: 'base' });
+    if (bar % 4 === 0) out.push({ inst: 'mus.bell', midi: ch[0]! + 24, beat: 0, gain: 0.16, layer: 'base' });
+
+    // -- battle: thundering drums, brass stabs, the high choir and a desperate horn call
+    const drums: [number, number, string][] = [[0.5, 0.45, 'mus.taiko.hi'], [0.75, 0.35, 'mus.taiko.hi'], [1.5, 0.7, 'mus.taiko'], [2.5, 0.5, 'mus.taiko.hi'], [3, 0.7, 'mus.taiko'], [3.5, 0.6, 'mus.taiko'], [3.75, 0.4, 'mus.taiko.hi']];
+    for (const [b, g, inst] of drums) out.push({ inst, beat: b, gain: g, layer: 'battle' });
+    for (let i = 0; i < 16; i++) out.push({ inst: 'mus.shaker', beat: i * 0.25, gain: i % 2 ? 0.18 : 0.3, layer: 'battle', pan: -0.4 });
+    for (const b of [0, 1.5]) for (const n of ch) out.push({ inst: 'mus.horn.lo', midi: n, beat: b, dur: 0.5, gain: 0.26, layer: 'battle' });
+    if (bar % 2 === 0) for (const n of up(ch, 12)) out.push({ inst: 'mus.choir.hi', midi: n, beat: 0, dur: 8, gain: 0.14, layer: 'battle' });
+    const call: Record<number, [number, number, number][]> = {
+      8: [[67, 0, 1], [70, 1, 1], [74, 2, 2]],
+      9: [[75, 0, 3], [74, 3, 1]],
+      10: [[70, 0, 1], [67, 1, 1], [70, 2, 2]],
+      11: [[74, 0, 4]],
+      12: [[74, 0, 1.5], [72, 1.5, 0.5], [70, 2, 2]],
+      13: [[72, 0, 2], [76, 2, 2]],
+      14: [[74, 0, 4]],
+      15: [[73, 0, 4]],
+    };
+    for (const [m, b, d] of call[bar] ?? []) out.push({ inst: 'mus.horn', midi: m - 12, beat: b, dur: d, gain: 0.34, layer: 'battle' });
+    if (bar === 15) out.push({ inst: 'mus.swell', beat: 4 - (1.8 * SIEGE.bpm) / 60, gain: 0.55, layer: 'battle' });
+    if (bar === 0 || bar === 8) out.push({ inst: 'mus.crash', beat: 0, gain: 0.4, layer: 'battle' });
+  },
+};
+
+export const SONGS = { hymn: HYMN, dawn: DAWN, battle: BATTLE, siege: SIEGE } as const;
 export type SongName = keyof typeof SONGS;
 
 // ---------------------------------------------------------------------------
