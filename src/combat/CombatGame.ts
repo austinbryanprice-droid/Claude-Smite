@@ -147,6 +147,7 @@ export class CombatGame implements Updatable {
       for (const [id, s] of this.match.structures) if (s === u) return placed.get(id);
       return undefined;
     });
+    this.views.camera = deps.camera;
     world.actors.add(this.views.group);
     this.setPlayerModel(mine.id);
 
