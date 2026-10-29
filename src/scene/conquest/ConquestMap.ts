@@ -79,7 +79,7 @@ export class ConquestMap implements MapContent {
     this.buildStructures();
     this.props = new ConquestProps(materials, terrain, collision, def);
     this.group.add(this.props.group);
-    this.group.add(new Flowers(this.placeFlowers()).mesh);
+    this.group.add(new Flowers(this.placeFlowers()).root);
     this.fires.push(...this.props.fires);
     for (const g of [this.dynamic, this.group]) g.traverse((o) => {
       if ((o as THREE.PointLight).isPointLight) this.lights.push(o as THREE.PointLight);

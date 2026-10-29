@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, attribute, float, fract, hash, instanceIndex, mix, positionLocal, sin, smoothstep, step, time, uv, vec3,
+  abs, attribute, float, fract, hash, mix, positionLocal, sin, smoothstep, step, time, uv, vec3,
 } from '../render/tsl';
 import { rng } from '../core/random';
 
@@ -14,6 +14,8 @@ export interface FlowerInstance {
 }
 
 const SPIKES = 7;
+/** Clumps are batched per square region this wide, so off-screen ones are culled. */
+const CHUNK = 50;
 
 /**
  * Clumps of flowering spikes (lavender-like) for the lane verges. Each clump
@@ -22,14 +24,16 @@ const SPIKES = 7;
  * one instance of a single tiny mesh, cheap enough to scatter thousands.
  */
 export class Flowers {
-  readonly mesh: THREE.InstancedMesh;
+  readonly root = new THREE.Group();
 
   constructor(list: FlowerInstance[]) {
     const mat = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
     const v = uv().y;
     const u = uv().x;
     const sway = attribute('sway', 'float');
-    const phase = hash(instanceIndex).mul(6.283);
+    // per-clump random number, stored per instance so it survives chunking
+    const seed = attribute('seed', 'float');
+    const phase = hash(seed).mul(6.283);
     const bend = sin(time.mul(1.6).add(phase)).mul(0.06).mul(sway);
     mat.positionNode = positionLocal.add(vec3(bend, 0, bend.mul(0.7)));
 
@@ -44,7 +48,7 @@ export class Flowers {
     mat.alphaTest = 0.5;
 
     // per-clump palette: mostly lavender, some magenta and a few pale gold
-    const h = hash(instanceIndex.add(11));
+    const h = hash(seed.add(11));
     const lavender = vec3(0.42, 0.24, 0.85);
     const magenta = vec3(0.78, 0.18, 0.58);
     const gold = vec3(0.95, 0.78, 0.3);
@@ -58,21 +62,39 @@ export class Flowers {
     // a little glow so the color reads in shade, as in the stylized references
     mat.emissiveNode = tip.mul(head).mul(0.12);
 
-    this.mesh = new THREE.InstancedMesh(Flowers.clump(), mat, list.length);
+    const chunks = new Map<string, FlowerInstance[]>();
+    for (const it of list) {
+      const key = `${Math.floor(it.x / CHUNK)}:${Math.floor(it.z / CHUNK)}`;
+      let c = chunks.get(key);
+      if (!c) chunks.set(key, (c = []));
+      c.push(it);
+    }
+    const clump = Flowers.clump();
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
     const p = new THREE.Vector3();
     const up = new THREE.Vector3(0, 1, 0);
-    list.forEach((it, i) => {
-      m.compose(p.set(it.x, it.y, it.z), q.setFromAxisAngle(up, it.yaw), s.setScalar(it.scale));
-      this.mesh.setMatrixAt(i, m);
-    });
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.computeBoundingSphere();
-    this.mesh.castShadow = false;
-    this.mesh.receiveShadow = true;
-    this.mesh.name = 'flowers';
+    let n = 0;
+    for (const items of chunks.values()) {
+      // each chunk needs its own geometry for its own seed attribute
+      const geo = clump.clone();
+      const seeds = new Float32Array(items.length);
+      const mesh = new THREE.InstancedMesh(geo, mat, items.length);
+      items.forEach((it, i) => {
+        m.compose(p.set(it.x, it.y, it.z), q.setFromAxisAngle(up, it.yaw), s.setScalar(it.scale));
+        mesh.setMatrixAt(i, m);
+        seeds[i] = n++;
+      });
+      geo.setAttribute('seed', new THREE.InstancedBufferAttribute(seeds, 1));
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.name = 'flowers';
+      this.root.add(mesh);
+    }
+    clump.dispose();
   }
 
   /** A clump of spikes, each two crossed cards, leaning slightly outward. */
