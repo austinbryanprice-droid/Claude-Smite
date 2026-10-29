@@ -81,8 +81,8 @@ export class Showcase {
       const side = new THREE.Vector3(1, 0, 0).applyQuaternion(g.root.quaternion);
       this.camera.fov = 26;
       this.camera.updateProjectionMatrix();
-      this.camera.position.copy(head).addScaledVector(fwd, 2.9).addScaledVector(side, 0.55).add(new THREE.Vector3(0, 0.12, 0));
-      this.camera.lookAt(head.x, head.y - 0.22, head.z);
+      this.camera.position.copy(head).addScaledVector(fwd, 2.9).addScaledVector(side, 0.55).add(new THREE.Vector3(0, -0.06, 0));
+      this.camera.lookAt(head.x, head.y - 0.2, head.z);
     }
     if (this.view === 'portrait' && g) {
       // frame the face: in front of the head bone, slightly above eye level
