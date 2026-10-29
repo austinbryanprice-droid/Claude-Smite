@@ -17,6 +17,13 @@ export interface LocomotionState {
 }
 
 /**
+ * Materials whose meshes skip the shadow passes: hair clumps, eyes, gems and
+ * glow edges are dense but too thin to change a god's cast shadow, and the
+ * baked AO already darkens them in contact. Saves ~100k triangles per cascade.
+ */
+const NO_SHADOW = new Set(['hair', 'eye', 'gem', 'glow']);
+
+/**
  * Per-god body language layered on the shared cast clip, so each god casts in
  * character. Rotations are about model-space axes (+Y up, +Z forward, the
  * god's right hand toward -X), in radians at full cast.
@@ -159,7 +166,7 @@ export class GodModel {
       if (!mesh.isMesh) return;
       const name = (mesh.material as THREE.Material).name;
       mesh.material = mats.get(name) ?? mats.get('default')!;
-      mesh.castShadow = true;
+      mesh.castShadow = !NO_SHADOW.has(name);
       mesh.receiveShadow = true;
       // cull against a fixed, generous sphere: the posed mesh (swinging weapons,
       // cast accents) never leaves it, and it is never recomputed from bones
