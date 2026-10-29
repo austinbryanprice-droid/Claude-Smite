@@ -119,8 +119,9 @@ export const SOUNDS: Record<string, Recipe> = {
   'heartbeat': { loop: true, peak: 0.7, make: (r) => heartbeat(r) },
 
   // -- UI (played flat, not positioned)
-  'ui.hover': { peak: 0.18, make: (r) => layer([knock(r, 0.03, 3200), 1], [sine(0.04, 2400, 0.3), 1]) },
-  'ui.click': { peak: 0.38, make: (r) => layer([knock(r, 0.04, 2600), 1], [sine(0.07, 1320, 0.6), 1], [knock(r, 0.05, 900), 0.6]) },
+  // a few slightly different takes, so clicking around a menu doesn't sound like a metronome
+  'ui.hover': { variants: 3, peak: 0.18, make: (r) => { const k = 0.94 + r() * 0.12; return layer([knock(r, 0.03, 3200 * k), 1], [sine(0.04, 2400 * k, 0.3), 1]); } },
+  'ui.click': { variants: 3, peak: 0.38, make: (r) => { const k = 0.95 + r() * 0.1; return layer([knock(r, 0.04, 2600 * k), 1], [sine(0.07, 1320 * k, 0.6), 1], [knock(r, 0.05, 900 * k), 0.6]); } },
   'ui.select': { peak: 0.45, make: (r) => layer([chime(r, 0.4, 1046.5), 1], [chime(r, 0.4, 1568, { at: 0.05 }), 0.6], [knock(r, 0.04, 2600), 0.6]) },
   'ui.play': { peak: 0.8, make: (r) => layer([horn(r, 1.8, [146.8, 220, 293.7]), 1], [thump(r, 0.8, 80, 35, { click: 0.4, drive: 2 }), 0.9], [whoosh(r, 1.2, 200, 4000, { q: 0.8, peak: 0.6 }), 0.4]) },
   'ui.open': { peak: 0.45, make: (r) => layer([whoosh(r, 0.25, 600, 2400, { q: 1 }), 0.8], [chime(r, 0.5, 880), 0.5, 0.06]) },

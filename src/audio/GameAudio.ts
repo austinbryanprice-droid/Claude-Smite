@@ -42,6 +42,8 @@ export class GameAudio {
   private heartbeat: LoopHandle | null = null;
   private heat = 0;
   private muffle = 0;
+  /** Gain for other units' sounds: drops as the mix fills up, so your own fight stays clear. */
+  private crowd = 1;
   private birdIn = 4;
   private crowIn = 30;
   private lastWave = 0;
@@ -206,8 +208,9 @@ export class GameAudio {
       gap = 0.05;
     } else if (src.kind === 'monster') name = src.radius > 2 ? 'hit.blunt' : 'hit.monster';
     else name = 'hit.flesh';
-    this.at(name, target, { gain, vary: 0.08 }, src === this.me ? 4 : 2, gap);
-    if (crit) this.at('hit.crit', target, { gain: 0.6 }, 3);
+    const mine = src === this.me || target === this.me;
+    this.at(name, target, { gain, vary: 0.08 }, src === this.me ? 4 : 2, gap, mine);
+    if (crit) this.at('hit.crit', target, { gain: 0.6 }, 3, 0, mine);
   }
 
   private onImpact(owner: Unit, x: number, z: number, big: boolean): void {
@@ -328,6 +331,8 @@ export class GameAudio {
     // the ears sit on the god (third-person games sound wrong with ears at the camera)
     this.engine.setListener(me.x, me.body.y + 1.7, me.z, fwd.x, fwd.z);
 
+    const target = 1 / Math.sqrt(Math.max(1, this.engine.busy / 16));
+    this.crowd += (target - this.crowd) * Math.min(1, dt * 8);
     this.followProjectiles();
     this.followZones();
     for (const [u, l] of this.recalls) {
@@ -428,7 +433,7 @@ export class GameAudio {
       const heavy = u.radius > 2 || u.tag.endsWith('warden') || u.tag.endsWith('brute');
       const name = heavy ? 'step.heavy' : u.kind === 'minion' ? 'step.minion' : `step.${this.surface(u.x, u.z)}`;
       const mine = u === this.me;
-      const gain = mine ? 0.55 : u.kind === 'minion' ? 0.22 : heavy ? (u.radius > 2 ? 0.9 : 0.5) : 0.4;
+      const gain = (mine ? 0.55 : u.kind === 'minion' ? 0.22 : heavy ? (u.radius > 2 ? 0.9 : 0.5) : 0.4) * (mine ? 1 : this.crowd);
       this.engine.play(name, { at: { x: u.x, y: u.body.y + 0.1, z: u.z }, gain, vary: 0.07, ref: heavy ? 10 : 4, rate: heavy && u.radius > 2 ? 0.8 : 1 }, mine ? 3 : 0, u.kind === 'minion' ? 0.05 : 0);
     }
     if (this.strides.size > 400) for (const u of this.strides.keys()) if (!this.game.sim.units.includes(u)) this.strides.delete(u);
@@ -587,9 +592,14 @@ export class GameAudio {
     if (this.engine.has(name)) this.at(name, u, { gain: u === this.me ? gain : gain * 0.85, vary: 0.04, ref: 7, wet: 0.05 }, priority, gap);
   }
 
-  /** Play a sound at a unit. */
-  private at(name: string, u: Unit, o: Parameters<AudioEngine['play']>[1] = {}, priority = 1, gap = 0): void {
-    this.engine.play(name, { ...o, at: { x: u.x, y: u.body.y + 1.2, z: u.z } }, priority, gap);
+  /**
+   * Play a sound at a unit. `own` marks the player's own sounds (made by or
+   * aimed at them), which stay at full level when a crowded fight ducks the
+   * rest; so do the big moments (priority 5 and up: deaths, collapses, bosses).
+   */
+  private at(name: string, u: Unit, o: Parameters<AudioEngine['play']>[1] = {}, priority = 1, gap = 0, own = u === this.me): void {
+    const gain = (o.gain ?? 1) * (own || priority >= 5 ? 1 : this.crowd);
+    this.engine.play(name, { ...o, gain, at: { x: u.x, y: u.body.y + 1.2, z: u.z } }, priority, gap);
   }
 }
 

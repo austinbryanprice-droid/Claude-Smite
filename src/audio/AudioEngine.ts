@@ -76,6 +76,8 @@ export class AudioEngine {
   private readonly settingsListeners: ((s: AudioSettings) => void)[] = [];
   private reverbIn!: GainNode;
   private readonly muffles: BiquadFilterNode[] = [];
+  private readonly airLoops = new Set<AirSpot>();
+  private readonly airFrom = { x: 0, z: 0 };
   private musicDuck!: GainNode;
   private muffle = 0;
   private readonly raw = new Map<string, { data: Float32Array[]; loop: boolean }>();
@@ -306,8 +308,7 @@ export class AudioEngine {
     const g = ctx.createGain();
     g.gain.value = o.gain ?? 1;
     src.connect(g);
-    const out = this.route(g, o);
-    void out;
+    this.route(g, o);
     const when = now + (o.delay ?? 0);
     src.start(when);
     const v: Voice = { src, started: when, priority, name };
@@ -335,9 +336,12 @@ export class AudioEngine {
     g.gain.value = 0;
     g.gain.setTargetAtTime(target, ctx.currentTime, 0.05);
     src.connect(g);
-    const panner = this.route(g, o);
+    const { panner, air, send } = this.route(g, o);
     src.start(ctx.currentTime, Math.random() * buffer.duration);
     let alive = true;
+    // the air between loop and listener changes as either one moves
+    const spot: AirSpot | null = air && send && o.at ? { air, send, base: o.wet ?? 0, x: o.at.x, z: o.at.z } : null;
+    if (spot) this.airLoops.add(spot);
     return {
       get alive() {
         return alive;
@@ -345,6 +349,11 @@ export class AudioEngine {
       setPosition: (x, y, z) => {
         if (!panner || !alive) return;
         setPannerPos(panner, x, y, z, ctx.currentTime);
+        if (spot) {
+          spot.x = x;
+          spot.z = z;
+          this.applyAir(spot, ctx.currentTime, 0.1);
+        }
       },
       setGain: (v, ramp = 0.08) => {
         if (alive) g.gain.setTargetAtTime(v, ctx.currentTime, ramp);
@@ -355,6 +364,7 @@ export class AudioEngine {
       stop: (fade = 0.15) => {
         if (!alive) return;
         alive = false;
+        if (spot) this.airLoops.delete(spot);
         const t = ctx.currentTime;
         g.gain.cancelScheduledValues(t);
         g.gain.setValueAtTime(g.gain.value, t);
@@ -365,13 +375,28 @@ export class AudioEngine {
     };
   }
 
-  /** Connect a voice's gain to its bus, through a panner when positioned. */
-  private route(g: GainNode, o: PlayOptions): PannerNode | null {
+  /**
+   * Connect a voice's gain to its bus, through a panner when positioned.
+   * Positioned sounds also pass through "air": a low-pass that closes with
+   * distance, and a reverb send that grows with it, so far fights sound far
+   * away rather than just quiet.
+   */
+  private route(g: GainNode, o: PlayOptions): { panner: PannerNode | null; air: BiquadFilterNode | null; send: GainNode | null } {
     const ctx = this.ctx!;
     const bus = this.buses[o.bus ?? 'sfx'];
     let node: AudioNode = g;
     let panner: PannerNode | null = null;
+    let air: BiquadFilterNode | null = null;
+    let wet = o.wet ?? 0;
     if (o.at) {
+      const d = this.distTo(o.at.x, o.at.z);
+      air = ctx.createBiquadFilter();
+      air.type = 'lowpass';
+      air.Q.value = 0.5;
+      air.frequency.value = airCutoff(d);
+      node.connect(air);
+      node = air;
+      wet += distantWet(d);
       panner = ctx.createPanner();
       panner.panningModel = 'equalpower';
       panner.distanceModel = 'inverse';
@@ -388,12 +413,30 @@ export class AudioEngine {
       node = p;
     }
     node.connect(bus);
-    if (o.wet) {
-      const s = ctx.createGain();
-      s.gain.value = o.wet;
-      node.connect(s).connect(this.wetIns[o.bus ?? 'sfx']);
+    let send: GainNode | null = null;
+    // positioned sounds always get a send, since their distance (and so their reverb) can change
+    if (wet > 0 || o.at) {
+      send = ctx.createGain();
+      send.gain.value = wet;
+      node.connect(send).connect(this.wetIns[o.bus ?? 'sfx']);
     }
-    return panner;
+    return { panner, air, send };
+  }
+
+  /** Re-fit a loop's air filter and reverb send to its current distance. */
+  private applyAir(a: AirSpot, t: number, ramp: number): void {
+    const d = this.distTo(a.x, a.z);
+    a.air.frequency.setTargetAtTime(airCutoff(d), t, ramp);
+    a.send.gain.setTargetAtTime(a.base + distantWet(d), t, ramp);
+  }
+
+  private distTo(x: number, z: number): number {
+    return Math.hypot(x - this.listenerPos.x, z - this.listenerPos.z);
+  }
+
+  /** How many one-shots are sounding right now (for thinning crowds). */
+  get busy(): number {
+    return this.voices.length;
   }
 
   /** Steal the oldest, least important voice when the pool is full. */
@@ -423,6 +466,12 @@ export class AudioEngine {
     if (!this.ctx) return;
     const l = this.ctx.listener;
     const t = this.ctx.currentTime;
+    // stationary loops (fountains, braziers) re-filter as the listener walks around them
+    if (Math.hypot(x - this.airFrom.x, z - this.airFrom.z) > 1) {
+      this.airFrom.x = x;
+      this.airFrom.z = z;
+      for (const a of this.airLoops) this.applyAir(a, t, 0.2);
+    }
     const len = Math.hypot(fx, fz) || 1;
     if (l.positionX) {
       l.positionX.setTargetAtTime(x, t, 0.02);
@@ -443,6 +492,25 @@ export class AudioEngine {
   get now(): number {
     return this.ctx?.currentTime ?? 0;
   }
+}
+
+interface AirSpot {
+  air: BiquadFilterNode;
+  send: GainNode;
+  /** The loop's own reverb amount, before distance adds to it. */
+  base: number;
+  x: number;
+  z: number;
+}
+
+/** Far sounds are mostly room: extra reverb that grows with distance. */
+function distantWet(d: number): number {
+  return Math.min(0.22, d / 250);
+}
+
+/** Air absorbs highs over distance: wide open up close, about 2.5 kHz at the edge of hearing. */
+function airCutoff(d: number): number {
+  return Math.max(2500, 20000 * Math.exp(-d / 40));
 }
 
 function setPannerPos(p: PannerNode, x: number, y: number, z: number, t: number, snap = false): void {
