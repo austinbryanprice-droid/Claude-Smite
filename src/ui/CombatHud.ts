@@ -271,7 +271,7 @@ export class CombatHud {
       const c = u.combatant;
       const dist = this.camera.position.distanceTo(head!);
       // keep the screen readable in a big fight: minion bars only up close
-      const maxDist = u.kind === 'minion' ? 45 : isStructure(u) ? 60 : 80;
+      const maxDist = u.kind === 'minion' ? 45 : isStructure(u) ? 45 : 80;
       if (dist > maxDist) {
         b.el.style.display = 'none';
         continue;
