@@ -11,7 +11,7 @@ import { grading, PostFX } from './render/PostFX';
 import { createRenderer } from './render/Renderer';
 import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from './render/Quality';
 import { TextureLibrary } from './scene/Materials';
-import { World } from './scene/World';
+import { mapFromUrl, World } from './scene/World';
 import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
 
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   await preloadGodAssets((f) => hud.progress(0.55 + f * 0.05, 'Summoning the gods…'));
   hud.progress(0.6, 'Raising the temple…');
   await new Promise((r) => setTimeout(r, 0));
-  const world = new World(textures, camera);
+  const world = new World(textures, camera, mapFromUrl());
 
   const input = new Input(renderer.domElement);
   const god = new GodModel();

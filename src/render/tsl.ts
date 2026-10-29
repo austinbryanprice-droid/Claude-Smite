@@ -87,3 +87,7 @@ export const vec3: any = T.vec3;
 export const vec4: any = T.vec4;
 export const velocity: any = T.velocity;
 export const vertexIndex: any = T.vertexIndex;
+export const dFdx: any = T.dFdx;
+export const dFdy: any = T.dFdy;
+export const log2: any = T.log2;
+export const normalViewGeometry: any = T.normalViewGeometry;

@@ -23,20 +23,20 @@ export class Environment {
 
   /** Brightness multiplier that puts the sky model in the same units as the sun. */
   readonly skyScale = uniform(0.5);
-  readonly fogDensity = uniform(0.0035);
-  readonly fogHeightFalloff = uniform(0.06);
-  readonly fogColor = uniform(new THREE.Color(0.55, 0.68, 0.86));
-  readonly sunColor = new THREE.Color(1.0, 0.9, 0.76);
+  readonly fogDensity = uniform(0.0068);
+  readonly fogHeightFalloff = uniform(0.028);
+  readonly fogColor = uniform(new THREE.Color(0.44, 0.5, 0.8));
+  readonly sunColor = new THREE.Color(1.0, 0.86, 0.68);
 
   /** Sun elevation and azimuth in degrees. Late-morning sun gives long, readable shadows. */
-  elevation = 42;
+  elevation = 36;
   azimuth = -142;
 
   constructor(private readonly scene: THREE.Scene, private readonly camera: THREE.PerspectiveCamera) {
     this.sky = new SkyMesh();
     this.sky.scale.setScalar(4000);
     this.sky.turbidity.value = 2.2;
-    this.sky.rayleigh.value = 2.0;
+    this.sky.rayleigh.value = 2.6;
     this.sky.mieCoefficient.value = 0.004;
     this.sky.mieDirectionalG.value = 0.82;
     this.sky.cloudCoverage.value = 0.3;
@@ -149,7 +149,7 @@ export class Environment {
     this.envTarget?.dispose();
     this.envTarget = pmrem.fromScene(envScene, 0.0, 0.1, 400);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = 0.9;
+    this.scene.environmentIntensity = 1.05;
     pmrem.dispose();
     sky.geometry.dispose();
     ground.geometry.dispose();

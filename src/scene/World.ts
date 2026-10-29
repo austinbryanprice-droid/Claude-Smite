@@ -1,7 +1,10 @@
 import * as THREE from 'three/webgpu';
 import { Arena } from './ArenaLayout';
+import { arenaTerrain } from './ArenaTerrain';
 import { CollisionWorld } from './Collision';
-import { DustMotes } from './Effects';
+import { ConquestMap } from './conquest/ConquestMap';
+import { conquestTerrain } from './conquest/ConquestTerrain';
+import { DustMotes, type Fire } from './Effects';
 import { Environment } from './Environment';
 import { Grass } from './Grass';
 import { MaterialLibrary, TextureLibrary } from './Materials';
@@ -9,8 +12,31 @@ import { Temple } from './Temple';
 import { Terrain } from './Terrain';
 import type { QualitySettings } from '../render/Quality';
 
+export type MapName = 'arena' | 'conquest';
+
+/** The map picked by the `?map=` URL parameter (the temple arena by default). */
+export function mapFromUrl(): MapName {
+  return new URLSearchParams(location.search).get('map') === 'conquest' ? 'conquest' : 'arena';
+}
+
+/** The static content of one map: architecture, props and foliage. */
+export interface MapContent {
+  readonly group: THREE.Group;
+  /** Braziers and other flickering lights; only the nearest few get real lights. */
+  readonly fires: Fire[];
+  /** All flickering point lights, if more than the fires'; only the nearest few are switched on. */
+  readonly lights?: THREE.PointLight[];
+  readonly spawn: { x: number; z: number; yaw: number };
+  /** Approximate sunlit ground color, for the environment's lower hemisphere. */
+  readonly groundColor: THREE.Color;
+  /** Animated scenery that must keep updating its matrices (not frozen like `group`). */
+  readonly dynamic?: THREE.Group;
+  applyQuality?(q: QualitySettings): void;
+  update(dt: number, t: number, camera: THREE.Camera): void;
+}
+
 /**
- * The arena scene graph. Gameplay plugs in through:
+ * The scene graph for one map. Gameplay plugs in through:
  *  - `actors`: add god / minion / jungle camp objects here,
  *  - `vfx`: spell effects, projectiles, decals,
  *  - `collision`: ground height + static obstacles for movement and projectiles,
@@ -24,13 +50,13 @@ export class World {
   readonly environment: Environment;
   readonly terrain: Terrain;
   readonly grass: Grass;
-  readonly temple: Temple;
+  readonly content: MapContent;
   readonly materials: MaterialLibrary;
   readonly collision: CollisionWorld;
   readonly dust: DustMotes;
   private readonly updaters: ((dt: number, t: number) => void)[] = [];
 
-  constructor(textures: TextureLibrary, readonly camera: THREE.PerspectiveCamera) {
+  constructor(textures: TextureLibrary, readonly camera: THREE.PerspectiveCamera, readonly map: MapName = 'arena') {
     this.static.name = 'static';
     this.actors.name = 'actors';
     this.vfx.name = 'vfx';
@@ -38,13 +64,27 @@ export class World {
 
     this.environment = new Environment(this.scene, camera);
     this.materials = new MaterialLibrary(textures);
-    this.terrain = new Terrain(textures);
+    const conquest = map === 'conquest' ? conquestTerrain() : null;
+    this.terrain = new Terrain(textures, conquest ?? arenaTerrain());
     this.static.add(this.terrain.mesh);
     this.collision = new CollisionWorld((x, z) => this.terrain.heightAt(x, z));
-    this.temple = new Temple(this.materials, this.terrain, this.collision);
-    this.static.add(this.temple.group);
-    this.grass = new Grass(this.terrain, this.environment.sunDirection);
-    this.static.add(this.grass.group);
+    if (conquest) {
+      this.collision.setWalkable(conquest.walkable);
+      this.content = new ConquestMap(this.materials, this.terrain, this.collision, conquest, this.environment.sunDirection);
+      this.grass = new Grass(this.terrain, this.environment.sunDirection, conquest.grass);
+    } else {
+      this.content = new Temple(this.materials, this.terrain, this.collision);
+      const plazaR = Arena.plaza.baseRadius + 0.6;
+      this.grass = new Grass(this.terrain, this.environment.sunDirection, {
+        extent: Arena.valleyRadius + 14,
+        round: true,
+        density: 1,
+        maxHeight: 7,
+        reject: (x, z) => Math.hypot(x, z) < plazaR,
+      });
+    }
+    this.static.add(this.content.group, this.grass.group);
+    if (this.content.dynamic) this.scene.add(this.content.dynamic);
     this.dust = new DustMotes(600, this.environment.sunDirection);
     this.vfx.add(this.dust.sprite);
 
@@ -59,11 +99,12 @@ export class World {
   async applyQuality(renderer: THREE.WebGPURenderer, q: QualitySettings): Promise<void> {
     this.environment.applyQuality(renderer, q);
     this.grass.build(q);
-    this.grass.group.traverse((o) => {
+    this.content.applyQuality?.(q);
+    this.static.traverse((o) => {
       o.updateMatrix();
       o.matrixAutoUpdate = false;
     });
-    this.grass.group.updateMatrixWorld(true);
+    this.static.updateMatrixWorld(true);
     (this.dust.sprite as any).count = Math.round(600 * q.particles);
     // only the nearest fires get real lights on lower presets
     this.maxLights = q.maxDynamicLights;
@@ -72,8 +113,7 @@ export class World {
   private maxLights = 8;
 
   bakeLighting(renderer: THREE.WebGPURenderer): void {
-    // Approximate average sunlit ground radiance for the environment's lower hemisphere.
-    this.environment.bakeEnvironment(renderer, new THREE.Color(0.16, 0.17, 0.09));
+    this.environment.bakeEnvironment(renderer, this.content.groundColor);
   }
 
   onUpdate(fn: (dt: number, t: number) => void): void {
@@ -82,18 +122,19 @@ export class World {
 
   update(dt: number, t: number, focus: THREE.Vector3): void {
     this.environment.update();
-    this.temple.update(t);
+    this.content.update(dt, t, this.camera);
     this.grass.update(this.camera, focus);
     // enable only the closest N fire lights
-    const fires = this.temple.fires;
-    const sorted = fires
-      .map((f) => ({ f, d: f.group.position.distanceToSquared(focus) }))
-      .sort((a, b) => a.d - b.d);
-    sorted.forEach(({ f }, i) => (f.light.visible = i < this.maxLights));
+    const lights = this.content.lights ?? this.content.fires.map((f) => f.light);
+    const p = new THREE.Vector3();
+    lights
+      .map((l) => ({ l, d: l.getWorldPosition(p).distanceToSquared(focus) }))
+      .sort((a, b) => a.d - b.d)
+      .forEach(({ l }, i) => (l.visible = i < this.maxLights));
     for (const u of this.updaters) u(dt, t);
   }
 
   get spawn() {
-    return Arena.spawn;
+    return this.content.spawn;
   }
 }

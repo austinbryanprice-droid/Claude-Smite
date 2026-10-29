@@ -4,7 +4,7 @@ import {
 } from '../render/tsl';
 
 /** Names of the generated PBR sets in public/textures/pbr (see tools/textures/gen.py). */
-export type PbrName = 'flagstone' | 'marble' | 'sandstone_blocks' | 'rock' | 'grass_ground' | 'dirt';
+export type PbrName = 'flagstone' | 'marble' | 'sandstone_blocks' | 'rock' | 'grass_ground' | 'dirt' | 'bark';
 
 export interface PbrSet {
   /** sRGB base color with baked cavity occlusion. */
@@ -13,7 +13,7 @@ export interface PbrSet {
   nr: THREE.Texture;
 }
 
-const ALL: PbrName[] = ['flagstone', 'marble', 'sandstone_blocks', 'rock', 'grass_ground', 'dirt'];
+const ALL: PbrName[] = ['flagstone', 'marble', 'sandstone_blocks', 'rock', 'grass_ground', 'dirt', 'bark'];
 
 /**
  * Loads and caches texture sets. Call `load()` once at startup; afterwards
@@ -22,13 +22,23 @@ const ALL: PbrName[] = ['flagstone', 'marble', 'sandstone_blocks', 'rock', 'gras
 export class TextureLibrary {
   private readonly sets = new Map<PbrName, PbrSet>();
   private readonly loader = new THREE.TextureLoader();
+  /** 2x2 atlas of leaf sprigs with alpha (see `foliage_atlas` in gen.py). */
+  foliage!: THREE.Texture;
 
   constructor(private readonly anisotropy: number) {}
 
   async load(onProgress?: (fraction: number) => void): Promise<void> {
     let done = 0;
-    const total = ALL.length * 2;
+    const total = ALL.length * 2 + 1;
     const tick = () => onProgress?.(++done / total);
+    const foliage = this.loader.loadAsync(`${import.meta.env.BASE_URL}textures/pbr/foliage_atlas.png`).then((t) => {
+      tick();
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = this.anisotropy;
+      t.generateMipmaps = true;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      this.foliage = t;
+    });
     await Promise.all(ALL.map(async (name) => {
       const base = `${import.meta.env.BASE_URL}textures/pbr/${name}`;
       const [albedo, nr] = await Promise.all([
@@ -44,6 +54,7 @@ export class TextureLibrary {
       }
       this.sets.set(name, { albedo, nr });
     }));
+    await foliage;
   }
 
   get(name: PbrName): PbrSet {
