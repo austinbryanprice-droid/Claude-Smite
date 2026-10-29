@@ -60,6 +60,11 @@ function buildDummy(): THREE.Group {
   return g;
 }
 
+/** How often (in frames) a god model off screen is animated. */
+const OFFSCREEN_EVERY = 8;
+/** The longest step GodModel.animate takes without dropping time. */
+const MAX_ANIM_DT = 1 / 20;
+
 interface UnitView {
   root: THREE.Group;
   model: GodModel | null;
@@ -78,6 +83,10 @@ interface UnitView {
   /** Seconds since a destroyed structure began to rise again, or -1. */
   rebirth: number;
   monster: MonsterView | null;
+  /** Time the god model's animation has not caught up on yet (see animateEvery). */
+  animDt: number;
+  /** Staggers reduced-rate animation so gods don't all update on the same frame. */
+  stagger: number;
 }
 
 /**
@@ -91,6 +100,13 @@ export class UnitViews {
   private readonly views = new Map<Unit, UnitView>();
   private readonly prev = new Map<Unit, THREE.Vector3>();
   private readonly cur = new Map<Unit, THREE.Vector3>();
+  /** When set, gods off screen or far away animate at a reduced rate. */
+  camera: THREE.Camera | null = null;
+  private readonly frustum = new THREE.Frustum();
+  private readonly viewProj = new THREE.Matrix4();
+  private readonly bounds = new THREE.Sphere();
+  private frameNo = 0;
+  private created = 0;
 
   constructor(
     private player: Unit,
@@ -129,6 +145,8 @@ export class UnitViews {
   }
 
   frame(units: readonly Unit[], dt: number, alpha: number, time = 0): void {
+    this.frameNo++;
+    if (this.camera) this.frustum.setFromProjectionMatrix(this.viewProj.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
     const seen = new Set<Unit>();
     const minions: Unit[] = [];
     for (const u of units) {
@@ -236,7 +254,7 @@ export class UnitViews {
       if (summoned) root.scale.setScalar(0.88);
       this.group.add(root);
     }
-    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1, external, windup: 0, monster };
+    const v: UnitView = { root, model, height, wobble: 0, wobbleVel: 0, deathTime: -1, localDir: new THREE.Vector2(), lift: 0, structure, rebirth: -1, external, windup: 0, monster, animDt: 0, stagger: this.created++ };
     this.views.set(u, v);
     return v;
   }
@@ -318,7 +336,33 @@ export class UnitViews {
       // world velocity into the model's frame: forward (-sin, -cos), right (cos, -sin)
       v.localDir.set((u.vx * cos - u.vz * sin) / speed, (-u.vx * sin - u.vz * cos) / speed);
     } else v.localDir.set(0, 0);
-    v.model.animate(dt, { speed, localDir: v.localDir, grounded: !u.forced || u.forced.arc === 0, verticalSpeed: 0 });
     v.root.rotation.z = v.wobble * 0.04;
+    v.animDt += dt;
+    const every = this.animateEvery(v);
+    // GodModel.animate clamps its step to MAX_ANIM_DT, so pose before the backlog would exceed it
+    if ((this.frameNo + v.stagger) % every !== 0 && v.animDt + dt <= MAX_ANIM_DT) return;
+    v.model.animate(
+      v.animDt,
+      { speed, localDir: v.localDir, grounded: !u.forced || u.forced.arc === 0, verticalSpeed: 0 },
+      // cloth is most of the cost: away from the camera it gets one 60 Hz step per update, in slow motion nobody can see
+      every === 1 ? v.animDt : Math.min(v.animDt, 1 / 60),
+    );
+    v.animDt = 0;
+  }
+
+  /**
+   * Skinned god models are the most expensive thing to animate on the CPU,
+   * so only the ones on screen and close by pose every frame. Far ones catch
+   * up every few frames, and ones off screen only tick over now and then
+   * (their shadows may still be in view).
+   */
+  private animateEvery(v: UnitView): number {
+    if (!this.camera) return 1;
+    if (!v.root.visible) return OFFSCREEN_EVERY;
+    this.bounds.center.copy(v.root.position).setY(v.root.position.y + v.height * 0.5);
+    this.bounds.radius = v.height * 1.2;
+    if (!this.frustum.intersectsSphere(this.bounds)) return OFFSCREEN_EVERY;
+    const d = this.camera.position.distanceTo(this.bounds.center);
+    return d > 70 ? 3 : d > 35 ? 2 : 1;
   }
 }

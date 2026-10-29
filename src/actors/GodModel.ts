@@ -349,8 +349,11 @@ export class GodModel {
 
   private held: THREE.AnimationAction | null = null;
 
-  /** Drives animation and secondary physics. Call once per rendered frame after placing `root`. */
-  animate(dt: number, s: LocomotionState): void {
+  /**
+   * Drives animation and secondary physics. Call once per rendered frame after placing `root`.
+   * `clothDt` lets a caller run the cloth on less time than the skeleton (distant or off-screen gods).
+   */
+  animate(dt: number, s: LocomotionState, clothDt = dt): void {
     dt = Math.min(dt, 1 / 20);
     const k = 1 - Math.exp(-dt * 10);
     this.smoothedSpeed += (s.speed - this.smoothedSpeed) * k;
@@ -455,7 +458,7 @@ export class GodModel {
     // the weapon hand stays closed around its handle in every clip
     for (const c of this.curl) c.bone.quaternion.multiply(c.q);
     this.root.updateMatrixWorld(true);
-    this.physics.update(dt);
+    this.physics.update(Math.min(clothDt, 1 / 20));
   }
 
   /** Rotates a bone about an axis given in the god's model space (parents must have current world matrices). */
