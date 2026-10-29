@@ -420,7 +420,7 @@ export class CombatGame implements Updatable {
     const shotStart = u.radius * 0.8;
     let best: Unit | null = null;
     let bestIn = false;
-    let bestAlong = Infinity;
+    let bestKey = Infinity;
     for (const t of this.sim.enemiesOf(u)) {
       if (!t.targetable || t.stealth > 0) continue;
       const rx = t.x - u.x;
@@ -428,6 +428,7 @@ export class CombatGame implements Updatable {
       const along = rx * dir.x + rz * dir.z;
       if (along <= 0 || along > range * 2.5) continue;
       let inRange: boolean;
+      let key = along;
       if (melee) {
         // swings cover an arc and hit everything in it, so a reachable enemy wins over a nearer-lined one
         const d = Math.hypot(rx, rz);
@@ -441,11 +442,12 @@ export class CombatGame implements Updatable {
         const contact = along - Math.sqrt(reach * reach - perp * perp);
         if (!this.sim.shotClear(u, dir, contact)) continue;
         inRange = contact <= shotStart + range;
+        key = contact; // the first body the shot touches stops it
       }
-      if (melee ? (inRange && !bestIn) || (inRange === bestIn && along < bestAlong) : along < bestAlong) {
+      if (melee ? (inRange && !bestIn) || (inRange === bestIn && key < bestKey) : key < bestKey) {
         best = t;
         bestIn = inRange;
-        bestAlong = along;
+        bestKey = key;
       }
     }
     return { target: best, inRange: bestIn };
