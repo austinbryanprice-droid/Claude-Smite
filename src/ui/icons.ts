@@ -55,6 +55,18 @@ const GLYPHS = {
   skull: '<path d="M32 6 C16 6 10 18 10 28 C10 36 16 40 18 42 V52 H46 V42 C48 40 54 36 54 28 C54 18 48 6 32 6 Z"/><circle cx="23" cy="28" r="6" fill="#07060a" stroke="none"/><circle cx="41" cy="28" r="6" fill="#07060a" stroke="none"/><path d="M26 52 V58 M32 52 V58 M38 52 V58" stroke-width="3"/>',
   poison: '<path d="M26 4 L32 30 H20 Z"/><path d="M14 32 H38" stroke-width="5" stroke-linecap="round"/><path d="M26 34 V46" stroke-width="5" stroke-linecap="round"/><path d="M46 30 C46 30 38 42 38 48 A8 8 0 0 0 54 48 C54 42 46 30 46 30 Z"/>',
   anvil: '<path d="M8 18 H48 Q58 18 58 26 H44 L40 34 H24 L20 26 H8 Z"/><path d="M22 34 H42 L46 52 H18 Z"/>',
+  // a crackling ring around a small bolt
+  presence: '<path d="M32 5 L40 14 L51 13 L50 24 L59 32 L50 40 L51 51 L40 50 L32 59 L24 50 L13 51 L14 40 L5 32 L14 24 L13 13 L24 14 Z" stroke-width="3.5" stroke-linejoin="round" fill="none"/><path d="M35 20 L26 34 H32 L28 44 L38 30 H32 Z"/>',
+  // a bolt bursting outward into sparks
+  discharge: '<path d="M36 14 L24 34 H32 L27 50 L41 28 H33 Z"/><path d="M12 12 L19 19 M52 12 L45 19 M12 52 L19 45 M52 52 L45 45 M6 32 H14 M50 32 H58" stroke-width="4" stroke-linecap="round" fill="none"/>',
+  // a winged helm
+  helm: '<path d="M18 46 V32 Q18 16 32 16 Q46 16 46 32 V46 H38 V36 H26 V46 Z"/><path d="M18 30 Q8 24 4 10 Q12 16 18 20 M46 30 Q56 24 60 10 Q52 16 46 20" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M14 52 H50" stroke-width="4" stroke-linecap="round"/>',
+  // a fox's head
+  fox: '<path d="M8 8 L24 24 H40 L56 8 L52 34 L32 56 L12 34 Z"/><circle cx="24" cy="34" r="3" fill="#07060a" stroke="none"/><circle cx="40" cy="34" r="3" fill="#07060a" stroke="none"/>',
+  // afterimages stepping into a strike
+  blink: '<circle cx="12" cy="40" r="5" opacity="0.4"/><circle cx="24" cy="34" r="6" opacity="0.7"/><path d="M34 46 L56 12" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M50 8 L60 6 L58 16 Z"/>',
+  // a canopic jar
+  jar: '<path d="M22 22 H42 Q50 32 46 50 Q44 56 32 56 Q20 56 18 50 Q14 32 22 22 Z"/><path d="M24 20 Q24 8 32 8 Q40 8 40 20 Z"/><path d="M22 34 H42" stroke="#07060a" stroke-width="3"/>',
   // talent glyphs for stat nodes
   sword: '<path d="M44 6 H58 V20 L26 46 L18 38 Z"/><path d="M12 36 L28 52" stroke-width="5" stroke-linecap="round"/><path d="M18 46 L8 56" stroke-width="6" stroke-linecap="round"/>',
   star: '<path d="M32 4 L38 24 H58 L42 36 L48 56 L32 44 L16 56 L22 36 L6 24 H26 Z"/>',
@@ -86,12 +98,19 @@ const BY_NAME: readonly [RegExp, Glyph][] = [
   [/Rune/, 'rune'],
   [/Assassinate/, 'dagger'],
   [/Smoke/, 'smoke'],
-  [/Decoy|Shapeshift/, 'mask'],
+  [/Decoy/, 'mask'],
   [/Locust/, 'swarm'],
   [/Mummify/, 'wrap'],
   [/Grasp/, 'hand'],
-  [/Howl|War Cry|Call of Asgard|Valhalla/, 'horn'],
+  [/Howl|War Cry|Call of Asgard/, 'horn'],
   [/Ascension/, 'wings'],
+  [/Thundering Presence/, 'presence'],
+  [/Static Discharge/, 'discharge'],
+  [/Valhalla/, 'helm'],
+  [/Shapeshift/, 'fox'],
+  [/Blink/, 'blink'],
+  [/Mark$/, 'target'],
+  [/Embalm/, 'jar'],
 ];
 
 type Glyph = keyof typeof GLYPHS;

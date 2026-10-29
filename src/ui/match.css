@@ -27,7 +27,7 @@
 .mh-feed-row.out { opacity: 0; }
 @keyframes mh-slide { from { transform: translateX(30px); opacity: 0; } }
 
-.mh-banner { position: absolute; left: 50%; top: 15%; transform: translateX(-50%) scale(0.9); padding: 8px 40px; font-size: 30px; letter-spacing: 0.18em; text-transform: uppercase; text-shadow: 0 0 18px currentColor, 0 2px 6px #000; background: linear-gradient(90deg, transparent, rgba(8, 6, 5, 0.75), transparent); opacity: 0; transition: opacity 0.4s, transform 0.4s; white-space: nowrap; }
+.mh-banner { position: absolute; left: 50%; top: max(15%, 150px); transform: translateX(-50%) scale(0.9); padding: 8px 40px; font-size: 30px; letter-spacing: 0.18em; text-transform: uppercase; text-shadow: 0 0 18px currentColor, 0 2px 6px #000; background: linear-gradient(90deg, transparent, rgba(8, 6, 5, 0.75), transparent); opacity: 0; transition: opacity 0.4s, transform 0.4s; white-space: nowrap; }
 .mh-banner.show { opacity: 1; transform: translateX(-50%) scale(1); }
 
 .mh-board { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; gap: 14px; padding: 18px 24px; background: linear-gradient(180deg, rgba(24, 18, 12, 0.94), rgba(8, 6, 5, 0.96)); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); min-width: min(720px, 94vw); }
