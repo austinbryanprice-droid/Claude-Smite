@@ -150,8 +150,14 @@ export function conquestTerrain(): ConquestTerrainDef {
         pavedPad = Math.min(pavedPad, Math.hypot(x - b.plaza.at[0], z - b.plaza.at[1]) - b.plaza.radius);
         pavedPad = Math.min(pavedPad, Math.hypot(x - b.fountain[0], z - b.fountain[1]) - L.radii.fountain - 2);
       }
-      for (const c of L.camps) campD = Math.min(campD, Math.hypot(x - c.at[0], z - c.at[1]) - (c.team === null ? L.radii.boss : L.radii.camp));
-      const paved = Math.max(1 - sstep(-0.4, 0.3, ld), 1 - sstep(-0.6, 0.4, pavedPad + edge * 0.8));
+      // buff camps and the Wyrm's hoard sit on old paved floors inside their dirt clearing
+      let campFloor = Infinity;
+      for (const c of L.camps) {
+        const d = Math.hypot(x - c.at[0], z - c.at[1]);
+        campD = Math.min(campD, d - (c.team === null ? L.radii.boss : L.radii.camp));
+        if (c.kind !== 'small' && c.kind !== 'moltenColossus') campFloor = Math.min(campFloor, d - (c.team === null ? L.radii.boss - 0.8 : L.radii.camp - 0.2));
+      }
+      const paved = Math.max(1 - sstep(-0.4, 0.3, ld), 1 - sstep(-0.6, 0.4, pavedPad + edge * 0.8), 1 - sstep(-0.5, 0.3, campFloor + edge * 0.5));
       const dirt = Math.max(
         1 - sstep(-0.6, 1.4, pd),
         (1 - sstep(0, 2.2, ld)) * 0.85,
