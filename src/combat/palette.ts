@@ -12,15 +12,15 @@ export interface GodPalette {
   /** Hot core / highlight color. */
   core: number;
   /** Signature effect layered on top of the shared ones. */
-  element?: 'lightning';
+  element?: 'lightning' | 'runes' | 'smoke' | 'sand';
 }
 
 const PALETTES: Record<string, GodPalette> = {
   zeus: { cloth: 0x1d3a8a, trim: 0xe0b04a, glow: 0x6fe3ff, vfx: 0x3fb6ff, core: 0xe6f8ff, element: 'lightning' },
   thor: { cloth: 0x8a1d1d, trim: 0xb9c3cf, glow: 0x9fd0ff, vfx: 0x6aa8ff, core: 0xf2f7ff, element: 'lightning' },
-  odin: { cloth: 0x3a3f4a, trim: 0xd8a23a, glow: 0xffc955, vfx: 0xffa62a, core: 0xfff1c4 },
-  loki: { cloth: 0x1f5a2a, trim: 0xb8b04a, glow: 0x7dff6a, vfx: 0x3dff7a, core: 0xdcffe2 },
-  anubis: { cloth: 0x18130e, trim: 0xe0b04a, glow: 0xffa040, vfx: 0xff7a1a, core: 0xffe3a6 },
+  odin: { cloth: 0x3a3f4a, trim: 0xd8a23a, glow: 0xffc955, vfx: 0xffa62a, core: 0xfff1c4, element: 'runes' },
+  loki: { cloth: 0x1f5a2a, trim: 0xb8b04a, glow: 0x7dff6a, vfx: 0x3dff7a, core: 0xdcffe2, element: 'smoke' },
+  anubis: { cloth: 0x18130e, trim: 0xe0b04a, glow: 0xffa040, vfx: 0xff7a1a, core: 0xffe3a6, element: 'sand' },
 };
 
 const FALLBACK: GodPalette = { cloth: 0x444444, trim: 0xc0a060, glow: 0xffffff, vfx: 0xffd27a, core: 0xffffff };
