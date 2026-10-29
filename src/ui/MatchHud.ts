@@ -16,6 +16,8 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 
 const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const MAP = 220;
+/** Seconds between minimap redraws. */
+const MAP_INTERVAL = 0.05;
 
 /**
  * Conquest match HUD: the score and clock at the top, structure pips for both
@@ -38,6 +40,8 @@ export class MatchHud {
   private bannerTime = 0;
   private firstBlood = false;
   private shown = false;
+  private pipEls: HTMLElement[] | null = null;
+  private mapClock = 0;
 
   constructor(
     private readonly match: Match,
@@ -132,7 +136,8 @@ export class MatchHud {
     }
     this.clockText.textContent = clock(m.time);
     this.wave.textContent = m.untilWave > 0 && m.untilWave < 10 ? `Minions in ${Math.ceil(m.untilWave)}` : '';
-    for (const pip of this.root.querySelectorAll<HTMLElement>('.mh-pip')) {
+    this.pipEls ??= [...this.root.querySelectorAll<HTMLElement>('.mh-pip')];
+    for (const pip of this.pipEls) {
       const s = m.structures.get(pip.dataset.id!);
       pip.classList.toggle('down', !!s && !s.alive);
     }
@@ -140,7 +145,12 @@ export class MatchHud {
       this.bannerTime -= dt;
       if (this.bannerTime <= 0) this.banner.classList.remove('show');
     }
-    this.drawMap(units);
+    // the minimap reads fine at 20 Hz and costs a canvas redraw each time
+    this.mapClock -= dt;
+    if (this.mapClock <= 0) {
+      this.mapClock = MAP_INTERVAL;
+      this.drawMap(units);
+    }
     this.board.classList.toggle('show', scoreboard || !!m.winner);
     if (scoreboard || m.winner) this.fillBoard();
     if (m.winner && !this.shown) this.showEnd(m.winner);
