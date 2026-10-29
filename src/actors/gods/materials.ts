@@ -246,7 +246,9 @@ function hairMaterial(root: number, tip: number): THREE.Material {
   const tint = data().y.mul(0.16).add(0.88); // per-clump variation
   // roots sit in the shadow of the clumps around them
   const occl = smoothstep(0.0, 0.45, t).mul(0.55).add(0.45);
-  m.colorNode = mix(color(root), color(tip), t.mul(0.8)).mul(strands.mul(0.3).add(0.62)).mul(occl).mul(tint);
+  // painted shine band a third of the way down each lock, broken up by the strands
+  const shine = smoothstep(0.18, 0.3, t).mul(float(1).sub(smoothstep(0.38, 0.52, t))).mul(strands).mul(0.22);
+  m.colorNode = mix(color(root), color(tip), t.mul(0.8)).mul(strands.mul(0.3).add(0.62)).mul(occl).mul(tint).add(color(tip).mul(shine));
   m.roughnessNode = float(0.5).sub(strands.mul(0.15));
   return m;
 }

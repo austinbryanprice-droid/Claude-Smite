@@ -94,6 +94,14 @@ export class GodModel {
   private phase = 0;
   private smoothedSpeed = 0;
   private hipYaw = 0;
+  private prevSpeed = 0;
+  private lean = 0;
+  private bank = 0;
+  private readonly axisX = new THREE.Vector3(1, 0, 0);
+  private readonly axisZ = new THREE.Vector3(0, 0, 1);
+  private get spine(): THREE.Bone {
+    return this.bones.get('DEF-spine002')!;
+  }
   private airWeight = 0;
   private readonly physics: SecondaryPhysics;
   private readonly tmpQ = new THREE.Quaternion();
@@ -258,6 +266,15 @@ export class GodModel {
       this.rotateWorldY(this.bones.get('DEF-spine001')!, this.hipYaw * 0.6);
       this.rotateWorldY(this.bones.get('DEF-spine002')!, this.hipYaw * 0.4);
     }
+
+    // weight: lean into acceleration, rock back when braking, bank into strafes
+    const accel = dt > 0 ? (speed - this.prevSpeed) / dt : 0;
+    this.prevSpeed = speed;
+    this.lean += (THREE.MathUtils.clamp(accel * 0.035 * (backward ? -1 : 1), -0.14, 0.18) - this.lean) * Math.min(1, dt * 6);
+    const bankTarget = s.grounded ? s.localDir.x * THREE.MathUtils.clamp(speed / 6, 0, 1) * 0.1 : 0;
+    this.bank += (bankTarget - this.bank) * Math.min(1, dt * 5);
+    if (Math.abs(this.lean) > 1e-3) this.rotateModel(this.spine, this.axisX, this.lean);
+    if (Math.abs(this.bank) > 1e-3) this.rotateModel(this.spine, this.axisZ, this.bank);
 
     // cast overlay: restart the clip on each new cast
     if (this.castWeight > 0.5 && this.prevCast <= 0.5) this.castTime = 0;

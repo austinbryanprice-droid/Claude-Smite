@@ -32,6 +32,7 @@ class Style:
     taper: float = 1.6  # tip sharpness
     clearance: float = 0.012  # min distance from the skin
     tip_curl: float = 0.0  # curls tips upward/outward (beards)
+    grooves: int = 0  # sculpted strand grooves across each clump's broad face
     seed: int = 1
 
 
@@ -99,7 +100,7 @@ def clumps(paths: list[np.ndarray], normals: np.ndarray, style: Style, widths=No
     """Flattened tapered tubes along the paths. The flat side faces away from the skin."""
     rng = np.random.default_rng(style.seed + 7)
     meshes = []
-    sides = style.sides
+    sides = max(style.sides, 12) if style.grooves else style.sides
     a = np.arange(sides) / sides * 2 * np.pi
     for k, path in enumerate(paths):
         K = len(path)
@@ -112,6 +113,10 @@ def clumps(paths: list[np.ndarray], normals: np.ndarray, style: Style, widths=No
         prof_w[0] *= 0.85
         prof_w[-1] = w * 0.03
         section = np.stack([np.cos(a) * style.flatness, np.sin(a)], axis=1)
+        if style.grooves:
+            # dents across the broad face: the clump reads as several locks sculpted together
+            g = style.grooves + (k % 2)
+            section[:, 0] *= 1 - 0.45 * (0.5 - 0.5 * np.cos(np.sin(a) * np.pi * g))
         m = sweep(path, section, prof_w, up=normals[k], cap=False)
         col = np.zeros((len(m.v), 4))
         col[:, 0] = np.repeat(t, sides)

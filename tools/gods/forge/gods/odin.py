@@ -88,7 +88,7 @@ class Odin(God):
             o = p - neck
             o[:, 1] = 0
             return normalize(normalize(o + 1e-6) * 0.7 + np.array([0, -1.0, 0]))
-        style = hairmod.Style(length=0.14, width=0.08, flatness=0.4, segments=8, sides=8, lift=0.9, gravity=0.5, flow=mflow,
+        style = hairmod.Style(length=0.14, width=0.08, flatness=0.4, segments=8, sides=8, grooves=3, lift=0.9, gravity=0.5, flow=mflow,
                               curl=0.25, jitter=0.35, clearance=0.075, taper=0.8, seed=21)
         m, _ = hairmod.hair(b, mantle, 0.028, style)
         self.add('mantle', 'fur', m, None)
