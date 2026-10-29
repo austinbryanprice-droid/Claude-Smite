@@ -81,9 +81,7 @@ export class Sim {
     readonly terrain: SimTerrain,
     readonly bases: Record<Side, BaseZone>,
     readonly rng: () => number = Math.random,
-  ) {
-    this.listeners.push((e) => this.releasePrimed(e));
-  }
+  ) {}
 
   add(unit: Unit): Unit {
     this.units.push(unit);
@@ -450,6 +448,8 @@ export class Sim {
       this.emit({ type: 'heal', target, amount: -delta });
     }
     if (wasAlive && !c.alive) this.onDeath(target, source);
+    // after the death check, so a primed hit that kills is reported once
+    if (delta > 0.05) this.releasePrimed(source, target);
   }
 
   private applySelf(u: Unit, cast: ResolvedSkill): void {
@@ -484,13 +484,13 @@ export class Sim {
   }
 
   /** A primed god takes the waiting effects on the caster's next hit, if the mark still holds. */
-  private releasePrimed(e: SimEvent): void {
-    if (e.type !== 'damage' || !e.source || !this.primed.size) return;
-    const p = this.primed.get(e.target);
-    if (!p || p.owner !== e.source) return;
-    this.primed.delete(e.target);
-    if (!e.target.alive || !e.target.marks.delete(p.mark)) return;
-    this.applyOnce(p.owner, p.cast, e.target);
+  private releasePrimed(source: Unit, target: Unit): void {
+    if (!this.primed.size) return;
+    const p = this.primed.get(target);
+    if (!p || p.owner !== source) return;
+    this.primed.delete(target);
+    if (!target.alive || !target.marks.delete(p.mark)) return;
+    this.applyOnce(p.owner, p.cast, target);
   }
 
   /** Sets off a mark: damage per stack, crowd control only at full stacks, and the mark is spent. */

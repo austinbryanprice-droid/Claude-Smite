@@ -177,6 +177,18 @@ describe('skill shapes', () => {
     expect(hp2 - far.combatant.health).toBeLessThan(20);
   });
 
+  it('a primed hit that kills counts the death once', () => {
+    const sim = setup();
+    const o = god(sim, odin, 'order', 0, 0, 5);
+    const far = target(sim, 0, -60);
+    castAt(sim, o, 'odin.all-seeing-eye', 0, -10);
+    run(sim, 0.1);
+    far.combatant.health = 100;
+    sim.strike(o, far, 10, 'physical');
+    expect(far.alive).toBe(false);
+    expect(sim.drainEvents().filter((e) => e.type === 'death')).toHaveLength(1);
+  });
+
   it('cones hit inside the arc and miss behind the caster', () => {
     const sim = setup();
     const l = god(sim, loki, 'order', 0, 0);
