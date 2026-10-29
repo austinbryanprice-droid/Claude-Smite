@@ -23,18 +23,30 @@ export const BUFF_COLOR: Partial<Record<CampKind, number>> = {
   insight: 0xb04aff,
 };
 
-/** Collects instance transforms per geometry so repeated props cost one draw call each. */
+/** Side of the square regions that instanced props are grouped by, meters. */
+const INSTANCE_CHUNK = 50;
+
+/**
+ * Collects instance transforms per geometry and per map region, so repeated
+ * props cost one draw call per region and the camera and shadow cascades can
+ * cull the regions they don't see.
+ */
 class Instancer {
-  private readonly lists = new Map<THREE.BufferGeometry, { mat: THREE.Material; m: THREE.Matrix4[] }>();
+  private readonly lists = new Map<string, { geo: THREE.BufferGeometry; mat: THREE.Material; m: THREE.Matrix4[] }>();
+  private readonly ids = new Map<THREE.BufferGeometry, number>();
 
   add(geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4): void {
-    let e = this.lists.get(geo);
-    if (!e) this.lists.set(geo, (e = { mat, m: [] }));
+    let id = this.ids.get(geo);
+    if (id === undefined) this.ids.set(geo, (id = this.ids.size));
+    const e3 = m.elements;
+    const key = `${id}:${Math.floor(e3[12]! / INSTANCE_CHUNK)}:${Math.floor(e3[14]! / INSTANCE_CHUNK)}`;
+    let e = this.lists.get(key);
+    if (!e) this.lists.set(key, (e = { geo, mat, m: [] }));
     e.m.push(m);
   }
 
   build(parent: THREE.Object3D): void {
-    for (const [geo, { mat, m }] of this.lists) {
+    for (const { geo, mat, m } of this.lists.values()) {
       const inst = new THREE.InstancedMesh(geo, mat, m.length);
       m.forEach((x, i) => inst.setMatrixAt(i, x));
       inst.instanceMatrix.needsUpdate = true;
