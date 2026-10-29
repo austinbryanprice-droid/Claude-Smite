@@ -271,17 +271,19 @@ export class GameAudio {
 
   private announceKill(victim: Unit, killer: Unit): void {
     const me = this.me;
-    if (!this.firstBlood) {
-      this.firstBlood = true;
+    const first = !this.firstBlood;
+    this.firstBlood = true;
+    if (killer === me && victim !== me) {
+      this.streak++;
+      const now = this.time;
+      this.multi.count = now < this.multi.until ? this.multi.count + 1 : 1;
+      this.multi.until = now + 10;
+    }
+    if (first) {
       this.herald.say(killer === me ? 'You drew first blood!' : 'First blood is spilled!', killer.team === me.team ? 'good' : 'bad', 4);
-      if (killer === me) this.streak = 1;
       return;
     }
     if (killer !== me || victim === me) return;
-    this.streak++;
-    const now = this.time;
-    this.multi.count = now < this.multi.until ? this.multi.count + 1 : 1;
-    this.multi.until = now + 10;
     const multi = ['', '', 'Two gods fall!', 'Three gods fall!', 'Four gods fall!', 'Ascendant! Five gods fall!'];
     if (this.multi.count >= 2) this.herald.say(multi[Math.min(5, this.multi.count)]!, 'epic', 4);
     else if (this.streak === 3) this.herald.say('You are on a rampage!', 'epic', 3);
