@@ -593,11 +593,12 @@ export class CombatVfx {
       case 'basic': {
         // the Warden's two-fisted slam cracks the ground in front of it
         const u = e.unit;
-        if (u.kind !== 'monster' || !u.tag.endsWith('warden')) break;
+        if (u.kind !== 'monster' || u.tag.includes('thornback')) break;
         const f = u.forward;
-        const x = u.x + f.x * 2.4;
-        const z = u.z + f.z * 2.4;
-        this.burst(monsterPalette(u), x, this.ground(x, z) + 0.3, z, 1.5);
+        const reach = u.radius + 1.2;
+        const x = u.x + f.x * reach;
+        const z = u.z + f.z * reach;
+        this.burst(monsterPalette(u), x, this.ground(x, z) + 0.3, z, u.radius > 2 ? 2.4 : 1.5);
         break;
       }
       case 'cast': {
@@ -632,7 +633,7 @@ export class CombatVfx {
           p.start(paletteOf(e.unit), e.unit.x, this.ground(e.unit.x, e.unit.z), e.unit.z);
           this.pillars.push(p);
         }
-        const power = k === 'minion' ? 0.6 : isStructure(e.unit) ? 4 : k === 'monster' ? (e.unit.tag.endsWith('warden') ? 2.6 : 0.9) : 1.8;
+        const power = k === 'minion' ? 0.6 : isStructure(e.unit) || e.unit.radius > 2 ? 4 : k === 'monster' ? (e.unit.tag.endsWith('warden') ? 2.6 : 0.9) : 1.8;
         this.burst(monsterPalette(e.unit), e.unit.x, e.unit.body.y + (isStructure(e.unit) ? 4 : 1.2), e.unit.z, power);
         // a buff leaves its Warden in a flare and settles on the god who took it
         if (k === 'monster' && e.unit.tag.endsWith('warden') && e.killer?.kind === 'god') {
@@ -695,7 +696,7 @@ export class CombatVfx {
       let v = this.flashes.get(f.id);
       if (!v) {
         v = this.flashPool.take();
-        const p = paletteOf(f.owner);
+        const p = monsterPalette(f.owner);
         v.reset(p, f.shape.type === 'circle');
         // smoke and sand gods kick up a cloud where the shape lands
         if (p.element === 'smoke' || p.element === 'sand') {
@@ -752,6 +753,8 @@ export class CombatVfx {
 /** Wardens burn in their buff's color; everything else uses its usual palette. */
 function monsterPalette(u: Unit): GodPalette {
   const p = paletteOf(u);
+  if (u.tag.endsWith('treasureWyrm')) return { ...p, vfx: 0xffc83a, core: 0xfff6d0 };
+  if (u.tag.endsWith('moltenColossus')) return { ...p, vfx: 0xff4a10, core: 0xffd080 };
   if (u.kind !== 'monster' || !u.tag.endsWith('warden')) return p;
   const kind = u.tag.split(':')[0]!.split('-')[1] as keyof typeof BUFF_GLOW;
   const c = BUFF_GLOW[kind];

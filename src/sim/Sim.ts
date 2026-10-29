@@ -532,7 +532,8 @@ export class Sim {
     }
   }
 
-  private reward(u: Unit, xp: number, favor: number): void {
+  /** Give a god XP and favor (Wisdom adds its bonus), with a reward event for the HUD. */
+  reward(u: Unit, xp: number, favor: number): void {
     if (u.kind !== 'god' && u.kind !== 'dummy') return;
     if (u.marks.has('buff:wisdom')) xp *= 1 + WISDOM_XP;
     const before = u.combatant.level;

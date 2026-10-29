@@ -3,7 +3,7 @@ import { thor, zeus } from '../game/gods';
 import { FAVOR_REWARDS } from '../game/progression';
 import { ConquestLayout as L } from '../map/ConquestLayout';
 import { godUnit } from './factory';
-import { BUFF_DURATION, BUFF_KINDS, buffMark, CAMP_FIRST_SPAWN, CAMP_RESPAWN, LEASH, type CampState } from './Jungle';
+import { BOSS_FIRST_SPAWN, BOSS_SPECIAL, BUFF_DURATION, BUFF_KINDS, buffMark, FURY_DURATION, WYRM_TEAM_XP, CAMP_FIRST_SPAWN, CAMP_RESPAWN, LEASH, type CampState } from './Jungle';
 import { LaneBot, spawnPoint } from './LaneBot';
 import { conquestBases, Match } from './Match';
 import { Nav } from './Nav';
@@ -46,7 +46,7 @@ describe('jungle camps', () => {
     expect(sim.units.some((u) => u.kind === 'monster')).toBe(false);
     run(sim, match, 1.5);
     const sides = L.camps.filter((c) => c.team !== null);
-    expect(match.jungle.camps.length).toBe(sides.length);
+    expect(match.jungle.camps.length).toBe(L.camps.length);
     expect(camp(match, 'small').members.length).toBe(3);
     expect(camp(match, 'might').members.length).toBe(1);
     expect(sim.units.filter((u) => u.kind === 'monster' && u.team === 'neutral').length).toBeGreaterThan(sides.length);
@@ -144,5 +144,55 @@ describe('navigation', () => {
     expect(path.length).toBeGreaterThan(2);
     for (let i = 1; i < path.length; i++) expect(nav.clear(path[i - 1]!, path[i]!)).toBe(true);
     expect(Math.max(...path.map((p) => Math.abs(p.z)))).toBeGreaterThan(19);
+  });
+});
+
+describe('jungle bosses', () => {
+  const boss = (match: Match, kind: string) => match.jungle.camps.find((c) => c.camp.kind === kind)!;
+
+  it('the Treasure Wyrm rises at two minutes and rewards the whole team', () => {
+    const { sim, match } = setup();
+    run(sim, match, BOSS_FIRST_SPAWN.treasureWyrm - 1);
+    const w = boss(match, 'treasureWyrm');
+    expect(w.members.length).toBe(0);
+    run(sim, match, 1.5);
+    expect(w.members[0]!.name).toBe('Treasure Wyrm');
+    const killer = godAt(sim, w, 6);
+    const friend = sim.add(godUnit(thor, 'order', { x: 0, z: -130, yaw: 0 }));
+    const favor = friend.combatant.favor;
+    const xp = friend.combatant.xp;
+    sim.strike(killer, w.members[0]!, 1e7, 'true');
+    expect(friend.combatant.favor).toBe(favor + FAVOR_REWARDS.treasureWyrm);
+    expect(friend.combatant.xp).toBe(xp + WYRM_TEAM_XP);
+    expect(w.respawnAt).not.toBeNull();
+  });
+
+  it("the Molten Colossus gives its slayers' whole team Fury", () => {
+    const { sim, match } = setup();
+    run(sim, match, BOSS_FIRST_SPAWN.moltenColossus + 0.5);
+    const c = boss(match, 'moltenColossus');
+    const killer = godAt(sim, c, 8);
+    const friend = sim.add(godUnit(thor, 'order', { x: 0, z: -130, yaw: 0 }));
+    const foe = sim.add(godUnit(thor, 'chaos', { x: 0, z: 130, yaw: 0 }));
+    sim.strike(killer, c.members[0]!, 1e7, 'true');
+    expect(friend.marks.get(buffMark('fury'))?.remaining).toBe(FURY_DURATION);
+    expect(killer.marks.has(buffMark('fury'))).toBe(true);
+    expect(foe.marks.has(buffMark('fury'))).toBe(false);
+  });
+
+  it('bosses wind up an area attack that hits everything around them', () => {
+    const { sim, match } = setup();
+    run(sim, match, BOSS_FIRST_SPAWN.treasureWyrm + 0.5);
+    const w = boss(match, 'treasureWyrm');
+    const a = godAt(sim, w, 4);
+    const b = godAt(sim, w, -4);
+    sim.strike(a, w.members[0]!, 10, 'physical');
+    let hurt = 0;
+    sim.listeners.push((e) => {
+      if (e.type === 'damage' && e.target === b) hurt += e.amount;
+    });
+    // b never attacks and the Wyrm fights a; only the area attack can reach b
+    run(sim, match, 7 + BOSS_SPECIAL.treasureWyrm.windup);
+    expect(hurt).toBeGreaterThan(0);
   });
 });

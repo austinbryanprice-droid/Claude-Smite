@@ -335,12 +335,13 @@ export class CombatGame implements Updatable {
       case 'basic':
         if (e.unit.kind === 'titan') shake(0.5 * near(e.unit.x, e.unit.z, 30));
         else if (e.unit.tag.endsWith('warden')) shake(0.3 * near(e.unit.x, e.unit.z, 14));
+        else if (e.unit.kind === 'monster' && e.unit.radius > 2) shake(0.4 * near(e.unit.x, e.unit.z, 22));
         break;
       case 'cast':
         if (e.unit === me && e.cast.slot === ULTIMATE_SLOT) shake(0.25);
         break;
       case 'death':
-        if (isStructure(e.unit)) shake(0.8 * near(e.unit.x, e.unit.z, 60));
+        if (isStructure(e.unit) || (e.unit.kind === 'monster' && e.unit.radius > 2)) shake(0.8 * near(e.unit.x, e.unit.z, 60));
         else if (e.unit.kind === 'god') shake(e.killer === me || e.unit === me ? 0.4 : 0.25 * near(e.unit.x, e.unit.z, 25));
         break;
       default:

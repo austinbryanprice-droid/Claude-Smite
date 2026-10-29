@@ -1,5 +1,5 @@
 import { BUFF_GLOW } from '../combat/MonsterViews';
-import { BUFF_DURATION, BUFF_KINDS, BUFFS, buffMark, type BuffKind } from '../sim/Jungle';
+import { BUFF_DURATION, BUFF_KINDS, BUFFS, buffMark, FURY_DURATION, type BuffKind } from '../sim/Jungle';
 import * as THREE from 'three/webgpu';
 import { SLOT_KEYS, ULTIMATE_SLOT } from '../game/loadout';
 import { MAX_LEVEL } from '../game/progression';
@@ -275,14 +275,14 @@ export class CombatHud {
       this.buffs.innerHTML = held
         .map((k) => {
           const b = BUFFS[k];
-          return `<div class="ch-buff" data-buff="${k}" style="--c:${hex(BUFF_GLOW[k] ?? 0xffffff)}" title="${b.name}: ${b.text}"><span>${b.name[0]}</span><i></i></div>`;
+          return `<div class="ch-buff" data-buff="${k}" style="--c:${hex(BUFF_GLOW[k] ?? 0xffffff)}" title="${b.name}: ${b.text}"><span>${k === 'fury' ? 'F' : b.name[0]}</span><i></i></div>`;
         })
         .join('');
     }
     for (const chip of this.buffs.children as HTMLCollectionOf<HTMLElement>) {
       const m = this.player.marks.get(buffMark(chip.dataset.buff as BuffKind));
       if (!m) continue;
-      chip.style.setProperty('--p', String(m.remaining / BUFF_DURATION));
+      chip.style.setProperty('--p', String(m.remaining / (chip.dataset.buff === 'fury' ? FURY_DURATION : BUFF_DURATION)));
       chip.querySelector('i')!.textContent = String(Math.ceil(m.remaining));
     }
   }
