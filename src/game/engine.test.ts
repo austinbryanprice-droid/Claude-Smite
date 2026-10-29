@@ -152,6 +152,35 @@ describe('skill trees', () => {
     expect(z.deallocate('tempest.force')).toBe('wouldBreakTier');
   });
 
+  it('needs the keystone prerequisite maxed, and refunds keep it', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(20));
+    z.gainFavor(1e9);
+    const tempest = zeus.trees[0].nodes;
+    const key = tempest.find((n) => n.tier === 4)!;
+    expect(key.requires).toBe('tempest.wide');
+    for (const n of tempest.filter((n) => n.tier < 3)) while (z.allocate(n.id) === null);
+    while (z.allocate('tempest.fury') === null);
+    expect(z.allocate(key.id)).toBe('needsPrereq');
+    while (z.allocate('tempest.wide') === null);
+    expect(z.allocate(key.id)).toBeNull();
+    expect(z.deallocate('tempest.wide')).toBe('wouldBreakTier');
+  });
+
+  it('resets one tree or all of them, in base only', () => {
+    const z = new Combatant(zeus, 'order');
+    z.gainXp(xpFor(20));
+    z.allocate('tempest.force');
+    z.allocate('aegis.vigor');
+    z.inBase = false;
+    expect(z.resetTrees()).toBe('notInBase');
+    z.inBase = true;
+    expect(z.resetTrees('tempest')).toBeNull();
+    expect(z.allocation).toEqual({ 'aegis.vigor': 1 });
+    expect(z.resetTrees()).toBeNull();
+    expect(z.unspentPoints).toBe(z.treeBudget);
+  });
+
   it('feeds skill modifiers into resolved casts', () => {
     const z = new Combatant(zeus, 'order');
     z.gainXp(xpFor(20));
