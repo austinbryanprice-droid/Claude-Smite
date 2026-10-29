@@ -76,7 +76,7 @@ export class AudioEngine {
   private readonly settingsListeners: ((s: AudioSettings) => void)[] = [];
   private reverbIn!: GainNode;
   private readonly muffles: BiquadFilterNode[] = [];
-  private readonly airLoops = new Set<{ air: BiquadFilterNode; x: number; z: number }>();
+  private readonly airLoops = new Set<AirSpot>();
   private readonly airFrom = { x: 0, z: 0 };
   private musicDuck!: GainNode;
   private muffle = 0;
@@ -336,11 +336,11 @@ export class AudioEngine {
     g.gain.value = 0;
     g.gain.setTargetAtTime(target, ctx.currentTime, 0.05);
     src.connect(g);
-    const { panner, air } = this.route(g, o);
+    const { panner, air, send } = this.route(g, o);
     src.start(ctx.currentTime, Math.random() * buffer.duration);
     let alive = true;
     // the air between loop and listener changes as either one moves
-    const spot = air && o.at ? { air, x: o.at.x, z: o.at.z } : null;
+    const spot: AirSpot | null = air && send && o.at ? { air, send, base: o.wet ?? 0, x: o.at.x, z: o.at.z } : null;
     if (spot) this.airLoops.add(spot);
     return {
       get alive() {
@@ -352,7 +352,7 @@ export class AudioEngine {
         if (spot) {
           spot.x = x;
           spot.z = z;
-          spot.air.frequency.setTargetAtTime(airCutoff(this.distTo(x, z)), ctx.currentTime, 0.1);
+          this.applyAir(spot, ctx.currentTime, 0.1);
         }
       },
       setGain: (v, ramp = 0.08) => {
@@ -381,7 +381,7 @@ export class AudioEngine {
    * distance, and a reverb send that grows with it, so far fights sound far
    * away rather than just quiet.
    */
-  private route(g: GainNode, o: PlayOptions): { panner: PannerNode | null; air: BiquadFilterNode | null } {
+  private route(g: GainNode, o: PlayOptions): { panner: PannerNode | null; air: BiquadFilterNode | null; send: GainNode | null } {
     const ctx = this.ctx!;
     const bus = this.buses[o.bus ?? 'sfx'];
     let node: AudioNode = g;
@@ -396,7 +396,7 @@ export class AudioEngine {
       air.frequency.value = airCutoff(d);
       node.connect(air);
       node = air;
-      wet += Math.min(0.22, d / 250);
+      wet += distantWet(d);
       panner = ctx.createPanner();
       panner.panningModel = 'equalpower';
       panner.distanceModel = 'inverse';
@@ -413,12 +413,21 @@ export class AudioEngine {
       node = p;
     }
     node.connect(bus);
-    if (wet > 0) {
-      const s = ctx.createGain();
-      s.gain.value = wet;
-      node.connect(s).connect(this.wetIns[o.bus ?? 'sfx']);
+    let send: GainNode | null = null;
+    // positioned sounds always get a send, since their distance (and so their reverb) can change
+    if (wet > 0 || o.at) {
+      send = ctx.createGain();
+      send.gain.value = wet;
+      node.connect(send).connect(this.wetIns[o.bus ?? 'sfx']);
     }
-    return { panner, air };
+    return { panner, air, send };
+  }
+
+  /** Re-fit a loop's air filter and reverb send to its current distance. */
+  private applyAir(a: AirSpot, t: number, ramp: number): void {
+    const d = this.distTo(a.x, a.z);
+    a.air.frequency.setTargetAtTime(airCutoff(d), t, ramp);
+    a.send.gain.setTargetAtTime(a.base + distantWet(d), t, ramp);
   }
 
   private distTo(x: number, z: number): number {
@@ -461,7 +470,7 @@ export class AudioEngine {
     if (Math.hypot(x - this.airFrom.x, z - this.airFrom.z) > 1) {
       this.airFrom.x = x;
       this.airFrom.z = z;
-      for (const a of this.airLoops) a.air.frequency.setTargetAtTime(airCutoff(this.distTo(a.x, a.z)), t, 0.2);
+      for (const a of this.airLoops) this.applyAir(a, t, 0.2);
     }
     const len = Math.hypot(fx, fz) || 1;
     if (l.positionX) {
@@ -483,6 +492,20 @@ export class AudioEngine {
   get now(): number {
     return this.ctx?.currentTime ?? 0;
   }
+}
+
+interface AirSpot {
+  air: BiquadFilterNode;
+  send: GainNode;
+  /** The loop's own reverb amount, before distance adds to it. */
+  base: number;
+  x: number;
+  z: number;
+}
+
+/** Far sounds are mostly room: extra reverb that grows with distance. */
+function distantWet(d: number): number {
+  return Math.min(0.22, d / 250);
 }
 
 /** Air absorbs highs over distance: wide open up close, about 2.5 kHz at the edge of hearing. */
