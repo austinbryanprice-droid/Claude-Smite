@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { compatibilityMode, showFatal } from '../ui/Fatal';
 
 export interface RendererInfo {
   renderer: THREE.WebGPURenderer;
@@ -8,11 +9,17 @@ export interface RendererInfo {
 
 /**
  * Creates the renderer. WebGPU is preferred; three.js falls back to its WebGL2
- * backend automatically when WebGPU is missing. `?webgl` forces the fallback,
- * which is handy for testing.
+ * backend automatically when WebGPU is missing. `?webgl` (or the title screen's
+ * compatibility switch) forces the fallback.
  */
+/** The slice of the WebGPU device we watch (the project doesn't pull in @webgpu/types). */
+interface GpuDevice {
+  lost: Promise<{ reason: string; message: string }>;
+  addEventListener(type: 'uncapturederror', fn: (e: Event) => void): void;
+}
+
 export async function createRenderer(container: HTMLElement): Promise<RendererInfo> {
-  const forceWebGL = new URLSearchParams(location.search).has('webgl');
+  const forceWebGL = compatibilityMode();
   const renderer = new THREE.WebGPURenderer({
     antialias: false, // anti-aliasing is done in post (TRAA / SMAA / FXAA)
     forceWebGL,
@@ -29,6 +36,14 @@ export async function createRenderer(container: HTMLElement): Promise<RendererIn
   renderer.shadowMap.type = THREE.PCFShadowMap;
   container.appendChild(renderer.domElement);
 
-  const backend = renderer.backend as unknown as { isWebGPUBackend?: boolean };
+  const backend = renderer.backend as unknown as { isWebGPUBackend?: boolean; device?: GpuDevice };
+  // a GPU that rejects our pipelines would otherwise just draw black
+  const device = backend.device;
+  if (device) {
+    void device.lost.then((info) => {
+      if (info.reason !== 'destroyed') showFatal('The graphics device was lost (WebGPU).', info.message);
+    });
+    device.addEventListener('uncapturederror', (e) => showFatal('The graphics card rejected a draw (WebGPU).', (e as Event & { error: { message: string } }).error.message));
+  }
   return { renderer, isWebGPU: backend.isWebGPUBackend === true };
 }
