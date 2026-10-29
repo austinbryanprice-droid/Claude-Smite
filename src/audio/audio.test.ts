@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { GODS } from '../game/gods';
 import { hashSeed, RATE } from './dsp';
-import { INSTRUMENTS } from './music';
+import { CHORDS, INST, INSTRUMENTS, SONGS } from './music';
 import { SKILL_SOUNDS } from './skillSounds';
 import { renderRecipe, SOUNDS, type Recipe } from './sounds';
 
@@ -51,6 +51,28 @@ describe('sound bank', () => {
           const make = ss![part];
           if (make) check(`skill:${s.id}:${part}`, { make, loop: part === 'travel' || part === 'zone' });
         }
+      }
+    }
+  });
+
+  test('every song writes only known chords and instruments, in range', () => {
+    for (const [name, song] of Object.entries(SONGS)) {
+      for (let loop = 0; loop < 2; loop++) {
+        song.chords.forEach((c, bar) => {
+          const chord = CHORDS[c];
+          expect(chord, `${name} bar ${bar} chord ${c}`).toBeTruthy();
+          const notes: Parameters<typeof song.write>[3] = [];
+          song.write(bar, loop, chord!, notes);
+          expect(notes.length, `${name} bar ${bar} is silent`).toBeGreaterThan(0);
+          for (const n of notes) {
+            expect(INST[n.inst], `${name}: ${n.inst}`).toBeTruthy();
+            expect(INSTRUMENTS[n.inst], `${name}: ${n.inst} has a recipe`).toBeTruthy();
+            expect(n.beat, `${name} bar ${bar} beat`).toBeGreaterThanOrEqual(0);
+            expect(n.beat).toBeLessThan(song.beats);
+            // transposing more than an octave and a half from the sample sounds wrong
+            if (n.midi !== undefined) expect(Math.abs(n.midi - INST[n.inst]!.ref), `${name}: ${n.inst} ${n.midi}`).toBeLessThanOrEqual(19);
+          }
+        });
       }
     }
   });
