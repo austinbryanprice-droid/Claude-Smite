@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   abs, atan, color, cos, dot, float, fract, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
   step, time, uniform, uv, vec3,
@@ -27,9 +28,9 @@ export const BUFF_COLOR: Partial<Record<CampKind, number>> = {
 const INSTANCE_CHUNK = 50;
 
 /**
- * Collects instance transforms per geometry and per map region, so repeated
- * props cost one draw call per region and the camera and shadow cascades can
- * cull the regions they don't see.
+ * Collects prop transforms per geometry and per map region, so repeated
+ * props cost one draw call per material and region, and the camera and
+ * shadow cascades can cull the regions they don't see.
  */
 class Instancer {
   private readonly lists = new Map<string, { geo: THREE.BufferGeometry; mat: THREE.Material; m: THREE.Matrix4[] }>();
@@ -46,16 +47,44 @@ class Instancer {
   }
 
   build(parent: THREE.Object3D): void {
-    for (const { geo, mat, m } of this.lists.values()) {
-      const inst = new THREE.InstancedMesh(geo, mat, m.length);
-      m.forEach((x, i) => inst.setMatrixAt(i, x));
-      inst.instanceMatrix.needsUpdate = true;
-      inst.castShadow = true;
-      inst.receiveShadow = true;
-      inst.computeBoundingSphere();
-      parent.add(inst);
+    // Static props sharing a material and region are baked into one mesh: the
+    // lane walls alone were ~150 draw calls (six block shapes per region) in
+    // every pass. Very large groups stay instanced to keep memory down.
+    const groups = new Map<string, { geo: THREE.BufferGeometry; mat: THREE.Material; m: THREE.Matrix4[] }[]>();
+    for (const [key, e] of this.lists) {
+      const region = key.slice(key.indexOf(':'));
+      const gk = `${e.mat.uuid}${region}`;
+      const g = groups.get(gk);
+      if (g) g.push(e);
+      else groups.set(gk, [e]);
+    }
+    for (const entries of groups.values()) {
+      const tris = entries.reduce((n, e) => n + triangles(e.geo) * e.m.length, 0);
+      const merged = tris <= MERGE_LIMIT ? mergeGeometries(entries.flatMap((e) => e.m.map((x) => e.geo.clone().applyMatrix4(x))), false) : null;
+      if (merged) {
+        const mesh = new THREE.Mesh(merged, entries[0]!.mat);
+        mesh.castShadow = mesh.receiveShadow = true;
+        parent.add(mesh);
+        continue;
+      }
+      for (const { geo, mat, m } of entries) {
+        const inst = new THREE.InstancedMesh(geo, mat, m.length);
+        m.forEach((x, i) => inst.setMatrixAt(i, x));
+        inst.instanceMatrix.needsUpdate = true;
+        inst.castShadow = true;
+        inst.receiveShadow = true;
+        inst.computeBoundingSphere();
+        parent.add(inst);
+      }
     }
   }
+}
+
+/** Largest group (in triangles) that `Instancer.build` bakes into one mesh. */
+const MERGE_LIMIT = 60000;
+
+function triangles(g: THREE.BufferGeometry): number {
+  return (g.index ? g.index.count : g.attributes.position!.count) / 3;
 }
 
 const tmpQ = new THREE.Quaternion();
