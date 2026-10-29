@@ -278,6 +278,19 @@ describe('combatant', () => {
     expect(a.basicAttack(new Combatant(thor, 'chaos'))).not.toBeNull();
   });
 
+  it('a ranged shot spends the attack timer when fired and deals damage when it lands', () => {
+    const a = new Combatant(zeus, 'order');
+    const t = new Combatant(thor, 'chaos');
+    const shot = a.startBasic(() => 1)!;
+    expect(shot).not.toBeNull();
+    expect(a.basicReady).toBe(false);
+    expect(a.startBasic()).toBeNull();
+    expect(t.health).toBe(t.stats.maxHealth);
+    expect(a.landBasic(new Combatant(zeus, 'order'), shot)).toBeNull();
+    expect(a.landBasic(t, shot)!.dealt).toBeGreaterThan(0);
+    expect(t.health).toBeLessThan(t.stats.maxHealth);
+  });
+
   it('refreshes a zone slow on each tick instead of stacking it', () => {
     const a = new Combatant(anubis, 'order');
     const z = new Combatant(zeus, 'chaos');

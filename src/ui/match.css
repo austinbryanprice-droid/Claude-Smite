@@ -1,0 +1,51 @@
+/* Conquest match HUD: score and clock, minimap, kill feed, scoreboard, end screen. */
+.match-hud { position: fixed; inset: 0; pointer-events: none; font-family: 'Cinzel', Georgia, serif; color: var(--ink, #f4ead8); z-index: 6; }
+.mh-ally { color: #46d7c4; }
+.mh-enemy { color: #ff5a4a; }
+
+.mh-top { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; gap: 0; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6)); }
+.mh-side { display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: linear-gradient(180deg, rgba(20, 16, 12, 0.85), rgba(8, 6, 5, 0.9)); border: 1px solid rgba(231, 194, 122, 0.4); }
+.mh-side:first-child { border-radius: 6px 0 0 6px; flex-direction: row-reverse; }
+.mh-side:last-child { border-radius: 0 6px 6px 0; }
+.mh-kills { font-size: 28px; font-weight: 700; min-width: 34px; text-align: center; text-shadow: 0 0 10px currentColor; }
+.mh-pips { display: flex; gap: 6px; }
+.mh-lane { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.mh-pip { display: block; width: 9px; height: 9px; background: currentColor; box-shadow: 0 0 5px currentColor; border-radius: 1px; }
+.mh-pip-phoenix { border-radius: 50%; width: 11px; height: 11px; }
+.mh-pip.down { background: #3a3632; box-shadow: none; }
+.mh-titan { width: 64px; height: 6px; background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); }
+.mh-titan div { height: 100%; background: currentColor; transition: width 0.2s; }
+.mh-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 16px; min-width: 96px; background: linear-gradient(180deg, rgba(40, 30, 16, 0.92), rgba(12, 9, 6, 0.95)); border-top: 1px solid rgba(231, 194, 122, 0.6); border-bottom: 1px solid rgba(231, 194, 122, 0.6); }
+.mh-clock { font-size: 22px; color: #ffe3a3; letter-spacing: 0.06em; }
+.mh-wave { font-size: 10px; letter-spacing: 0.08em; opacity: 0.8; min-height: 12px; }
+
+.mh-map { position: absolute; top: 12px; right: 12px; width: 220px; height: 220px; border: 1px solid rgba(231, 194, 122, 0.55); border-radius: 6px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.6); }
+.mh-map canvas { width: 100%; height: 100%; display: block; }
+.mh-feed { position: absolute; top: 244px; right: 12px; width: 260px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.mh-feed-row { padding: 3px 10px; font-size: 13px; background: linear-gradient(90deg, transparent, rgba(8, 6, 5, 0.8)); text-shadow: 0 1px 2px #000; transition: opacity 0.6s; animation: mh-slide 0.25s ease-out; }
+.mh-feed-row span { opacity: 0.7; font-size: 11px; margin: 0 4px; }
+.mh-feed-row.out { opacity: 0; }
+@keyframes mh-slide { from { transform: translateX(30px); opacity: 0; } }
+
+.mh-banner { position: absolute; left: 50%; top: 15%; transform: translateX(-50%) scale(0.9); padding: 8px 40px; font-size: 30px; letter-spacing: 0.18em; text-transform: uppercase; text-shadow: 0 0 18px currentColor, 0 2px 6px #000; background: linear-gradient(90deg, transparent, rgba(8, 6, 5, 0.75), transparent); opacity: 0; transition: opacity 0.4s, transform 0.4s; white-space: nowrap; }
+.mh-banner.show { opacity: 1; transform: translateX(-50%) scale(1); }
+
+.mh-board { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; gap: 14px; padding: 18px 24px; background: linear-gradient(180deg, rgba(24, 18, 12, 0.94), rgba(8, 6, 5, 0.96)); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); min-width: min(720px, 94vw); }
+.mh-board.show { display: flex; }
+.mh-team h3 { margin: 0 0 6px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase; font-size: 15px; }
+.mh-team table { width: 100%; border-collapse: collapse; color: var(--ink, #f4ead8); font-size: 13px; }
+.mh-team th { font-weight: 400; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6; text-align: left; padding: 2px 8px; }
+.mh-team td { padding: 4px 8px; border-top: 1px solid rgba(231, 194, 122, 0.12); }
+.mh-team td.god { color: #ffe3a3; }
+.mh-team td em { font-style: normal; margin-left: 8px; color: #ff8a70; font-size: 11px; }
+.mh-team tr.me td { background: rgba(127, 227, 106, 0.08); }
+
+.mh-end { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; padding: 5vh 0; gap: 8px; background: radial-gradient(ellipse at center, rgba(0,0,0,0.1), rgba(0,0,0,0.6)); pointer-events: auto; }
+.mh-end.show { display: flex; animation: mh-fade 1.2s ease-out; }
+.mh-end .mh-board { position: static; transform: none; margin-top: 12px; }
+.mh-end-title { font-size: 72px; letter-spacing: 0.3em; text-shadow: 0 0 30px currentColor, 0 4px 12px #000; }
+.mh-end-title.win { color: #ffd77a; }
+.mh-end-title.loss { color: #ff5a4a; }
+.mh-end-sub { font-size: 18px; letter-spacing: 0.12em; text-shadow: 0 2px 6px #000; }
+.mh-again { margin-top: 14px; padding: 10px 34px; font: inherit; font-size: 18px; letter-spacing: 0.14em; color: #ffe3a3; background: rgba(40, 30, 16, 0.9); border: 1px solid #e7c27a; border-radius: 4px; cursor: pointer; }
+@keyframes mh-fade { from { opacity: 0; } }

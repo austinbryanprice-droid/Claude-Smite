@@ -1,0 +1,58 @@
+/* K menu: loadout, skill pool and skill trees. */
+.lm { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(20, 14, 8, 0.55), rgba(4, 3, 2, 0.85)); font-family: 'Cinzel', Georgia, serif; color: var(--ink, #f4ead8); pointer-events: auto; }
+.lm.show { display: flex; }
+.lm button { font: inherit; color: inherit; cursor: pointer; }
+.lm-panel { width: min(1380px, 96vw); height: min(860px, 94vh); display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(28, 22, 16, 0.97), rgba(12, 10, 8, 0.98)); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.7), inset 0 0 40px rgba(231, 194, 122, 0.06); overflow: hidden; }
+.lm-head { display: flex; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid rgba(231, 194, 122, 0.3); background: linear-gradient(90deg, rgba(231, 194, 122, 0.12), transparent 60%); }
+.lm-title { font-size: 28px; letter-spacing: 0.12em; color: #ffe3a3; }
+.lm-sub { font-size: 12px; letter-spacing: 0.1em; opacity: 0.75; text-transform: capitalize; }
+.lm-gods { display: flex; gap: 6px; flex: 1; justify-content: center; }
+.lm-god { padding: 6px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(231, 194, 122, 0.3); border-radius: 4px; letter-spacing: 0.08em; }
+.lm-god.on { background: rgba(231, 194, 122, 0.22); border-color: #e7c27a; color: #ffe3a3; }
+.lm-god:disabled { opacity: 0.35; cursor: not-allowed; }
+.lm-close { padding: 6px 14px; background: rgba(150, 40, 30, 0.35); border: 1px solid rgba(255, 140, 110, 0.5); border-radius: 4px; }
+.lm-bar { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 8px 20px; font-size: 13px; letter-spacing: 0.04em; border-bottom: 1px solid rgba(231, 194, 122, 0.15); }
+.lm-bar b { color: #ffe3a3; }
+.lm-glow { color: #ffe3a3; text-shadow: 0 0 8px rgba(255, 210, 120, 0.8); }
+.lm-base.yes { color: #8ff07a; }
+.lm-base.no { color: #ffb08a; }
+.lm-practice { margin-left: auto; opacity: 0.85; }
+.lm-practice button { margin-left: 4px; padding: 2px 8px; font-size: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(231, 194, 122, 0.3); border-radius: 3px; }
+.lm-msg { min-height: 22px; padding: 2px 20px; font-size: 13px; color: #ff9a80; }
+.lm-body { flex: 1; display: grid; grid-template-columns: minmax(280px, 32%) minmax(0, 1fr); gap: 16px; padding: 0 20px 16px; min-height: 0; }
+.lm h3 { margin: 6px 0 8px; font-size: 14px; font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase; color: #e7c27a; }
+.lm-left { display: flex; flex-direction: column; min-height: 0; }
+.lm-slots { display: flex; gap: 8px; }
+.lm-slot { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; background: rgba(255,255,255,0.03); border: 1px solid rgba(231, 194, 122, 0.25); border-radius: 6px; }
+.lm-slot.sel { border-color: #ffe3a3; box-shadow: 0 0 12px rgba(255, 220, 140, 0.4); background: rgba(231, 194, 122, 0.1); }
+.lm-slot .lm-ico { width: 52px; height: 52px; }
+.lm-ico svg { width: 100%; height: 100%; display: block; }
+.lm-key { position: absolute; top: 3px; left: 6px; font-size: 11px; color: #ffe3a3; }
+.lm-sname { font-size: 10px; text-align: center; line-height: 1.15; min-height: 23px; }
+.lm-pool { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+.lm-skill { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(231, 194, 122, 0.15); border-radius: 6px; }
+.lm-skill:hover { border-color: rgba(231, 194, 122, 0.6); background: rgba(231, 194, 122, 0.08); }
+.lm-skill.equipped { opacity: 0.55; }
+.lm-skill .lm-ico { flex: none; width: 46px; height: 46px; }
+.lm-sk-text { display: flex; flex-direction: column; gap: 2px; }
+.lm-sk-name { font-size: 14px; color: #ffe3a3; }
+.lm-sk-name em { font-style: normal; font-size: 10px; letter-spacing: 0.1em; color: #e7c27a; margin-left: 6px; text-transform: uppercase; }
+.lm-sk-desc { font-family: Georgia, serif; font-size: 12px; line-height: 1.35; opacity: 0.85; }
+.lm-sk-meta { font-size: 10px; letter-spacing: 0.06em; opacity: 0.6; text-transform: capitalize; }
+.lm-trees { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-height: 0; overflow-y: auto; }
+.lm-tree { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: rgba(255,255,255,0.025); border: 1px solid rgba(231, 194, 122, 0.18); border-radius: 6px; }
+.lm-tree h3 { display: flex; justify-content: space-between; margin: 0; }
+.lm-tree h3 span { color: #ffe3a3; }
+.lm-theme { font-family: Georgia, serif; font-size: 11px; opacity: 0.65; margin-bottom: 4px; }
+.lm-tier { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 6px 0; border-top: 1px solid rgba(231, 194, 122, 0.12); }
+.lm-tier.key { grid-template-columns: 1fr; }
+.lm-tier.locked .lm-node { opacity: 0.4; }
+.lm-req { position: absolute; right: 0; top: -9px; font-size: 9px; letter-spacing: 0.08em; padding: 0 4px; background: #1a140e; color: #c9a86a; }
+.lm-node { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; min-height: 64px; background: radial-gradient(ellipse at top, rgba(255,255,255,0.06), rgba(0,0,0,0.25)); border: 1px solid rgba(231, 194, 122, 0.22); border-radius: 5px; }
+.lm-node:hover { border-color: rgba(231, 194, 122, 0.7); }
+.lm-node.taken { border-color: rgba(231, 194, 122, 0.75); background: radial-gradient(ellipse at top, rgba(231, 194, 122, 0.25), rgba(0,0,0,0.2)); }
+.lm-node.max { box-shadow: 0 0 10px rgba(255, 210, 120, 0.4); }
+.lm-tier.key .lm-node { border-color: rgba(255, 200, 110, 0.55); background: radial-gradient(ellipse at top, rgba(255, 170, 60, 0.18), rgba(0,0,0,0.25)); }
+.lm-n-name { font-size: 11px; color: #ffe3a3; text-align: center; line-height: 1.15; }
+.lm-n-rank { font-size: 12px; font-weight: 700; }
+.lm-n-desc { font-family: Georgia, serif; font-size: 10px; line-height: 1.25; opacity: 0.72; text-align: center; }
