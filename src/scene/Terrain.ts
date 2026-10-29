@@ -134,7 +134,9 @@ export class Terrain {
     let L: any = {
       col: grassCol, nrm: mix(gA.normal, gB.normal, 0.4), rough: mix(gA.roughness, gB.roughness, 0.4), ao: gA.ao,
     };
-    L = lerp4(L, { col: dirt.color, nrm: dirt.normal, rough: dirt.roughness, ao: dirt.ao }, dW);
+    // muted, slightly olive earth so paths sit under the grass instead of glowing red
+    const dirtCol = mix(dirt.color, vec3(dot(dirt.color, vec3(0.3, 0.59, 0.11))), 0.35).mul(vec3(0.92, 0.95, 0.85));
+    L = lerp4(L, { col: dirtCol, nrm: dirt.normal, rough: dirt.roughness, ao: dirt.ao }, dW);
     // worn, slightly mossy grey-olive paving, darker than the temple's sandstone
     const pavedLum = dot(paved.color, vec3(0.3, 0.59, 0.11));
     // big, worn grey-olive slabs with soft seams, like the reference lanes

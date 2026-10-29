@@ -39,8 +39,8 @@ export class Environment {
     this.sky.rayleigh.value = 2.6;
     this.sky.mieCoefficient.value = 0.004;
     this.sky.mieDirectionalG.value = 0.82;
-    this.sky.cloudCoverage.value = 0.3;
-    this.sky.cloudDensity.value = 0.55;
+    this.sky.cloudCoverage.value = 0.48;
+    this.sky.cloudDensity.value = 0.75;
     this.sky.cloudElevation.value = 0.55;
     this.sky.cloudScale.value = 0.00028;
     this.sky.cloudSpeed.value = 0.00001;

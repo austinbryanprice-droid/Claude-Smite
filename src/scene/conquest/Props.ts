@@ -352,7 +352,7 @@ export class ConquestProps {
     light.position.y = 2;
     pit.add(light);
     this.lights.push(light);
-    mergeStatic(pit);
+    mergeStatic(pit, [floor]);
     this.group.add(pit);
   }
 }

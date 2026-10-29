@@ -132,7 +132,8 @@ export class Grass {
     mat.normalNode = transformNormalToView(normalize(mix(faceN.mul(faceDirection), vec3(0, 1, 0), 0.75)));
 
     const base = mix(vec3(0.05, 0.13, 0.03), vec3(0.08, 0.17, 0.035), variation);
-    const tipGreen = mix(vec3(0.22, 0.47, 0.07), vec3(0.4, 0.55, 0.11), smoothstep(0.6, 0.97, variation));
+    // sunlit tips must stay close to the ground's albedo, or exposed ridges glow
+    const tipGreen = mix(vec3(0.13, 0.3, 0.045), vec3(0.2, 0.34, 0.06), smoothstep(0.6, 0.97, variation));
     const col = mix(base, tipGreen, pow(h, float(0.9)));
     mat.colorNode = col;
     // rough enough that blades on sunward ridges don't flare with specular
@@ -142,7 +143,7 @@ export class Grass {
     // Fake subsurface: blades glow when the sun is behind them.
     const viewDir = normalize(pos.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
-    const back = pow(dot(viewDir, sun.negate()).max(0), float(3)).mul(h).mul(0.1);
+    const back = pow(dot(viewDir, sun).max(0), float(3)).mul(h).mul(0.1);
     mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(1.0);
     return mat;
   }
