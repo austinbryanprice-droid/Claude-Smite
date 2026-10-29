@@ -51,6 +51,38 @@ const CAST_ACCENTS: Record<string, { bone: string; axis: [number, number, number
   ],
 };
 
+/**
+ * Per-god stance layered on the shared idle clip, faded out as the god starts
+ * moving: posture says who they are before they act. Same axes as CAST_ACCENTS.
+ */
+const IDLE_STANCE: Record<string, { bone: string; axis: [number, number, number]; angle: number }[]> = {
+  // Zeus: chest out, chin up
+  zeus: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: -0.08 },
+    { bone: 'DEF-head', axis: [1, 0, 0], angle: -0.1 },
+  ],
+  // Thor: shoulders rolled forward, head low, ready to charge
+  thor: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: 0.1 },
+    { bone: 'DEF-head', axis: [1, 0, 0], angle: 0.06 },
+  ],
+  // Odin: upright and watchful, head turned a little to his good eye
+  odin: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: -0.04 },
+    { bone: 'DEF-head', axis: [0, 1, 0], angle: 0.18 },
+  ],
+  // Loki: weight on one hip, head cocked
+  loki: [
+    { bone: 'DEF-spine001', axis: [0, 0, 1], angle: 0.08 },
+    { bone: 'DEF-head', axis: [0, 0, 1], angle: -0.12 },
+  ],
+  // Anubis: hunched forward, head thrust out like a hound
+  anubis: [
+    { bone: 'DEF-spine003', axis: [1, 0, 0], angle: 0.1 },
+    { bone: 'DEF-head', axis: [1, 0, 0], angle: 0.14 },
+  ],
+};
+
 /** Bones the cast pose overrides (upper body only, so legs keep running). */
 const UPPER = /^DEF-(spine00[23]|neck|head|shoulder|upper_arm|forearm|hand|f_|thumb)/;
 
@@ -108,6 +140,8 @@ export class GodModel {
   private readonly tmpQ2 = new THREE.Quaternion();
   private readonly curl: { bone: THREE.Bone; q: THREE.Quaternion }[] = [];
   private readonly accents: { bone: THREE.Bone; axis: THREE.Vector3; angle: number }[] = [];
+  private readonly stance: { bone: THREE.Bone; axis: THREE.Vector3; angle: number }[] = [];
+  private stanceWeight = 1;
   private readonly tmpV = new THREE.Vector3();
 
   constructor(god: string | object = 'zeus', variant?: string) {
@@ -177,6 +211,10 @@ export class GodModel {
       const b = bone(c.bone);
       const axis = new THREE.Vector3().fromArray(c.axis).normalize();
       if (b) this.curl.push({ bone: b, q: new THREE.Quaternion().setFromAxisAngle(axis, c.angle) });
+    }
+    for (const a of IDLE_STANCE[this.id] ?? []) {
+      const b = this.bones.get(a.bone.replace(/\./g, ''));
+      if (b) this.stance.push({ bone: b, axis: new THREE.Vector3(...a.axis), angle: a.angle });
     }
     for (const a of CAST_ACCENTS[this.id] ?? []) {
       const b = this.bones.get(a.bone.replace(/\./g, ''));
@@ -282,6 +320,9 @@ export class GodModel {
     this.bank += (bankTarget - this.bank) * Math.min(1, dt * 5);
     if (Math.abs(this.lean) > 1e-3) this.rotateModel(this.spine, this.axisX, this.lean);
     if (Math.abs(this.bank) > 1e-3) this.rotateModel(this.spine, this.axisZ, this.bank);
+    // stance: full while standing, gone at a jog
+    this.stanceWeight += ((1 - move) * (s.grounded ? 1 : 0) - this.stanceWeight) * Math.min(1, dt * 4);
+    if (this.stanceWeight > 0.01) for (const a of this.stance) this.rotateModel(a.bone, a.axis, a.angle * this.stanceWeight);
 
     // cast overlay: restart the clip on each new cast
     if (this.castWeight > 0.5 && this.prevCast <= 0.5) this.castTime = 0;
