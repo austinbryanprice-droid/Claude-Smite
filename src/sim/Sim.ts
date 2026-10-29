@@ -34,6 +34,8 @@ export const RECALL_TIME = 8;
 export const PROJECTILE_HEIGHT = 1.5;
 /** How far a bouncing projectile looks for its next target, arena meters. */
 const BOUNCE_RANGE = 9;
+/** Seconds a ground-targeted skill shows its circle before it lands. */
+export const GROUND_WARNING = 0.4;
 const LEAP_SPEED = 24;
 const DASH_SPEED = 28;
 /** Melee basic attacks hit everything in this arc (degrees). */
@@ -66,6 +68,8 @@ export class Sim {
   readonly zones: Zone[] = [];
   readonly flashes: Flash[] = [];
   private pending: { at: number; owner: Unit; cast: ResolvedSkill; target: Unit }[] = [];
+  /** Ground blasts waiting out their warning circle. */
+  private landing: { at: number; owner: Unit; cast: ResolvedSkill; x: number; z: number; r: number }[] = [];
   private events: SimEvent[] = [];
   time = 0;
 
@@ -251,11 +255,16 @@ export class Sim {
         const r = radius(t.radius);
         if (ticking && ticking.kind === 'damage') {
           const followAim = movement?.kind === 'movement' && movement.style === 'leap' && movement.distance === 0;
-          this.spawnZone(u, cast, at, r, ticking.hits, ticking.interval, followAim ? 'aim' : null, range(t.range));
+          // a placed field shows its circle a moment before it starts to bite
+          this.spawnZone(u, cast, at, r, ticking.hits, ticking.interval, followAim ? 'aim' : null, range(t.range), followAim ? 0 : GROUND_WARNING);
           if (followAim) u.untargetable = ticking.hits * ticking.interval;
-        } else {
+        } else if (cast.hits.some((e) => e.kind === 'summon')) {
           this.area(u, cast, at, r);
           this.flash(u, { type: 'circle', x: at.x, z: at.z, radius: r });
+        } else {
+          // a ground blast lands after a short warning circle, so it can be dodged
+          this.spawnZone(u, cast, at, r, 0, 0, null, 0, GROUND_WARNING);
+          this.landing.push({ at: this.time + GROUND_WARNING, owner: u, cast, x: at.x, z: at.z, r });
         }
         break;
       }
@@ -595,6 +604,8 @@ export class Sim {
     interval: number,
     follow: Zone['follow'],
     range: number,
+    /** Seconds before the first tick, while the circle shows. */
+    warning = 0,
   ): void {
     this.zones.push({
       id: nextEntityId(),
@@ -605,11 +616,11 @@ export class Sim {
       radius,
       ticks,
       interval,
-      timer: 0,
+      timer: warning,
       follow,
       range,
       age: 0,
-      duration: ticks * interval,
+      duration: warning + ticks * interval,
     });
   }
 
@@ -700,6 +711,7 @@ export class Sim {
     this.stepProjectiles(dt);
     this.stepZones(dt);
     this.stepPending();
+    this.stepLanding();
     this.passives.step();
     for (const f of this.flashes) f.age += dt;
     removeWhere(this.flashes, (f) => f.age >= f.life);
@@ -958,6 +970,17 @@ export class Sim {
       }
     }
     removeWhere(this.zones, (z) => z.ticks <= 0 && z.timer <= -0.4);
+  }
+
+  private stepLanding(): void {
+    if (!this.landing.length) return;
+    const due = this.landing.filter((l) => l.at <= this.time);
+    if (!due.length) return;
+    this.landing = this.landing.filter((l) => l.at > this.time);
+    for (const l of due) {
+      this.area(l.owner, l.cast, l, l.r);
+      this.flash(l.owner, { type: 'circle', x: l.x, z: l.z, radius: l.r });
+    }
   }
 
   private stepPending(): void {
