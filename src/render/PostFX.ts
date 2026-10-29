@@ -15,9 +15,9 @@ export const grading = {
   exposure: uniform(0.85),
   /** ASC CDL in display space: slope (gain), offset (lift), power (gamma). */
   slope: uniform(new THREE.Vector3(1.05, 1.0, 0.94)),
-  offset: uniform(new THREE.Vector3(-0.016, -0.01, 0.006)),
-  power: uniform(new THREE.Vector3(1.14, 1.12, 1.09)),
-  saturation: uniform(1.25),
+  offset: uniform(new THREE.Vector3(-0.022, -0.014, 0.012)),
+  power: uniform(new THREE.Vector3(1.2, 1.16, 1.08)),
+  saturation: uniform(1.3),
   vignette: uniform(0.32),
   grain: uniform(0.025),
   bloomStrength: uniform(0.22),

@@ -23,9 +23,10 @@ export class Environment {
 
   /** Brightness multiplier that puts the sky model in the same units as the sun. */
   readonly skyScale = uniform(0.5);
-  readonly fogDensity = uniform(0.0068);
-  readonly fogHeightFalloff = uniform(0.028);
-  readonly fogColor = uniform(new THREE.Color(0.44, 0.5, 0.8));
+  readonly fogDensity = uniform(0.009);
+  readonly fogHeightFalloff = uniform(0.022);
+  /** Lavender-blue haze, so jungle layers separate with distance as in the references. */
+  readonly fogColor = uniform(new THREE.Color(0.42, 0.44, 0.9));
   readonly sunColor = new THREE.Color(1.0, 0.86, 0.68);
 
   /** Sun elevation and azimuth in degrees. Late-morning sun gives long, readable shadows. */
@@ -51,7 +52,7 @@ export class Environment {
     this.sky.renderOrder = -1;
     scene.add(this.sky);
 
-    this.sun = new THREE.DirectionalLight(this.sunColor, 5.5);
+    this.sun = new THREE.DirectionalLight(this.sunColor, 6.6);
     this.sun.castShadow = true;
     scene.add(this.sun);
     scene.add(this.sun.target);
@@ -149,7 +150,8 @@ export class Environment {
     this.envTarget?.dispose();
     this.envTarget = pmrem.fromScene(envScene, 0.0, 0.1, 400);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = 1.05;
+    // kept below the sun so shadows read deep and cool, as in the stylized references
+    this.scene.environmentIntensity = 0.72;
     pmrem.dispose();
     sky.geometry.dispose();
     ground.geometry.dispose();
