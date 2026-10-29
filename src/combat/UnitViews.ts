@@ -62,6 +62,8 @@ function buildDummy(): THREE.Group {
 
 /** How often (in frames) a god model off screen is animated. */
 const OFFSCREEN_EVERY = 8;
+/** The longest step GodModel.animate takes without dropping time. */
+const MAX_ANIM_DT = 1 / 20;
 
 interface UnitView {
   root: THREE.Group;
@@ -337,7 +339,8 @@ export class UnitViews {
     v.root.rotation.z = v.wobble * 0.04;
     v.animDt += dt;
     const every = this.animateEvery(v);
-    if ((this.frameNo + v.stagger) % every !== 0) return;
+    // GodModel.animate clamps its step to MAX_ANIM_DT, so pose before the backlog would exceed it
+    if ((this.frameNo + v.stagger) % every !== 0 && v.animDt + dt <= MAX_ANIM_DT) return;
     v.model.animate(
       v.animDt,
       { speed, localDir: v.localDir, grounded: !u.forced || u.forced.arc === 0, verticalSpeed: 0 },
