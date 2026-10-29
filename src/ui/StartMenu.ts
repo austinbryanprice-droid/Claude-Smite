@@ -32,6 +32,7 @@ export const CONTROLS: [string, string][] = [
   ['Tab (hold)', 'Scoreboard'],
   ['Wheel', 'Camera zoom'],
   ['H', 'Show or hide this help'],
+  ['M', 'Mute or unmute sound'],
   ['Esc', 'Release the mouse'],
 ];
 

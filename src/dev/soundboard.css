@@ -1,0 +1,11 @@
+:root { --gold: #e7c27a; --ink: #f4ead8; }
+html, body { margin: 0; background: #0b0a09; color: var(--ink); font-family: 'Cinzel', Georgia, serif; }
+.sb { max-width: 1100px; margin: 0 auto; padding: 56px 16px 40px; }
+.sb h1 { color: var(--gold); letter-spacing: 0.2em; font-size: 26px; margin: 0 0 6px; }
+.sb h2 { color: var(--gold); font-size: 14px; letter-spacing: 0.12em; margin: 22px 0 8px; font-weight: 500; }
+.sb-note { font-family: Georgia, serif; opacity: 0.75; font-size: 14px; }
+.sb-grid, .sb-music { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-music { margin: 14px 0 8px; }
+.sb button { background: #1a1612; color: var(--ink); border: 1px solid rgba(231, 194, 122, 0.35); border-radius: 4px; padding: 6px 10px; font: 12px Georgia, serif; cursor: pointer; }
+.sb button:hover { border-color: var(--gold); background: #2a2118; }
+.sb-music button { border-color: rgba(231, 194, 122, 0.7); font-family: 'Cinzel', Georgia, serif; }
