@@ -70,6 +70,8 @@ export class GameAudio {
     private readonly game: CombatGame,
     private readonly camera: THREE.Camera,
     private readonly conquest: boolean,
+    /** Whether the player is off the ground on a jump of their own (the sim does not see those). */
+    private readonly jumping: () => boolean = () => false,
   ) {
     game.sim.listeners.push((e) => this.onEvent(e));
     window.addEventListener('keydown', (e) => this.onKey(e));
@@ -461,14 +463,15 @@ export class GameAudio {
       s.x = u.x;
       s.z = u.z;
       // coming down from a leap, a jump or a knock-up
-      const air = !!u.forced && u.forced.arc > 0;
-      if (s.air && !air && u.alive && d < range && u.kind !== 'minion') {
+      const air = (!!u.forced && u.forced.arc > 0) || (u === this.me && this.jumping());
+      const hidden = u.stealth > 0 && u.team !== this.me.team;
+      if (s.air && !air && u.alive && !hidden && d < range && u.kind !== 'minion') {
         const big = u.radius > 2;
         this.engine.play('land', { at: { x: u.x, y: u.body.y, z: u.z }, gain: (u === this.me ? 0.75 : 0.55) * (u === this.me ? 1 : this.crowd), vary: 0.06, ref: big ? 12 : 6, rate: big ? 0.7 : 1 }, u === this.me ? 4 : 2);
       }
       s.air = air;
       // leaps, blinks and recalls are not walking
-      if (!u.alive || u.forced || moved > 3 || d > range || (u.stealth > 0 && u.team !== this.me.team)) {
+      if (!u.alive || u.forced || moved > 3 || d > range || hidden) {
         s.acc = 0;
         continue;
       }

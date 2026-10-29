@@ -116,7 +116,7 @@ async function main(): Promise<void> {
   const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
   void baked;
-  const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest');
+  const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest', () => !player.grounded);
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);
   follow.update(1 / 60);
