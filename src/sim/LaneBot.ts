@@ -1,7 +1,8 @@
 import type { Side as Team } from '../game/combatant';
 import { alongPolyline, baseOf, nearestOnPolyline, type LaneId, type Vec2 } from '../map/ConquestLayout';
+import { ConquestLayout as L } from '../map/ConquestLayout';
 import { GodBot } from './Bot';
-import { MonsterBrain } from './Jungle';
+import { buffMark, isBuff, MonsterBrain, type CampState } from './Jungle';
 import { LANES, marchPath, type Match } from './Match';
 import type { Sim } from './Sim';
 import { isStructure, WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
@@ -28,6 +29,10 @@ export class LaneBot implements Brain {
   private anchor: Point;
   private think = 0;
   private roamTimer = 0;
+  /** The jungle camp a jungler is clearing or walking to. */
+  private camp: CampState | null = null;
+  /** The jungler's current walking route through the jungle, and what it leads to. */
+  private trail: { goal: Point; points: Point[]; at: number } | null = null;
 
   constructor(
     private readonly sim: Sim,
@@ -58,8 +63,12 @@ export class LaneBot implements Brain {
     this.think -= dt;
     if (this.think <= 0) {
       this.think = 0.3;
-      if (this.role === 'roam') this.roam(dt + 0.3);
-      this.placeAnchor();
+      if (this.role === 'roam') {
+        this.camp = this.pickCamp();
+        if (!this.camp) this.roam(dt + 0.3);
+      }
+      if (this.camp) this.campAnchor(this.camp);
+      else this.placeAnchor();
     }
     this.bot.update(dt);
   }
@@ -74,6 +83,39 @@ export class LaneBot implements Brain {
     this.roamTimer = 50 + this.sim.rng() * 30;
     this.lane = LANES[Math.floor(this.sim.rng() * LANES.length)]!;
     this.path = marchPath(this.u.side, this.lane);
+  }
+
+  /**
+   * The jungler clears its own side's camps while any stand, buffs first,
+   * nearest next. It drops the jungle while hurt so it heals up first.
+   */
+  private pickCamp(): CampState | null {
+    const { u } = this;
+    const c = u.combatant;
+    // keep clearing the camp we're on until it is done (the bot still retreats when very low)
+    if (this.camp && this.match.jungle.alive(this.camp)) return this.camp;
+    // start a new camp only healthy
+    if (c.health < c.stats.maxHealth * 0.5) return null;
+    let best: CampState | null = null;
+    let bestScore = Infinity;
+    for (const k of this.match.jungle.camps) {
+      if (k.camp.team !== u.team || !this.match.jungle.alive(k)) continue;
+      const d = Math.hypot(k.camp.at[0] - u.x, k.camp.at[1] - u.z);
+      // skip a buff the jungler already holds
+      if (isBuff(k.camp.kind) && u.marks.has(buffMark(k.camp.kind))) continue;
+      const score = d - (isBuff(k.camp.kind) ? 35 : 0);
+      if (score < bestScore) {
+        best = k;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  private campAnchor(c: CampState): void {
+    this.anchor.x = c.camp.at[0];
+    this.anchor.z = c.camp.at[1];
+    this.bot.options.anchor = this.anchor;
   }
 
   private along(x: number, z: number): number {
@@ -126,6 +168,53 @@ export class LaneBot implements Brain {
   }
 
   private choose(): Unit | null {
+    if (this.camp) return this.chooseInJungle(this.camp);
+    return this.chooseInLane();
+  }
+
+  /** In the jungle: fight an enemy god that comes close, otherwise the camp's monsters. */
+  private chooseInJungle(camp: CampState): Unit | null {
+    const { sim, u } = this;
+    let god: Unit | null = null;
+    let gd = AGGRO * 0.8;
+    for (const t of sim.enemiesOf(u)) {
+      if (t.kind !== 'god' || t.stealth > 0) continue;
+      const d = Math.hypot(t.x - u.x, t.z - u.z);
+      if (d < gd) {
+        god = t;
+        gd = d;
+      }
+    }
+    if (god) return god;
+    const [cx, cz] = camp.camp.at;
+    if (Math.hypot(u.x - cx, u.z - cz) > L.radii.camp + 6) return null;
+    let best: Unit | null = null;
+    let bd = Infinity;
+    for (const m of camp.members) {
+      if (!m.targetable) continue;
+      // finish the one already fighting us, then the nearest
+      const d = Math.hypot(m.x - u.x, m.z - u.z) - (m.brain instanceof MonsterBrain && m.brain.target === u ? 2 : 0);
+      if (d < bd) {
+        best = m;
+        bd = d;
+      }
+    }
+    return best;
+  }
+
+  /** The next waypoint along a path through the jungle's corridors, re-planned now and then. */
+  private jungleRoute(goal: Point): Point {
+    const { u, sim } = this;
+    const t = this.trail;
+    const stale = !t || Math.hypot(t.goal.x - goal.x, t.goal.z - goal.z) > 3 || sim.time - t.at > REPLAN;
+    if (stale) this.trail = { goal: { ...goal }, points: this.match.nav.path({ x: u.x, z: u.z }, goal), at: sim.time };
+    const pts = this.trail!.points;
+    // drop the waypoints we've reached
+    while (pts.length > 1 && Math.hypot(pts[0]!.x - u.x, pts[0]!.z - u.z) < 1.5) pts.shift();
+    return pts[0] ?? goal;
+  }
+
+  private chooseInLane(): Unit | null {
     const { sim, u } = this;
     const c = u.combatant;
     const hp = c.health / c.stats.maxHealth;
@@ -161,9 +250,10 @@ export class LaneBot implements Brain {
     return best;
   }
 
-  /** Walk along the lane instead of cutting through the jungle walls. */
+  /** Walk along the lane instead of cutting through the jungle walls; junglers path through the jungle. */
   private route(goal: Point): Point {
     const { u } = this;
+    if (this.role === 'roam') return this.jungleRoute(goal);
     const me = nearestOnPolyline(this.path, u.x, u.z);
     const there = nearestOnPolyline(this.path, goal.x, goal.z);
     if (me.distance > OFF_LANE) {
@@ -180,6 +270,9 @@ export class LaneBot implements Brain {
     return { x: p[0], z: p[1] };
   }
 }
+
+/** Re-plan a jungle route at least this often, seconds. */
+const REPLAN = 2;
 
 export const isLaneBot = (b: Brain | null): b is LaneBot => b instanceof LaneBot;
 

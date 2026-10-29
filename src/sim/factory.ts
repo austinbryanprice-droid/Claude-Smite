@@ -103,9 +103,9 @@ export type MonsterType = 'thornback' | 'thornbackAlpha' | 'warden';
 
 /** Jungle monsters, neutral to both sides. Bounty is XP and favor for the god who kills one. */
 const MONSTERS: Record<MonsterType, { name: string; health: number; power: number; speed: number; prot: number; range: number; radius: number; rate: number; xp: number; favor: number }> = {
-  thornback: { name: 'Thornback', health: 380, power: 20, speed: 360, prot: 10, range: 1.4, radius: 0.6, rate: 0.9, xp: 45, favor: 6 },
-  thornbackAlpha: { name: 'Thornback Alpha', health: 820, power: 34, speed: 340, prot: 18, range: 1.7, radius: 0.9, rate: 0.8, xp: 110, favor: FAVOR_REWARDS.jungleCamp },
-  warden: { name: 'Warden', health: 2000, power: 70, speed: 300, prot: 30, range: 2, radius: 1.25, rate: 0.5, xp: 220, favor: FAVOR_REWARDS.buffCamp },
+  thornback: { name: 'Thornback', health: 300, power: 14, speed: 360, prot: 10, range: 1.4, radius: 0.6, rate: 0.9, xp: 45, favor: 6 },
+  thornbackAlpha: { name: 'Thornback Alpha', health: 620, power: 24, speed: 340, prot: 18, range: 1.7, radius: 0.9, rate: 0.8, xp: 110, favor: FAVOR_REWARDS.jungleCamp },
+  warden: { name: 'Warden', health: 950, power: 30, speed: 300, prot: 20, range: 2, radius: 1.25, rate: 0.55, xp: 220, favor: FAVOR_REWARDS.buffCamp },
 };
 
 /** A jungle monster; camps that grow back later in the match are tougher. */

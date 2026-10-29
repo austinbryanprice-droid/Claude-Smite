@@ -109,7 +109,8 @@ export class GodBot implements Brain {
     if (this.decide <= 0) {
       this.decide = 0.3;
       // skills are for gods; on minions only now and then, with mana to spare
-      const chance = target.kind === 'god' ? this.options.aggression : target.kind === 'minion' && c.mana > c.stats.maxMana * 0.5 ? this.options.aggression * 0.3 : 0;
+      const farm = (target.kind === 'minion' && c.mana > c.stats.maxMana * 0.5) || (target.kind === 'monster' && c.mana > c.stats.maxMana * 0.35);
+      const chance = target.kind === 'god' ? this.options.aggression : farm ? this.options.aggression * (target.kind === 'monster' ? 0.6 : 0.3) : 0;
       if (sim.rng() < chance) this.tryCast(dist, target);
     }
   }

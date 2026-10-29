@@ -3,8 +3,10 @@ import { thor, zeus } from '../game/gods';
 import { FAVOR_REWARDS } from '../game/progression';
 import { ConquestLayout as L } from '../map/ConquestLayout';
 import { godUnit } from './factory';
-import { BUFF_DURATION, buffMark, CAMP_FIRST_SPAWN, CAMP_RESPAWN, LEASH, type CampState } from './Jungle';
+import { BUFF_DURATION, BUFF_KINDS, buffMark, CAMP_FIRST_SPAWN, CAMP_RESPAWN, LEASH, type CampState } from './Jungle';
+import { LaneBot, spawnPoint } from './LaneBot';
 import { conquestBases, Match } from './Match';
+import { Nav } from './Nav';
 import { Sim, type SimTerrain } from './Sim';
 import type { Unit } from './Unit';
 
@@ -95,7 +97,7 @@ describe('jungle camps', () => {
     expect(c.respawnAt).not.toBeNull();
     run(sim, match, CAMP_RESPAWN.buff + 1);
     expect(c.members[0]!.alive).toBe(true);
-    expect(c.members[0]!.combatant.stats.maxHealth).toBeGreaterThan(2000);
+    expect(c.members[0]!.combatant.stats.maxHealth).toBeGreaterThan(950);
   });
 
   it('lose the buff on death, and Wisdom adds XP', () => {
@@ -117,3 +119,30 @@ describe('jungle camps', () => {
 function c0Xp(c: CampState): number {
   return c.members[0]!.bounty!.xp;
 }
+
+describe('jungle bots', () => {
+  it('the roaming bot clears its own camps and takes a buff', () => {
+    const { sim, match } = setup();
+    const g = sim.add(godUnit(thor, 'order', spawnPoint('order', 4)));
+    g.brain = new LaneBot(sim, match, g, 'roam');
+    run(sim, match, 100);
+    const cleared = match.jungle.camps.filter((c) => c.camp.team === 'order' && c.respawnAt !== null).length;
+    expect(cleared).toBeGreaterThanOrEqual(2);
+    expect(BUFF_KINDS.some((k) => g.marks.has(buffMark(k)))).toBe(true);
+  });
+});
+
+describe('navigation', () => {
+  it('finds a way around a wall', () => {
+    // a wall along x = 0 from z = -20 to z = 20
+    const walled: SimTerrain = {
+      groundAt: () => 0,
+      resolve: (x, z, r) => (Math.abs(x) < 1 + r && Math.abs(z) < 20 ? { x: x < 0 ? -1 - r : 1 + r, z } : { x, z }),
+    };
+    const nav = new Nav(walled, 40);
+    const path = nav.path({ x: -10, z: 0 }, { x: 10, z: 0 });
+    expect(path.length).toBeGreaterThan(2);
+    for (let i = 1; i < path.length; i++) expect(nav.clear(path[i - 1]!, path[i]!)).toBe(true);
+    expect(Math.max(...path.map((p) => Math.abs(p.z)))).toBeGreaterThan(19);
+  });
+});

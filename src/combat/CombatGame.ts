@@ -161,6 +161,8 @@ export class CombatGame implements Updatable {
 
     if (conquest) {
       this.match = new Match(this.sim, godById('zeus')!);
+      // build the bots' jungle paths while the map loads, not mid-match
+      this.match.nav.warm();
       this.match.addGod(this.player);
       this.addTeam('order', GODS.filter((g) => g.id !== 'zeus'), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
       this.addTeam('chaos', GODS, ROLES, [0, 1, 2, 3, 4]);
