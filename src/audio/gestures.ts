@@ -1,11 +1,11 @@
 /**
- * Sound gestures: whooshes, thumps, zaps, thunder, metal, sand, smoke and
+ * Sound gestures: whooshes, thumps, impacts, zaps, thunder, metal, sand, smoke and
  * voices, each a small parametric generator. The SFX bank and the per-skill
  * sounds are layered from these.
  */
 
 import {
-  ahr, bell, Biquad, brown, buf, crackle, drive, fill, glide, lerp, modal, OnePole, Osc, perc, pink, pluck, RATE, wander, white, type Rand,
+  ahr, bell, Biquad, brown, buf, crackle, drive, fill, glide, lerp, modal, OnePole, Osc, perc, pink, pluck, RATE, tail, wander, white, type Rand,
 } from './dsp';
 
 /** Air moving past: band-passed noise sweeping from f0 to f1 under a bump envelope. */
@@ -50,46 +50,182 @@ export function thump(r: Rand, len: number, f0: number, f1: number, opts: { clic
   return out;
 }
 
-/** Electric zap: a buzzing tone that jitters in pitch, with hissing static. */
+/**
+ * Electric arc: a ragged train of sparks at roughly `freq` a second (never
+ * quite regular, so it crackles instead of buzzing like a synth), each a sharp
+ * click ringing through the air, over the hiss of ionised air.
+ */
 export function zap(r: Rand, len: number, freq: number, opts: { chaos?: number; fall?: number; gain?: number; hiss?: number } = {}): Float32Array {
   const out = buf(len);
-  const o = new Osc();
-  const o2 = new Osc(0.3);
   const nz = white(r);
   const hp = new Biquad('highpass', 2500, 0.7);
-  const bp = new Biquad('bandpass', freq * 3, 0.9);
+  const snap = new Biquad('bandpass', 3200, 0.8);
+  const body = new Biquad('bandpass', Math.min(900, freq * 1.6), 1.1);
+  // the arc's thump: each spark also kicks the air low down
+  const low = new Biquad('lowpass', 170, 0.8);
   const chaos = opts.chaos ?? 0.5;
-  let jump = 1;
+  let phase = 0;
+  let jitter = 1;
+  let burst = 0;
+  let amp = 0;
   for (let i = 0; i < out.length; i++) {
     const t = i / RATE;
-    if (r() < 0.004) jump = 1 + (r() * 2 - 1) * chaos;
-    const f = freq * jump * glide(1, opts.fall ?? 0.5, t, len);
-    const tone = o.square(f, 0.3 + r() * 0.05) * 0.5 + o2.saw(f * 2.01) * 0.4;
-    const env = perc(t, 0.002, len) * (0.6 + 0.4 * (r() < 0.5 ? 1 : 0.3));
-    const s = hp.run(nz()) * (opts.hiss ?? 0.5) * perc(t, 0.001, len * 0.7);
-    out[i] = drive(bp.run(tone) * 2 + tone * 0.25 + s, 2) * env * (opts.gain ?? 1);
+    const f = freq * glide(1, opts.fall ?? 0.5, t, len) * jitter;
+    phase += f / RATE;
+    if (phase >= 1) {
+      phase -= 1;
+      jitter = Math.max(0.25, 1 + (r() * 2 - 1) * chaos);
+      // now and then a fat spark pops louder than the rest
+      amp = (0.35 + r() * 0.65) * (r() < 0.08 ? 2.2 : 1) * (r() < 0.5 ? -1 : 1);
+      burst = 18 + Math.floor(r() * 30);
+    }
+    let x = 0;
+    if (burst > 0) {
+      x = (amp + nz() * 0.6) * (burst / 48);
+      burst--;
+    }
+    const s = hp.run(nz()) * (opts.hiss ?? 0.5) * perc(t, 0.001, len * 0.7) * 0.6;
+    const env = perc(t, 0.001, len);
+    out[i] = drive(snap.run(x) * 1.8 + body.run(x) * 2 + low.run(x) * 5 + x * 0.3 + s, 1.8) * env * (opts.gain ?? 1);
   }
   return out;
 }
 
-/** Thunder: a sharp crack that rolls off into a long, grumbling rumble. */
+/**
+ * Thunder, modelled the way the real thing happens: the bolt's channel is a
+ * crooked path kilometres long, and every kink of it sends out its own shock
+ * wave. The kinks near you arrive first as short, sharp shocks (the ripping
+ * crack); the far ones arrive later, stretched long and low by the air (the
+ * rolling rumble), bunching up where the channel runs across your line of
+ * sight. `crack` is how close the strike is; `rumble` how long it rolls.
+ * Rings on past `len` by up to a second as the roll dies away.
+ */
 export function thunder(r: Rand, len: number, opts: { crack?: number; rumble?: number; gain?: number; delay?: number } = {}): Float32Array {
-  const out = buf(len);
-  const nz = white(r);
-  const br = brown(r);
-  const hp = new Biquad('highpass', 1800, 0.6);
-  const lp = new Biquad('lowpass', 260, 0.7);
-  const lp2 = new Biquad('lowpass', 120, 0.9);
-  const wob = wander(r, 9);
   const crack = opts.crack ?? 1;
   const rumble = opts.rumble ?? 1;
   const d = opts.delay ?? 0.02;
+  const total = len + Math.min(1, 0.7 * rumble);
+  const out = buf(total);
+  // the channel: a random walk from the ground strike up into the cloud, and a few branches
+  const ground = 260 / Math.max(0.3, crack) ** 1.5;
+  const pts: [number, number, number, number][] = [];
+  const walk = (x: number, y: number, z: number, steps: number, energy: number): void => {
+    let dx = 0;
+    let dz = 0;
+    for (let k = 0; k < steps; k++) {
+      dx = dx * 0.6 + (r() * 2 - 1) * 14;
+      dz = dz * 0.6 + (r() * 2 - 1) * 14;
+      const dy = 4 + r() * 12;
+      x += dx;
+      y += dy;
+      z += dz;
+      // the return stroke is fiercest near the ground
+      pts.push([x, y, z, energy * Math.hypot(dx, dy, dz) * (1 + 3 * Math.exp(-y / 220))]);
+      if (energy > 0.5 && r() < 0.025) walk(x, y, z, 20 + Math.floor(r() * 50), energy * 0.35);
+    }
+  };
+  walk(ground, 0, 0, Math.round(140 + 160 * Math.min(2, len)), 1);
+  let near = Infinity;
+  let far = 0;
+  for (const p of pts) {
+    const dist = Math.hypot(p[0], p[1], p[2]);
+    near = Math.min(near, dist);
+    far = Math.max(far, dist);
+    p[1] = dist;
+  }
+  const rip = buf(total);
+  // squeeze kilometres of sound travel into the sound's length; the near end stays in real time
+  const span = (len - d) * 0.9;
+  for (const p of pts) {
+    const k = (p[1] - near) / Math.max(1, far - near);
+    const at = d + span * k ** 0.85;
+    // shocks stretch as they travel: a few milliseconds up close, tens far away
+    const dur = 0.0012 + 0.016 * k ** 0.7 + 0.003 / crack;
+    const n = Math.max(4, Math.round(dur * RATE));
+    const a = (p[3] / (1 + (p[1] - near) / 1200)) * (r() < 0.5 ? 1 : -0.8) * (k < 0.15 ? crack : rumble * 1.8 + 0.3);
+    const o = Math.round(at * RATE);
+    for (let i = 0; i < n && o + i < out.length; i++) out[o + i]! += a * (1 - (2 * i) / n);
+    // up close each shock front tears the air: a burst of hiss that the darkening never touches
+    if (k < 0.2) {
+      const m = Math.round((0.002 + r() * 0.004) * RATE);
+      const ta = Math.abs(a) * crack * (1 - k / 0.2);
+      for (let i = 0; i < m && o + i < out.length; i++) rip[o + i]! += (r() * 2 - 1) * ta * (1 - i / m);
+    }
+  }
+  // the air takes the treble first: brightness falls away as the roll goes on
+  const lp1 = new OnePole(9000);
+  const lp2 = new OnePole(9000);
+  const hi = Math.min(12000, 3500 + 5000 * crack);
+  const ripHp = new Biquad('highpass', 900, 0.7);
+  let peak = 0;
+  for (let i = 0; i < out.length; i++) {
+    if ((i & 31) === 0) {
+      // the crack keeps its bite for its first fifth of a second, then the roll darkens
+      const t = i / RATE - d - 0.18;
+      const f = t < 0 ? hi : glide(hi * 0.5, 320 + 120 / Math.max(0.3, rumble), t, total * 0.6);
+      lp1.set(f);
+      lp2.set(f * 1.4);
+    }
+    out[i] = lp2.run(lp1.run(out[i]!)) + ripHp.run(rip[i]!) * 2.2;
+    peak = Math.max(peak, Math.abs(out[i]!));
+  }
+  // a low rolling bed under the shocks, swelling where they bunch up, and the hills echoing it back
+  const br = brown(r);
+  const bed = new Biquad('lowpass', 170, 0.8);
+  const follow = new OnePole(6);
+  const wob = wander(r, 4);
+  const scale = 1 / Math.max(1e-6, peak);
+  for (let i = 0; i < out.length; i++) {
+    const x = out[i]! * scale;
+    const env = follow.run(Math.abs(x));
+    out[i] = x + bed.run(br()) * env * 2 * rumble * (0.7 + 0.3 * wob());
+  }
+  const wet = tail(out, 1.8, 0.35, 1400);
+  const g = opts.gain ?? 1;
+  // the crack saturates the way a close strike overloads your ears, which lets the roll sit closer to it
+  const fade = total * 0.7;
   for (let i = 0; i < out.length; i++) {
     const t = i / RATE;
-    const c = hp.run(nz()) * perc(t, 0.0008, 0.09) * crack * 1.6 + nz() * perc(t, 0.0005, 0.018) * crack;
-    const rr = (lp.run(br()) * 1.6 + lp2.run(nz()) * 1.4) * ahr(t - d, 0.05, len * 0.1, len * 0.8) * (0.6 + 0.5 * Math.abs(wob())) * rumble;
-    out[i] = drive(c + rr, 1.6) * (opts.gain ?? 1);
+    out[i] = drive(wet[i]! * 2.2, 2.2) * g * (t < fade ? 1 : Math.cos(((t - fade) / (total - fade)) * Math.PI * 0.5) ** 2);
   }
+  return out;
+}
+
+/**
+ * A blow that lands with weight: a sharp snap, a saturated punch whose
+ * overtones carry even on laptop speakers, a meaty thwack, a crunch, a low
+ * sub drop you feel on headphones and a short room tail. `weight` runs from
+ * 0.5 (a jab) to 2 (a hammer from the sky); `tone` sets the body's pitch.
+ */
+export function impact(r: Rand, weight = 1, opts: { tone?: number; snap?: number; crunch?: number; sub?: number; room?: number; gain?: number } = {}): Float32Array {
+  const len = 0.3 + 0.25 * weight;
+  const out = buf(len);
+  const tone = opts.tone ?? 150;
+  const snap = opts.snap ?? 1;
+  const crunch = opts.crunch ?? 0.7;
+  const sub = opts.sub ?? 1;
+  const o = new Osc();
+  const so = new Osc();
+  const nz = white(r);
+  const hp = new Biquad('highpass', 2200, 0.7);
+  const thwack = new Biquad('bandpass', tone * 2.6, 1.6);
+  const crackBody = new Biquad('bandpass', tone * 5.5, 2);
+  const cr = new Biquad('bandpass', 1700 + r() * 600, 0.8);
+  let grain = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / RATE;
+    const n = nz();
+    const s = hp.run(n) * perc(t, 0.0002, 0.01) * snap * 1.4 + (i === 0 ? snap : 0);
+    const punch = drive(o.sine(glide(tone * 2.4, tone * 0.6, t, 0.05 + 0.03 * weight)) * 3, 5) * perc(t, 0.001, 0.24 + 0.18 * weight);
+    const w = thwack.run(n) * perc(t, 0.0008, 0.11 + 0.06 * weight) * 5 + crackBody.run(n) * perc(t, 0.0005, 0.03 + 0.02 * weight) * 2.5;
+    if ((i & 63) === 0) grain = r() < 0.6 ? r() : 0;
+    const c = cr.run(n) * grain * perc(t, 0.002, 0.07 + 0.03 * weight) * crunch * 2.2;
+    const low = so.sine(glide(75, 38, t, 0.12 * weight)) * perc(t, 0.004, 0.22 * weight) * sub;
+    out[i] = drive(s + punch * 0.9 + w + c + low * 0.6, 2);
+  }
+  const wet = tail(out, 0.55, opts.room ?? 0.3, 3000);
+  const g = opts.gain ?? 1;
+  for (let i = 0; i < out.length; i++) out[i] = wet[i]! * g;
   return out;
 }
 

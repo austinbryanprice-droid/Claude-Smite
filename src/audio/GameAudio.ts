@@ -107,7 +107,12 @@ export class GameAudio {
         else if (e.target.kind === 'god' && this.dist(e.target) < 30) this.heat = Math.min(1.5, this.heat + 0.05);
         if (e.target.kind === 'god' && e.target.alive && e.amount >= e.target.combatant.stats.maxHealth * 0.07) this.voice(e.target, 'hurt', 0.75, 3, 0.9);
         if (!e.ability && e.source) this.onBasicHit(e.source, e.target, e.crit);
-        else if (e.ability && e.target === me) this.engine.play('hit.flesh', { gain: 0.35, vary: 0.1 }, 2, 0.15);
+        else if (e.ability && e.target === me) this.engine.play('hit.flesh', { gain: 0.45, vary: 0.1 }, 2, 0.15);
+        // your skill landing on an enemy god or boss: a thwack that cuts through the fight, harder for bigger chunks
+        else if (e.ability && e.source === me && e.target.team !== me.team && (e.target.kind === 'god' || e.target.kind === 'monster')) {
+          const chunk = Math.min(1, e.amount / Math.max(1, e.target.combatant.stats.maxHealth) / 0.15);
+          if (e.target.kind === 'god' || chunk > 0.3) this.engine.play('hit.confirm', { gain: 0.5 + 0.4 * chunk, vary: 0.06 }, 4, 0.07);
+        }
         if (e.target.kind === 'titan' && e.target.team === me.team && this.time - this.titanWarnAt > 40) {
           this.titanWarnAt = this.time;
           this.herald.say('Our Titan is under attack!', 'bad', 3);
@@ -153,6 +158,10 @@ export class GameAudio {
     const gain = (mine ? 1 : 0.85) * (ult ? 1.15 : 1);
     this.at(skillPart(id, 'cast'), u, { gain, ref: ult ? 12 : 8, vary: 0.02, wet: ult ? 0.2 : 0.05 }, mine ? 6 : 4);
     if (ult) this.voice(u, 'cry', 0.9, 5);
+    if (ult && mine) {
+      this.engine.duckMusic(0.6, 1.4);
+      this.engine.play('ult.surge', { gain: 0.8 }, 6);
+    } else if (ult && u.team !== this.me.team && u.stealth <= 0 && this.dist(u) < 35) this.engine.play('ult.warn', { gain: 0.75 * (1 - this.dist(u) / 50) }, 5, 1);
     else if (Math.random() < 0.5) this.voice(u, 'effort', 0.6, 3, 0.6);
     if (!ss.impact) return;
     if (targeting === 'leap') {
@@ -208,7 +217,7 @@ export class GameAudio {
 
   private onBasicHit(src: Unit, target: Unit, crit: boolean): void {
     let name: string;
-    let gain = src === this.me || target === this.me ? 0.75 : 0.55;
+    let gain = src === this.me ? 1 : target === this.me ? 0.85 : 0.55;
     let gap = 0;
     if (isStructure(target)) name = 'hit.structure';
     else if (src.kind === 'tower' || src.kind === 'phoenix') name = 'tower.hit';
@@ -229,7 +238,7 @@ export class GameAudio {
     // the sim emits impacts while the projectile or zone still exists, so find which one this is
     for (const p of this.game.sim.projectiles) {
       if (p.owner !== owner || Math.abs(p.x - x) > 0.01 || Math.abs(p.z - z) > 0.01) continue;
-      if (p.cast) this.engine.play(skillPart(p.cast.skill.id, 'impact'), { at: { x, z }, gain: 0.9, vary: 0.05, ref: 8 }, owner === this.me ? 5 : 3, 0.03);
+      if (p.cast) this.engine.play(skillPart(p.cast.skill.id, 'impact'), { at: { x, z }, gain: owner === this.me ? 1.1 : 0.9, vary: 0.05, ref: 8 }, owner === this.me ? 5 : 3, 0.03);
       else if (p.shot && this.game.sim.units.some((u) => isStructure(u) && u.shielded() && hypot(u.x - x, u.z - z) < u.radius + 1)) {
         this.engine.play('hit.structure', { at: { x, z }, gain: 0.4, vary: 0.1 }, 1, 0.08);
       }
@@ -254,8 +263,16 @@ export class GameAudio {
       case 'god':
         this.at('god.death', u, { gain: u === me ? 1 : 0.8, ref: 10 }, 5);
         this.voice(u, 'death', 0.85, 5);
-        if (killer === me) this.engine.play('kill.confirm', { gain: 0.7 }, 5);
         const streak = this.endStreak(u, killer);
+        if (killer === me && u !== me) {
+          this.streak++;
+          this.multi.count = this.time < this.multi.until ? this.multi.count + 1 : 1;
+          this.multi.until = this.time + 10;
+          // each kill in a run rings a step higher; multi-kills and shutdowns add a thunderclap and a chorus
+          const step = Math.min(4, this.multi.count - 1 + Math.max(0, this.streak - 2) * 0.5);
+          this.engine.play('kill.confirm', { gain: 0.8, rate: 2 ** ((step * 2) / 12) }, 5);
+          if (this.multi.count >= 2 || streak >= 3 || this.streak >= 3) this.engine.play('kill.big', { gain: 0.6 + 0.1 * Math.min(3, this.multi.count) }, 5);
+        }
         if (this.conquest) this.announceDeath(u, killer, streak);
         if (u === me) {
           this.streak = 0;
@@ -309,12 +326,6 @@ export class GameAudio {
     const killer = by?.kind === 'god' ? by : null;
     const first = !!killer && !this.firstBlood;
     if (killer) this.firstBlood = true;
-    if (killer === me && victim !== me) {
-      this.streak++;
-      const now = this.time;
-      this.multi.count = now < this.multi.until ? this.multi.count + 1 : 1;
-      this.multi.until = now + 10;
-    }
     if (first && killer) {
       this.herald.say(killer === me ? 'You drew first blood!' : 'First blood is spilled!', killer.team === me.team ? 'good' : 'bad', 4);
       return;

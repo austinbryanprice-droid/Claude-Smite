@@ -27,6 +27,12 @@ const DEFAULTS: AudioSettings = { master: 0.8, music: 0.55, sfx: 0.85, voice: 0.
 
 /** Mixer trims so the sliders' defaults land at a good balance. */
 const BUS_TRIM: Record<Bus, number> = { music: 0.55, sfx: 0.75, ui: 0.6, voice: 1, ambience: 0.7 };
+/** Tonal weight per bus in dB (Austin wants more bass than treble); UI and voices stay as they are. */
+const WEIGHT: Partial<Record<Bus, { low: number; sub: number; high: number }>> = {
+  sfx: { low: 6, sub: 3, high: -4 },
+  ambience: { low: 4, sub: 2, high: -3 },
+  music: { low: 3, sub: 1.5, high: -2 },
+};
 const REVERB_SEND: Record<Bus, number> = { music: 0.28, sfx: 0.16, ui: 0.05, voice: 0.12, ambience: 0.1 };
 
 export interface PlayOptions {
@@ -164,7 +170,13 @@ export class AudioEngine {
       const muffled = b === 'sfx' || b === 'ambience';
       if (b === 'music') this.musicDuck = ctx.createGain();
       const post: AudioNode = muffled ? this.muffleFilter() : b === 'music' ? this.musicDuck : g;
-      if (post !== g) g.connect(post);
+      // weight: the world's sounds lean on their low end and soften their top, the music a little
+      const eq = WEIGHT[b];
+      if (eq && post !== g) {
+        const w = this.weight(eq);
+        g.connect(w.input);
+        w.output.connect(post);
+      } else if (post !== g) g.connect(post);
       post.connect(this.master);
       const send = ctx.createGain();
       send.gain.value = REVERB_SEND[b];
@@ -198,6 +210,26 @@ export class AudioEngine {
     return f;
   }
 
+  /** Low shelf and sub bump up, high shelf down: the bus's tonal weight. */
+  private weight(eq: { low: number; sub: number; high: number }): { input: AudioNode; output: AudioNode } {
+    const ctx = this.ctx!;
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowshelf';
+    low.frequency.value = 220;
+    low.gain.value = eq.low;
+    const sub = ctx.createBiquadFilter();
+    sub.type = 'peaking';
+    sub.frequency.value = 85;
+    sub.Q.value = 0.9;
+    sub.gain.value = eq.sub;
+    const high = ctx.createBiquadFilter();
+    high.type = 'highshelf';
+    high.frequency.value = 4500;
+    high.gain.value = eq.high;
+    low.connect(sub).connect(high);
+    return { input: low, output: high };
+  }
+
   /**
    * Muffle the world: 0 is clear, 1 is heard from far away (effects and
    * ambience lose their highs, the music drops back). Smoothed here, so it
@@ -213,6 +245,17 @@ export class AudioEngine {
     const hz = 20000 * Math.pow(550 / 20000, m);
     for (const f of this.muffles) f.frequency.setTargetAtTime(hz, now, 0.25);
     this.musicDuck.gain.setTargetAtTime(1 - 0.45 * m, now, 0.4);
+  }
+
+  /** Dip the music for a big moment (`depth` 0..1), then bring it back after `hold` seconds. */
+  duckMusic(depth: number, hold: number): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const base = 1 - 0.45 * this.muffle;
+    const g = this.musicDuck.gain;
+    g.cancelScheduledValues(now);
+    g.setTargetAtTime(base * (1 - depth), now, 0.04);
+    g.setTargetAtTime(base, now + hold, 0.5);
   }
 
   // -------------------------------------------------------------------------

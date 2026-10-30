@@ -179,6 +179,8 @@ export class GodModel {
   private flinchTime = 1e9;
   private flinchDuration = 0.4;
   private flinchStrength = 0;
+  /** Seconds of hit-stop left: the pose all but freezes so a blow reads as landing. */
+  private stopLeft = 0;
   private readonly physics: SecondaryPhysics;
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpQ2 = new THREE.Quaternion();
@@ -387,6 +389,12 @@ export class GodModel {
     this.flinchStrength = THREE.MathUtils.clamp(strength, 0, 1);
   }
 
+  /** Hit-stop: nearly freeze the pose for a few frames, the way a heavy blow catches. */
+  hitStop(seconds: number): void {
+    if (this.deathTime >= 0) return;
+    this.stopLeft = Math.max(this.stopLeft, seconds);
+  }
+
   /** Dev: hold one clip (by name) instead of locomotion; null resumes. */
   debugClip(name: string | null, time = 0): void {
     this.held?.stop();
@@ -407,6 +415,11 @@ export class GodModel {
    * `clothDt` lets a caller run the cloth on less time than the skeleton (distant or off-screen gods).
    */
   animate(dt: number, s: LocomotionState, clothDt = dt): void {
+    if (this.stopLeft > 0) {
+      this.stopLeft -= dt;
+      dt *= 0.06;
+      clothDt *= 0.06;
+    }
     dt = Math.min(dt, 1 / 20);
     const k = 1 - Math.exp(-dt * 10);
     this.smoothedSpeed += (s.speed - this.smoothedSpeed) * k;
