@@ -27,7 +27,7 @@ export const BUFF_COLOR: Partial<Record<CampKind, number>> = {
 };
 
 /** Side of the square regions that instanced props are grouped by, meters. */
-const INSTANCE_CHUNK = 50;
+const INSTANCE_CHUNK = 100;
 
 /**
  * Collects prop transforms per geometry and per map region, so repeated
@@ -83,7 +83,7 @@ class Instancer {
 }
 
 /** Largest group (in triangles) that `Instancer.build` bakes into one mesh. */
-const MERGE_LIMIT = 60000;
+const MERGE_LIMIT = 240000;
 
 function triangles(g: THREE.BufferGeometry): number {
   return (g.index ? g.index.count : g.attributes.position!.count) / 3;

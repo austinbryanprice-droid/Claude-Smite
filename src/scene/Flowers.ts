@@ -16,7 +16,7 @@ export interface FlowerInstance {
 
 const SPIKES = 7;
 /** Clumps are batched per square region this wide, so off-screen ones are culled. */
-const CHUNK = 50;
+const CHUNK = 100;
 
 /**
  * Clumps of flowering spikes (lavender-like) for the lane verges. Each clump

@@ -20,7 +20,7 @@ export interface TerrainDef {
 }
 
 /** Grid cells per side of one terrain tile. */
-const TILE_CELLS = 64;
+const TILE_CELLS = 128;
 
 /**
  * Heightfield terrain built from a map's `TerrainDef`: grass, dirt, paved and
