@@ -23,6 +23,16 @@ describe('gpuAdvice', () => {
     expect(gpuAdvice('Intel(R) UHD Graphics', EDGE)?.copy).toBe('edge://flags/#force-high-performance-gpu');
   });
 
+  it('names the Chrome flag only where it exists', () => {
+    const firefox = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0';
+    const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+    for (const ua of [firefox, mac]) {
+      const advice = gpuAdvice('Intel(R) UHD Graphics', ua);
+      expect(advice?.copy).toBeUndefined();
+      expect(advice?.text).toMatch(/graphics settings/);
+    }
+  });
+
   it('leaves dedicated cards alone', () => {
     for (const name of ['NVIDIA GeForce RTX 4090 Laptop GPU', 'nvidia lovelace', 'AMD Radeon RX 7600M XT', 'AMD Radeon RX 7900 XTX', 'AMD Radeon Pro W7900', 'Intel(R) Arc(TM) A770 Graphics', 'Intel(R) Arc(TM) B580 Graphics', 'intel xe-hpg', 'Apple M3 Max']) {
       expect(gpuAdvice(name, CHROME), name).toBeNull();

@@ -27,6 +27,10 @@ export function gpuAdvice(name: string, userAgent = navigator.userAgent): GpuAdv
   const intel = /intel/i.test(name) && !/\b[ab]\d{3}m?\b|hpg|gen-12hp/i.test(name);
   const amd = /radeon|vega/i.test(name) && /graphics|\d{3}m\b|vega/i.test(name) && !/\brx\b|\bpro\b/i.test(name);
   if (!intel && !amd) return null;
+  // the flag is Chromium's; other browsers and systems pick the GPU in the OS settings
+  if (!/Chrome\//.test(userAgent) || !/Windows/.test(userAgent)) {
+    return { text: `The game is running on ${name}, this computer's built-in graphics, so it will stutter. If it also has a gaming graphics card, set the browser to use it in the system's graphics settings and relaunch the browser.` };
+  }
   return {
     text: `The game is running on ${name}, this computer's built-in graphics, so it will stutter. If it also has a gaming graphics card, open ${flags}, set it to Enabled and relaunch the browser.`,
     copy: flags,
