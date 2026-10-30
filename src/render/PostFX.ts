@@ -13,7 +13,7 @@ import type { QualitySettings } from './Quality';
 
 /** Artist controls for the final image. Values are live uniforms. */
 export const grading = {
-  exposure: uniform(0.95),
+  exposure: uniform(0.92),
   /**
    * ASC CDL in display space: slope (gain), offset (lift), power (gamma).
    * Kept close to neutral: a lifted blue offset veils the whole frame, and a
@@ -22,7 +22,7 @@ export const grading = {
   slope: uniform(new THREE.Vector3(1.04, 1.0, 0.96)),
   offset: uniform(new THREE.Vector3(-0.01, -0.01, -0.008)),
   power: uniform(new THREE.Vector3(1.04, 1.03, 1.0)),
-  saturation: uniform(1.25),
+  saturation: uniform(1.15),
   vignette: uniform(0.2),
   grain: uniform(0.01),
   bloomStrength: uniform(0.22),
