@@ -66,6 +66,52 @@ function save(c: StartChoice): void {
   }
 }
 
+/** A warning under the title, where it can't be missed. */
+function showWarning(root: HTMLElement, content: string | HTMLElement): HTMLDivElement {
+  const warn = document.createElement('div');
+  warn.className = 'sm-warn';
+  warn.append(content);
+  root.querySelector('.sm-title')!.after(warn);
+  return warn;
+}
+
+/** The slow-GPU warning: what's wrong, then numbered steps to fix it. */
+function gpuWarning(advice: GpuAdvice): HTMLElement {
+  const box = document.createElement('div');
+  const text = document.createElement('div');
+  text.textContent = advice.text;
+  const steps = document.createElement('ol');
+  for (const step of advice.steps) steps.appendChild(document.createElement('li')).textContent = step;
+  box.append(text, steps);
+  if (advice.copy) {
+    // browsers refuse links to their own settings pages, so offer the text instead
+    const copy = document.createElement('button');
+    copy.className = 'sm-compat';
+    copy.textContent = 'Copy flag address';
+    copy.addEventListener('click', () => {
+      // (a refused clipboard leaves the address in the steps to copy by hand)
+      navigator.clipboard?.writeText(advice.copy!).then(() => (copy.textContent = 'Copied: paste it in the address bar'), () => (copy.textContent = 'Copy it from the steps above'));
+    });
+    box.appendChild(copy);
+  }
+  return box;
+}
+
+interface BatteryManager extends EventTarget {
+  readonly charging: boolean;
+}
+
+/** Calls `then` if this is a laptop running on battery (Chromium reports it; other browsers don't). */
+async function onBattery(then: (battery: BatteryManager) => void): Promise<void> {
+  const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManager> };
+  try {
+    const battery = await nav.getBattery?.();
+    if (battery && !battery.charging) then(battery);
+  } catch {
+    /* not allowed here */
+  }
+}
+
 /**
  * The title screen: pick a mode and a god, read the controls, press Play.
  * Shown over the loading screen while textures and models load behind it.
@@ -154,23 +200,11 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
         ? 'Compatibility mode (WebGL 2). <button class="sm-compat">Switch to WebGPU</button>'
         : 'WebGPU is unavailable, so the game uses WebGL 2. Chrome or Edge on a recent GPU runs best.';
     note.querySelector('.sm-compat')?.addEventListener('click', () => setCompatibilityMode(!forced));
-    if (!advice) return;
-    const warn = document.createElement('div');
-    warn.className = 'sm-warn';
-    warn.textContent = advice.text;
-    if (advice.copy) {
-      // browsers refuse links to their own settings pages, so offer the text instead
-      const copy = document.createElement('button');
-      copy.className = 'sm-compat';
-      copy.textContent = 'Copy flag address';
-      copy.addEventListener('click', () => {
-        // (a refused clipboard leaves the address in the text above to copy by hand)
-        navigator.clipboard?.writeText(advice.copy!).then(() => (copy.textContent = 'Copied: paste it in the address bar'), () => (copy.textContent = 'Copy it from the text above'));
-      });
-      warn.appendChild(copy);
-    }
-    // under the title, where it can't be missed
-    root.querySelector('.sm-title')!.after(warn);
+    if (advice) showWarning(root, gpuWarning(advice));
+  });
+  void onBattery((battery) => {
+    const warn = showWarning(root, 'Your laptop is on battery. Plug it in for a smooth game: on battery Windows and the browser slow the graphics card down.');
+    battery.addEventListener('chargingchange', () => warn.classList.toggle('gone', battery.charging));
   });
 
   return new Promise((resolve) => {
