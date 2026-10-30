@@ -224,6 +224,7 @@ async function main(): Promise<void> {
   if (advice) hud.notice(advice.text, 15);
   const shadersAtStart = pipelines.built;
   const deferredAtStart = pipelines.deferred;
+  const builtForAtStart = new Map(pipelines.builtFor);
   perf.watchGpu(renderer);
   // (automated captures want every object in the frame they ask for)
   pipelines.limitShaderBuilds(params.has('capture') ? Infinity : 4);
@@ -237,6 +238,7 @@ async function main(): Promise<void> {
     mode: `${choice.mode}${choice.net ? ' online' : ''}`,
     shaders: pipelines.built - shadersAtStart,
     deferred: pipelines.deferred - deferredAtStart,
+    shadersFor: new Map([...pipelines.builtFor].map(([what, n]) => [what, n - (builtForAtStart.get(what) ?? 0)] as const).filter(([, n]) => n > 0)),
   });
   combat.netReady();
 

@@ -1,10 +1,27 @@
 import * as THREE from 'three/webgpu';
-import { abs, attribute, float, mix, smoothstep, uniform, uv, vec4 } from '../render/tsl';
+import { abs, attribute, float, mix, smoothstep, uv, vec4 } from '../render/tsl';
+import { objectUniforms, useUniforms } from '../render/shared';
 
 /** Segments one arc mesh can hold (main bolt plus forks). */
 const MAX_SEGMENTS = 256;
 
 type P = THREE.Vector3;
+
+/** Each arc's own values for the material every arc shares: colors, and 0..1 brightness. */
+const arcUniforms = () => ({ main: new THREE.Color(), core: new THREE.Color(), fade: 1 });
+let arcMaterial: THREE.MeshBasicNodeMaterial | null = null;
+
+function makeArcMaterial(): THREE.MeshBasicNodeMaterial {
+  const { main, core, fade } = objectUniforms(arcUniforms());
+  const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
+  const across = abs(uv().y.sub(0.5)).mul(2);
+  const filament = smoothstep(1, 0.15, across);
+  const heat = attribute('heat', 'float');
+  const c = mix(main, core, smoothstep(0.55, 0, across).mul(heat));
+  mat.colorNode = vec4(c.mul(float(3).add(heat.mul(9))).mul(filament).mul(fade), 1);
+  mat.opacityNode = filament.mul(fade);
+  return mat;
+}
 
 /**
  * Jagged lightning: a bolt split by midpoint displacement, drawn as two
@@ -14,9 +31,7 @@ type P = THREE.Vector3;
  */
 export class ArcView {
   readonly group = new THREE.Group();
-  readonly main = uniform(new THREE.Color());
-  readonly core = uniform(new THREE.Color());
-  readonly fade = uniform(1);
+  readonly values = arcUniforms();
   private readonly geometry = new THREE.BufferGeometry();
   private readonly pos = new Float32Array(MAX_SEGMENTS * 8 * 3);
   private readonly heat = new Float32Array(MAX_SEGMENTS * 8);
@@ -37,23 +52,18 @@ export class ArcView {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     this.geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     this.geometry.setAttribute('heat', new THREE.BufferAttribute(this.heat, 1));
-    const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
-    const across = abs(uv().y.sub(0.5)).mul(2);
-    const filament = smoothstep(1, 0.15, across);
-    const heat = attribute('heat', 'float');
-    const c = mix(this.main, this.core, smoothstep(0.55, 0, across).mul(heat));
-    mat.colorNode = vec4(c.mul(float(3).add(heat.mul(9))).mul(filament).mul(this.fade), 1);
-    mat.opacityNode = filament.mul(this.fade);
-    const mesh = new THREE.Mesh(this.geometry, mat);
+    const mesh = new THREE.Mesh(this.geometry, (arcMaterial ??= makeArcMaterial()));
+    mesh.name = 'arc';
     mesh.frustumCulled = false;
     mesh.renderOrder = 14;
+    useUniforms(this.values, mesh);
     this.group.add(mesh);
     this.geometry.setDrawRange(0, 0);
   }
 
   setColors(main: number, core: number): void {
-    this.main.value.setHex(main);
-    this.core.value.setHex(core);
+    this.values.main.setHex(main);
+    this.values.core.setHex(core);
   }
 
   clear(): void {

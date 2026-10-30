@@ -1,8 +1,9 @@
 import * as THREE from 'three/webgpu';
 import {
   abs, color, dot, float, fract, mix, mx_noise_float, normalView, normalize, positionLocal, positionView, positionWorld,
-  pow, sin, smoothstep, step, time, uniform, uv, vec3,
+  pow, sin, smoothstep, step, time, uv, vec3,
 } from '../../render/tsl';
+import { objectUniforms, useUniforms } from '../../render/shared';
 import { rng } from '../../core/random';
 import type { Team } from '../../map/ConquestLayout';
 import { boulder, chippedBlock } from '../Architecture';
@@ -79,11 +80,15 @@ function bannerMaterial(style: TeamStyle): THREE.MeshStandardNodeMaterial {
   return mat;
 }
 
-/** Translucent fresnel dome shown while a structure can't be damaged. */
-export function shieldMesh(radius: number, height: number, glow: number): THREE.Mesh {
+const shields = new Map<number, THREE.MeshBasicNodeMaterial>();
+
+/** The shield dome's material, one per glow color. */
+function shieldMaterial(glow: number): THREE.MeshBasicNodeMaterial {
+  let mat = shields.get(glow);
+  if (mat) return mat;
   // (like every additive glow: with no depth writes, one pass over both faces
   // adds up the same as three's default back-then-front pair of draws)
-  const mat =new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
+  mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
   const viewDir = normalize(positionView.negate());
   const fres = pow(float(1).sub(abs(dot(normalView, viewDir))), float(2.5));
   const bands = sin(positionLocal.y.mul(5).sub(time.mul(2.5))).mul(0.5).add(0.5);
@@ -91,9 +96,15 @@ export function shieldMesh(radius: number, height: number, glow: number): THREE.
   // a faint rim and drifting hex sparkle, so the structure inside stays readable
   const a = fres.mul(0.55).add(bands.mul(0.02)).add(smoothstep(0.64, 0.7, hex).mul(0.05));
   mat.colorNode = color(glow).mul(a).mul(1.1);
+  shields.set(glow, mat);
+  return mat;
+}
+
+/** Translucent fresnel dome shown while a structure can't be damaged. */
+export function shieldMesh(radius: number, height: number, glow: number): THREE.Mesh {
   const geo = new THREE.SphereGeometry(1, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
   geo.scale(radius, height, radius);
-  const m = new THREE.Mesh(geo, mat);
+  const m = new THREE.Mesh(geo, shieldMaterial(glow));
   m.renderOrder = 20;
   m.visible = false;
   // drawn while loading anyway, so raising it mid-match generates no shader
@@ -102,13 +113,22 @@ export function shieldMesh(radius: number, height: number, glow: number): THREE.
   return m;
 }
 
+/** A structure's own wear (0 = pristine, 1 = about to fall) for the cracked stone its team shares. */
+export const wearUniforms = () => ({ damage: 0 });
+const cracked = new WeakMap<THREE.Material, Map<number, THREE.MeshStandardNodeMaterial>>();
+
 /**
- * Clones a stone material with a `damage` uniform that opens glowing cracks,
- * so each structure can show wear on its own.
+ * A stone material with glowing cracks that open as a structure takes damage.
+ * One per stone and glow color, shared by every structure that uses it; each
+ * shows its own wear through `showWear`.
  */
-export function crackedStone(base: THREE.MeshStandardNodeMaterial, glow: number): { material: THREE.MeshStandardNodeMaterial; damage: any } {
-  const damage = uniform(0);
-  const mat = base.clone();
+export function crackedStone(base: THREE.MeshStandardNodeMaterial, glow: number): THREE.MeshStandardNodeMaterial {
+  let byGlow = cracked.get(base);
+  if (!byGlow) cracked.set(base, (byGlow = new Map()));
+  let mat = byGlow.get(glow);
+  if (mat) return mat;
+  const { damage } = objectUniforms(wearUniforms());
+  mat = base.clone();
   const n = mx_noise_float(positionLocal.mul(1.3));
   const n2 = mx_noise_float(positionLocal.mul(3.7).add(5));
   const line = smoothstep(0.06, 0.0, abs(n)).max(smoothstep(0.04, 0.0, abs(n2)).mul(0.7));
@@ -117,7 +137,15 @@ export function crackedStone(base: THREE.MeshStandardNodeMaterial, glow: number)
   const crack = line.mul(spread).mul(step(0.01, damage));
   mat.colorNode = (base.colorNode as any).mul(float(1).sub(crack.mul(0.85)));
   mat.emissiveNode = color(glow).mul(crack).mul(damage).mul(1.5);
-  return { material: mat, damage };
+  byGlow.set(glow, mat);
+  return mat;
+}
+
+/** Has every mesh under `root` drawn in `stone` (a `crackedStone`) show this wear. */
+export function showWear(root: THREE.Object3D, stone: THREE.Material, wear: ReturnType<typeof wearUniforms>): void {
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).material === stone) useUniforms(wear, o);
+  });
 }
 
 /** A pile of broken blocks for the destroyed state, grown from 0 to full by `setGrowth`. */

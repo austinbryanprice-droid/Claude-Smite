@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, atan, attribute, float, floor, fract, hash, max, mix, mx_noise_float, positionWorld, sign, smoothstep, step, time, uniform, vec3, vec4,
+  abs, atan, attribute, float, floor, fract, hash, max, mix, mx_noise_float, positionWorld, sign, smoothstep, step, time, vec3, vec4,
 } from '../render/tsl';
+import { objectUniforms, useUniforms } from '../render/shared';
 
 export type DecalShape =
   | { type: 'circle'; radius: number }
@@ -13,6 +14,85 @@ export type DecalStyle = 'telegraph' | 'zone' | 'flash';
 
 const STYLE = { telegraph: 0, zone: 1, flash: 2 } as const;
 
+/** Each decal's own values for the material every decal shares. */
+const decalUniforms = () => ({
+  color: new THREE.Color(1, 1, 1),
+  core: new THREE.Color(1, 1, 1),
+  opacity: 1,
+  /** 0..1 fill sweep for telegraphs (how charged the cast is). */
+  fill: 0,
+  /** 0..1 shockwave front for flashes, sweeping out from the caster. */
+  wave: 1,
+  /** 1 draws a ring of slowly turning runes inside a circle's rim (Odin). */
+  glyphs: 0,
+  center: new THREE.Vector2(),
+  style: 0,
+});
+let decalMaterial: THREE.MeshBasicNodeMaterial | null = null;
+
+function makeDecalMaterial(): THREE.MeshBasicNodeMaterial {
+  const { color, core, opacity, fill, wave, glyphs, center, style } = objectUniforms(decalUniforms());
+  const mat = new THREE.MeshBasicNodeMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const edge = attribute('edge', 'float');
+  // 0 at the origin of the shape, 1 at its far end (radius, length or range)
+  const along = attribute('along', 'float');
+  const rim = smoothstep(0.82, 0.98, edge).mul(smoothstep(1.02, 0.97, edge));
+  const wp = positionWorld.xz;
+  const t = time;
+  // Zones: churning energy (two scrolling noise layers) with bright veins.
+  const n1 = mx_noise_float(vec3(wp.x.mul(0.45), wp.y.mul(0.45), t.mul(0.7))).mul(0.5).add(0.5);
+  const n2 = mx_noise_float(vec3(wp.x.mul(1.3).add(t.mul(0.6)), wp.y.mul(1.3).sub(t.mul(0.4)), t.mul(0.3))).mul(0.5).add(0.5);
+  const veins = smoothstep(0.42, 0.5, n1).mul(smoothstep(0.58, 0.5, n1)).mul(2.5);
+  const swirl = n1.mul(0.45).add(n2.mul(0.35)).add(veins);
+  // Telegraphs: faint fill, a crisp rim, and a pulse sweeping outward.
+  const pulse = smoothstep(0.08, 0.0, abs(edge.sub(fract(t.mul(0.9))))).mul(0.6);
+  const telegraphFill = float(0.16).add(pulse.mul(edge));
+  const charged = smoothstep(fill.add(0.02), fill, edge).mul(0.25);
+
+  // Flashes: a bright front sweeps outward, leaving a fading wash and crackle behind it.
+  const front = smoothstep(0.16, 0.0, abs(along.sub(wave))).mul(2.6);
+  const behind = smoothstep(wave.add(0.02), wave.sub(0.05), along);
+  const crackle = smoothstep(0.46, 0.5, n2).mul(smoothstep(0.54, 0.5, n2)).mul(1.8);
+  const flashBody = front.add(behind.mul(float(0.3).add(crackle).mul(float(1.15).sub(wave))));
+  const flashRim = behind.mul(rim);
+
+  // Runes: a band of procedural glyphs (staves, branches, ticks) framed by two thin circles.
+  const local = wp.sub(center);
+  const turn = atan(local.x, local.y).div(6.2832).add(0.5).add(t.mul(0.02));
+  const cells = turn.mul(22);
+  const cell = floor(cells);
+  const u = fract(cells);
+  const rr = edge.sub(0.7).div(0.16);
+  const inBand = step(0, rr).mul(step(rr, 1));
+  const h1 = hash(cell);
+  const h2 = hash(cell.add(31.7));
+  const stroke = (d: any) => smoothstep(0.1, 0.04, abs(d));
+  const stave = stroke(u.sub(0.5)).mul(step(0.12, rr)).mul(step(rr, 0.88));
+  const branch = stroke(u.sub(0.5).sub(rr.sub(0.5).mul(sign(h1.sub(0.5))).mul(0.7))).mul(step(0.35, h2));
+  const tick = stroke(rr.sub(h1.mul(0.5).add(0.25)).mul(1.4)).mul(step(abs(u.sub(0.5)), 0.28)).mul(step(h2, 0.6));
+  const frame = stroke(edge.sub(0.68).mul(4)).add(stroke(edge.sub(0.88).mul(4)));
+  const runes = max(max(stave, branch), tick).mul(inBand).add(frame.mul(0.6)).mul(glyphs).mul(2.4);
+
+  const isZone = smoothstep(0.5, 1.0, style).mul(smoothstep(1.5, 1.0, style));
+  const isFlash = smoothstep(1.5, 2.0, style);
+  const isTele = float(1).sub(isZone).sub(isFlash);
+
+  const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(1.25))).add(isFlash.mul(flashBody));
+  const rimStrength = isTele.mul(2.2).add(isZone.mul(3.0)).add(isFlash.mul(2.0));
+  const glyphBody = runes.mul(mix(float(1), behind, isFlash));
+  const intensity = glyphBody.add(body).add(rim.mul(rimStrength).mul(float(1).sub(isFlash).add(isFlash.mul(flashRim))));
+  // Alpha-blended, not additive: additive light vanishes on the white marble.
+  // HDR color (above 1) still feeds bloom so rims and veins glow.
+  const hot = mix(color, core, smoothstep(1.2, 2.6, intensity));
+  mat.colorNode = vec4(hot.mul(float(0.9).add(intensity.mul(1.4))), 1);
+  mat.opacityNode = intensity.mul(0.75).clamp(0, 0.95).mul(opacity);
+  return mat;
+}
+
 /**
  * A glowing shape painted on the ground. The mesh is rebuilt in world space
  * and every vertex is dropped onto the terrain, so it hugs steps and slopes
@@ -22,101 +102,35 @@ const STYLE = { telegraph: 0, zone: 1, flash: 2 } as const;
  */
 export class GroundDecal {
   readonly mesh: THREE.Mesh;
-  readonly color = uniform(new THREE.Color(1, 1, 1));
-  readonly core = uniform(new THREE.Color(1, 1, 1));
-  readonly opacity = uniform(1);
-  /** 0..1 fill sweep for telegraphs (how charged the cast is). */
-  readonly fill = uniform(0);
-  /** 0..1 shockwave front for flashes, sweeping out from the caster. */
-  readonly wave = uniform(1);
-  /** 1 draws a ring of slowly turning runes inside a circle's rim (Odin). */
-  readonly glyphs = uniform(0);
-  private readonly center = uniform(new THREE.Vector2());
-  private readonly style = uniform(0);
+  readonly values = decalUniforms();
   private local: Float32Array = new Float32Array(0);
   private shapeKey = '';
   private readonly geometry = new THREE.BufferGeometry();
 
   constructor(private readonly groundAt: (x: number, z: number) => number) {
-    const mat = new THREE.MeshBasicNodeMaterial({
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const edge = attribute('edge', 'float');
-    // 0 at the origin of the shape, 1 at its far end (radius, length or range)
-    const along = attribute('along', 'float');
-    const rim = smoothstep(0.82, 0.98, edge).mul(smoothstep(1.02, 0.97, edge));
-    const wp = positionWorld.xz;
-    const t = time;
-    // Zones: churning energy (two scrolling noise layers) with bright veins.
-    const n1 = mx_noise_float(vec3(wp.x.mul(0.45), wp.y.mul(0.45), t.mul(0.7))).mul(0.5).add(0.5);
-    const n2 = mx_noise_float(vec3(wp.x.mul(1.3).add(t.mul(0.6)), wp.y.mul(1.3).sub(t.mul(0.4)), t.mul(0.3))).mul(0.5).add(0.5);
-    const veins = smoothstep(0.42, 0.5, n1).mul(smoothstep(0.58, 0.5, n1)).mul(2.5);
-    const swirl = n1.mul(0.45).add(n2.mul(0.35)).add(veins);
-    // Telegraphs: faint fill, a crisp rim, and a pulse sweeping outward.
-    const pulse = smoothstep(0.08, 0.0, abs(edge.sub(fract(t.mul(0.9))))).mul(0.6);
-    const telegraphFill = float(0.16).add(pulse.mul(edge));
-    const charged = smoothstep(this.fill.add(0.02), this.fill, edge).mul(0.25);
-
-    // Flashes: a bright front sweeps outward, leaving a fading wash and crackle behind it.
-    const front = smoothstep(0.16, 0.0, abs(along.sub(this.wave))).mul(2.6);
-    const behind = smoothstep(this.wave.add(0.02), this.wave.sub(0.05), along);
-    const crackle = smoothstep(0.46, 0.5, n2).mul(smoothstep(0.54, 0.5, n2)).mul(1.8);
-    const flashBody = front.add(behind.mul(float(0.3).add(crackle).mul(float(1.15).sub(this.wave))));
-    const flashRim = behind.mul(rim);
-
-    // Runes: a band of procedural glyphs (staves, branches, ticks) framed by two thin circles.
-    const local = wp.sub(this.center);
-    const turn = atan(local.x, local.y).div(6.2832).add(0.5).add(t.mul(0.02));
-    const cells = turn.mul(22);
-    const cell = floor(cells);
-    const u = fract(cells);
-    const rr = edge.sub(0.7).div(0.16);
-    const inBand = step(0, rr).mul(step(rr, 1));
-    const h1 = hash(cell);
-    const h2 = hash(cell.add(31.7));
-    const stroke = (d: any) => smoothstep(0.1, 0.04, abs(d));
-    const stave = stroke(u.sub(0.5)).mul(step(0.12, rr)).mul(step(rr, 0.88));
-    const branch = stroke(u.sub(0.5).sub(rr.sub(0.5).mul(sign(h1.sub(0.5))).mul(0.7))).mul(step(0.35, h2));
-    const tick = stroke(rr.sub(h1.mul(0.5).add(0.25)).mul(1.4)).mul(step(abs(u.sub(0.5)), 0.28)).mul(step(h2, 0.6));
-    const frame = stroke(edge.sub(0.68).mul(4)).add(stroke(edge.sub(0.88).mul(4)));
-    const runes = max(max(stave, branch), tick).mul(inBand).add(frame.mul(0.6)).mul(this.glyphs).mul(2.4);
-
-    const isZone = smoothstep(0.5, 1.0, this.style).mul(smoothstep(1.5, 1.0, this.style));
-    const isFlash = smoothstep(1.5, 2.0, this.style);
-    const isTele = float(1).sub(isZone).sub(isFlash);
-
-    const body = isTele.mul(telegraphFill.add(charged)).add(isZone.mul(swirl.mul(1.25))).add(isFlash.mul(flashBody));
-    const rimStrength = isTele.mul(2.2).add(isZone.mul(3.0)).add(isFlash.mul(2.0));
-    const glyphBody = runes.mul(mix(float(1), behind, isFlash));
-    const intensity = glyphBody.add(body).add(rim.mul(rimStrength).mul(float(1).sub(isFlash).add(isFlash.mul(flashRim))));
-    // Alpha-blended, not additive: additive light vanishes on the white marble.
-    // HDR color (above 1) still feeds bloom so rims and veins glow.
-    const hot = mix(this.color, this.core, smoothstep(1.2, 2.6, intensity));
-    mat.colorNode = vec4(hot.mul(float(0.9).add(intensity.mul(1.4))), 1);
-    mat.opacityNode = intensity.mul(0.75).clamp(0, 0.95).mul(this.opacity);
-
-
-    this.mesh = new THREE.Mesh(this.geometry, mat);
+    this.mesh = new THREE.Mesh(this.geometry, (decalMaterial ??= makeDecalMaterial()));
+    this.mesh.name = 'decal';
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;
     this.mesh.matrixAutoUpdate = false;
+    useUniforms(this.values, this.mesh);
+    // a shape from the start, so a loading frame can draw it and prepare the shader
+    this.ensureShape({ type: 'circle', radius: 1 });
   }
 
   setStyle(style: DecalStyle): void {
-    this.style.value = STYLE[style];
+    this.values.style = STYLE[style];
   }
 
   setColors(main: number, core: number): void {
-    this.color.value.setHex(main);
-    this.core.value.setHex(core);
+    this.values.color.setHex(main);
+    this.values.core.setHex(core);
   }
 
   /** Place the shape at (x, z) facing `yaw` and conform it to the ground. */
   place(shape: DecalShape, x: number, z: number, yaw: number, lift = 0.07): void {
     this.ensureShape(shape);
-    this.center.value.set(x, z);
+    this.values.center.set(x, z);
     const pos = this.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     const cos = Math.cos(yaw);
@@ -148,7 +162,6 @@ export class GroundDecal {
 
   dispose(): void {
     this.geometry.dispose();
-    (this.mesh.material as THREE.Material).dispose();
   }
 }
 

@@ -1,12 +1,13 @@
 import * as THREE from 'three/webgpu';
 import {
-  color, float, mix, mx_noise_float, positionLocal, pow, smoothstep, time, uniform, vec3,
+  color, float, mix, mx_noise_float, positionLocal, pow, smoothstep, time, vec3,
 } from '../../render/tsl';
+import { objectUniforms, useUniforms } from '../../render/shared';
 import type { Team } from '../../map/ConquestLayout';
 import { lathe } from '../Architecture';
 import { Fire } from '../Effects';
 import type { MaterialLibrary } from '../Materials';
-import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, showWear, TEAM_STYLE, TeamMaterials, wearUniforms } from './common';
 import type { StructureModel } from './TowerModel';
 
 /** One feather: a long, flat, pointed blade along +Y from its root. */
@@ -16,6 +17,31 @@ function feather(length: number, width: number): THREE.BufferGeometry {
   ], 10);
   g.scale(1, 1, 0.16);
   return g;
+}
+
+/** Each Phoenix's own burn (1 at rest, higher while it fires, dies or rises) for its team's bird material. */
+const birdUniforms = () => ({ heat: 1 });
+const birdMaterials = new Map<Team, THREE.MeshStandardNodeMaterial>();
+
+/** The bird: gilded body whose feathers burn toward their tips. One per team, shared by its Phoenixes. */
+function birdMaterial(team: Team): THREE.MeshStandardNodeMaterial {
+  let mat = birdMaterials.get(team);
+  if (mat) return mat;
+  const { heat } = objectUniforms(birdUniforms());
+  const fire = TEAM_STYLE[team].fire;
+  mat = new THREE.MeshStandardNodeMaterial();
+  const tip = smoothstep(0.4, 2.4, positionLocal.y.abs().add(positionLocal.z.abs().mul(0.6)));
+  const flow = mx_noise_float(vec3(positionLocal.x.mul(1.8), positionLocal.y.mul(1.8).sub(time.mul(1.4)), positionLocal.z.mul(1.8))).mul(0.5).add(0.5);
+  const burn = pow(tip.mul(flow.mul(0.6).add(0.6)), float(1.3)).clamp(0, 1);
+  const fireCol = mix(color(fire.low), color(fire.high), flow.mul(0.45));
+  // gold stays gold until the flame takes over, so the two hues never mix into a pastel
+  const flameW = smoothstep(0.28, 0.7, burn);
+  mat.colorNode = mix(color(team === 'order' ? 0xe0a838 : 0x3a1a14), fireCol, flameW);
+  mat.metalnessNode = float(1).sub(flameW);
+  mat.roughnessNode = float(0.3);
+  mat.emissiveNode = fireCol.mul(flameW.mul(3.5).add(burn.mul(0.4))).mul(heat);
+  birdMaterials.set(team, mat);
+  return mat;
 }
 
 /**
@@ -34,8 +60,8 @@ export class PhoenixModel implements StructureModel {
   private readonly fire: Fire;
   private readonly shield: THREE.Mesh;
   private readonly rubble: Rubble;
-  private readonly damage: any;
-  private readonly heat = uniform(1);
+  private readonly wear = wearUniforms();
+  private readonly burn = birdUniforms();
   private shot = 0;
   private destroyed = 0;
   private rebirth = 1;
@@ -46,8 +72,7 @@ export class PhoenixModel implements StructureModel {
   constructor(lib: MaterialLibrary, team: Team, teamMats?: TeamMaterials) {
     const style = TEAM_STYLE[team];
     const tm = teamMats ?? new TeamMaterials(lib, style);
-    const { material: stone, damage } = crackedStone(agedMarble(lib), style.glow);
-    this.damage = damage;
+    const stone = crackedStone(agedMarble(lib), style.glow);
     const add = (parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0) => {
       const mesh = new THREE.Mesh(g, m);
       mesh.position.set(x, y, z);
@@ -79,18 +104,7 @@ export class PhoenixModel implements StructureModel {
     this.fire = new Fire(new THREE.Vector3(0, 3.0, 0), 1.6, 3, 50, style.fire);
     this.root.add(this.fire.group);
 
-    // The bird: gilded body whose feathers burn toward their tips.
-    const birdMat = new THREE.MeshStandardNodeMaterial();
-    const tip = smoothstep(0.4, 2.4, positionLocal.y.abs().add(positionLocal.z.abs().mul(0.6)));
-    const flow = mx_noise_float(vec3(positionLocal.x.mul(1.8), positionLocal.y.mul(1.8).sub(time.mul(1.4)), positionLocal.z.mul(1.8))).mul(0.5).add(0.5);
-    const burn = pow(tip.mul(flow.mul(0.6).add(0.6)), float(1.3)).clamp(0, 1);
-    const fireCol = mix(color(style.fire.low), color(style.fire.high), flow.mul(0.45));
-    // gold stays gold until the flame takes over, so the two hues never mix into a pastel
-    const flameW = smoothstep(0.28, 0.7, burn);
-    birdMat.colorNode = mix(color(team === 'order' ? 0xe0a838 : 0x3a1a14), fireCol, flameW);
-    birdMat.metalnessNode = float(1).sub(flameW);
-    birdMat.roughnessNode = float(0.3);
-    birdMat.emissiveNode = fireCol.mul(flameW.mul(3.5).add(burn.mul(0.4))).mul(this.heat);
+    const birdMat = birdMaterial(team);
 
     this.bird.position.y = this.birdY;
     this.bird.scale.setScalar(this.birdScale);
@@ -150,6 +164,10 @@ export class PhoenixModel implements StructureModel {
     for (const w of this.wings) mergeStatic(w);
     mergeStatic(this.bird, this.wings);
     mergeStatic(this.root, [this.bird, this.fire.group, this.shield, this.rubble.group]);
+    showWear(this.root, stone, this.wear);
+    this.root.traverse((o) => {
+      if ((o as THREE.Mesh).material === birdMat) useUniforms(this.burn, o);
+    });
   }
 
   setShielded(on: boolean): void {
@@ -161,7 +179,7 @@ export class PhoenixModel implements StructureModel {
   }
 
   setDamage(d: number): void {
-    this.damage.value = clamp01(d);
+    this.wear.damage = clamp01(d);
   }
 
   /** 0 = alive, 1 = burnt out: the bird flares, then collapses into the brazier. */
@@ -185,7 +203,7 @@ export class PhoenixModel implements StructureModel {
     const life = ease(this.rebirth);
     this.bird.visible = life > 0.02;
     this.bird.scale.setScalar(Math.max(0.02, life) * this.birdScale);
-    this.fire.strength.value = 0.35 + 0.65 * life;
+    this.fire.strength = 0.35 + 0.65 * life;
   }
 
   update(dt: number, time: number): void {
@@ -194,7 +212,7 @@ export class PhoenixModel implements StructureModel {
     const life = ease(this.rebirth);
     // A dying or rising Phoenix burns hotter.
     const flare = 1 + (1 - Math.abs(life * 2 - 1)) * 3 * (life < 1 && life > 0 ? 1 : 0);
-    this.heat.value = (1 + this.shot * 2.5) * flare;
+    this.burn.heat = (1 + this.shot * 2.5) * flare;
     const flap = Math.sin(time * 1.4) * 0.22 + this.shot * 0.3;
     this.wings[0]!.rotation.set(0, 0, -flap);
     this.wings[1]!.rotation.set(0, 0, flap);

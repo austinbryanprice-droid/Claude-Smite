@@ -27,6 +27,8 @@ export interface ReportInfo {
   shaders: number;
   /** Draws put off to a later frame because that frame had spent its shader budget. */
   deferred?: number;
+  /** What those shaders were for ("object/material"), with counts. */
+  shadersFor?: ReadonlyMap<string, number>;
 }
 
 interface Hitch {
@@ -258,6 +260,7 @@ export class PerfStats {
       `Stalls since load: ${this.counts.over50} over 50 ms · ${this.counts.over100} over 100 ms · ${this.counts.over250} over 250 ms · ${this.counts.over1000} over 1 s`,
       ...this.hitches.map((h) => `  ${ms(h.ms)} ms at ${h.t.toFixed(1)} s: the frame before ran ${ms(h.cpu)} ms of game code${h.shaders ? ` and built ${h.shaders} shaders` : ''}`),
       `Shaders built during play: ${info.shaders}${info.deferred ? ` (${info.deferred} draws waited for one)` : ''}`,
+      ...[...(info.shadersFor ?? [])].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([what, n]) => `  ${n}x ${what}`),
       `Long frames flagged by the browser: ${this.longFrameCount}`,
       ...this.longFrames.map((f) => `  ${Math.round(f.ms)} ms at ${f.t.toFixed(1)} s (blocking ${Math.round(f.blocking)} ms): ${f.script}`),
       `UA: ${ua}`,

@@ -3,7 +3,7 @@ import { GodModel, type LocomotionState } from '../../actors/GodModel';
 import type { Team } from '../../map/ConquestLayout';
 import { lathe } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
-import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, showWear, TEAM_STYLE, TeamMaterials, wearUniforms } from './common';
 import type { StructureModel } from './TowerModel';
 
 /** Seconds from `attack()` to the moment the slam lands. */
@@ -27,7 +27,7 @@ export class TitanModel implements StructureModel {
   private readonly body = new THREE.Group();
   private readonly shield: THREE.Mesh;
   private readonly rubble: Rubble;
-  private readonly damage: any;
+  private readonly wear = wearUniforms();
   private readonly light: THREE.PointLight;
   private attackT = -1;
   private destroyed = 0;
@@ -40,8 +40,7 @@ export class TitanModel implements StructureModel {
   constructor(lib: MaterialLibrary, team: Team, teamMats?: TeamMaterials) {
     const style = TEAM_STYLE[team];
     const tm = teamMats ?? new TeamMaterials(lib, style);
-    const { material: marble, damage } = crackedStone(agedMarble(lib), style.glow);
-    this.damage = damage;
+    const marble = crackedStone(agedMarble(lib), style.glow);
     this.root.name = `titan-${team}`;
 
     const dais = new THREE.Mesh(lathe([
@@ -92,6 +91,7 @@ export class TitanModel implements StructureModel {
     this.rubble.group.position.y = DAIS_TOP;
     this.root.add(this.rubble.group);
     mergeStatic(this.root, [this.body, this.shield, this.rubble.group]);
+    showWear(this.root, marble, this.wear);
   }
 
   setShielded(on: boolean): void {
@@ -109,7 +109,7 @@ export class TitanModel implements StructureModel {
   }
 
   setDamage(d: number): void {
-    this.damage.value = clamp01(d);
+    this.wear.damage = clamp01(d);
   }
 
   /** Topples backward off the dais and breaks apart. */

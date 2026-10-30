@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   abs, atan, color, cos, dot, float, fract, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, pow, sin, smoothstep,
-  step, time, uniform, uv, vec3,
+  step, time, uv, vec3,
 } from '../../render/tsl';
 import { rng } from '../../core/random';
 import { ConquestLayout as L, type Camp, type CampKind } from '../../map/ConquestLayout';
@@ -12,6 +12,7 @@ import { Fire } from '../Effects';
 import type { MaterialLibrary } from '../Materials';
 import type { Terrain } from '../Terrain';
 import { mergeStatic } from '../structures/common';
+import { objectUniforms, useUniforms } from '../../render/shared';
 import type { ConquestTerrainDef } from './ConquestTerrain';
 import { hypot } from '../../core/math';
 
@@ -121,17 +122,27 @@ function lavaFloorMaterial(): THREE.MeshStandardNodeMaterial {
   return mat;
 }
 
-/** A rune crystal that spins in the vertex shader, so its group can stay frozen. */
-function spinningCrystal(glow: number, strength: any): THREE.Mesh {
-  const mat = new THREE.MeshBasicNodeMaterial();
+/** Each buff camp's own glow for the inlay and crystal materials every camp shares. */
+const campUniforms = () => ({ glow: new THREE.Color(), strength: 1, phase: 0 });
+let campMaterials: { inlay: THREE.MeshBasicNodeMaterial; crystal: THREE.MeshBasicNodeMaterial } | null = null;
+
+function makeCampMaterials(): NonNullable<typeof campMaterials> {
+  const { glow, strength, phase } = objectUniforms(campUniforms());
+  // a glowing inlay ring in the camp's paving, broken into rune-like dashes so
+  // it reads as inlay, not a selection circle
+  const inlay = new THREE.MeshBasicNodeMaterial();
+  const dash = step(0.35, fract(atan(positionLocal.z, positionLocal.x).mul(36 / (2 * Math.PI))));
+  inlay.colorNode = glow.mul(sin(time.mul(1.2).add(phase)).mul(0.2).add(1)).mul(1.3).mul(strength);
+  inlay.opacityNode = dash;
+  inlay.alphaTest = 0.5;
+  // a rune crystal that spins in the vertex shader, so its group can stay frozen
+  const crystal = new THREE.MeshBasicNodeMaterial();
   const a = time.mul(0.9);
   const p = positionLocal;
   const bob = sin(time.mul(1.7)).mul(0.12);
-  mat.positionNode = vec3(p.x.mul(cos(a)).sub(p.z.mul(sin(a))), p.y.add(bob), p.x.mul(sin(a)).add(p.z.mul(cos(a))));
-  mat.colorNode = color(glow).mul(sin(time.mul(2.3)).mul(0.25).add(1.1)).mul(5).mul(strength);
-  const g = new THREE.OctahedronGeometry(0.42, 0);
-  g.scale(1, 1.6, 1);
-  return new THREE.Mesh(g, mat);
+  crystal.positionNode = vec3(p.x.mul(cos(a)).sub(p.z.mul(sin(a))), p.y.add(bob), p.x.mul(sin(a)).add(p.z.mul(cos(a))));
+  crystal.colorNode = glow.mul(sin(time.mul(2.3)).mul(0.25).add(1.1)).mul(5).mul(strength);
+  return { inlay, crystal };
 }
 
 /**
@@ -153,7 +164,7 @@ export class ConquestProps {
   /** Hoard gold that glints in scattered coins. */
   private readonly hoardGold: THREE.MeshStandardNodeMaterial;
   /** Each buff camp's crystal brightness and light, by camp id, for `setCampActive`. */
-  private readonly campGlow = new Map<string, { strength: any; light: THREE.PointLight }>();
+  private readonly campGlow = new Map<string, { glow: ReturnType<typeof campUniforms>; light: THREE.PointLight }>();
 
   constructor(
     private readonly mats: MaterialLibrary,
@@ -197,7 +208,7 @@ export class ConquestProps {
   setCampActive(campId: string, active: boolean): void {
     const e = this.campGlow.get(campId);
     if (!e) return;
-    e.strength.value = active ? 1 : 0.12;
+    e.glow.strength = active ? 1 : 0.12;
     e.light.intensity = active ? CAMP_LIGHT : CAMP_LIGHT * 0.1;
   }
 
@@ -327,27 +338,30 @@ export class ConquestProps {
       }
     }
     add(lathe([[0.001, 0], [1.5, 0], [1.5, 0.3], [1.25, 0.35], [1.1, 0.9], [1.3, 1.0], [0.001, 1.0]], 32), this.ruinMarble, 0, -0.05, 0);
-    const strength = uniform(1);
-    // a glowing inlay ring in the camp's paving, and a rune band on the altar
-    const inlay = new THREE.MeshBasicNodeMaterial();
-    // broken into rune-like dashes so it reads as inlay, not a selection circle
-    const dash = step(0.35, fract(atan(positionLocal.z, positionLocal.x).mul(36 / (2 * Math.PI))));
-    inlay.colorNode = color(glow).mul(sin(time.mul(1.2).add(cx)).mul(0.2).add(1)).mul(1.3).mul(strength);
-    inlay.opacityNode = dash;
-    inlay.alphaTest = 0.5;
+    const look = campUniforms();
+    look.glow.setHex(glow);
+    look.phase = cx;
+    const mats = (campMaterials ??= makeCampMaterials());
+    // the inlay ring in the paving, and a rune band on the altar
     const ringGeo = new THREE.RingGeometry(L.radii.camp - 0.6, L.radii.camp - 0.48, 96).rotateX(-Math.PI / 2);
-    add(ringGeo, inlay, 0, 0.04, 0).castShadow = false;
-    add(new THREE.TorusGeometry(1.2, 0.05, 6, 48).rotateX(Math.PI / 2), inlay, 0, 0.62, 0).castShadow = false;
-    const crystal = spinningCrystal(glow, strength);
+    add(ringGeo, mats.inlay, 0, 0.04, 0).castShadow = false;
+    add(new THREE.TorusGeometry(1.2, 0.05, 6, 48).rotateX(Math.PI / 2), mats.inlay, 0, 0.62, 0).castShadow = false;
+    const crystalShape = new THREE.OctahedronGeometry(0.42, 0);
+    crystalShape.scale(1, 1.6, 1);
+    const crystal = new THREE.Mesh(crystalShape, mats.crystal);
     crystal.position.y = 2.0;
     camp.add(crystal);
     const light = new THREE.PointLight(glow, CAMP_LIGHT, 14, 2);
-    this.campGlow.set(c.id, { strength, light });
+    this.campGlow.set(c.id, { glow: look, light });
     light.position.y = 2.2;
     camp.add(light);
     this.lights.push(light);
     this.collision.addCircle(cx, cz, 1.4, g0 + 1);
     mergeStatic(camp, [crystal]);
+    camp.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m === mats.inlay || m === mats.crystal) useUniforms(look, o);
+    });
     this.group.add(camp);
   }
 

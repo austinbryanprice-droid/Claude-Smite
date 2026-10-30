@@ -4,7 +4,7 @@ import type { Team } from '../../map/ConquestLayout';
 import { dot, mix, vec3 } from '../../render/tsl';
 import { columnCapital, flutedShaft, roundedBox } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
-import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, TEAM_STYLE, TeamMaterials } from './common';
+import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, showWear, TEAM_STYLE, TeamMaterials, wearUniforms } from './common';
 
 /** What every structure view exposes to the combat code. */
 export interface StructureModel {
@@ -37,6 +37,23 @@ function frustum(bottom: number, top: number, y0: number, y1: number): THREE.Buf
   return flat;
 }
 
+const limestones = new WeakMap<MaterialLibrary, THREE.MeshStandardNodeMaterial>();
+
+/**
+ * Pale, sun-bleached limestone rather than orange sandstone, so the gold trim
+ * and team colors carry the tower. One per library, shared by every tower.
+ */
+function limestone(lib: MaterialLibrary): THREE.MeshStandardNodeMaterial {
+  let m = limestones.get(lib);
+  if (!m) {
+    m = lib.sandstone.clone() as THREE.MeshStandardNodeMaterial;
+    const sand = lib.sandstone.colorNode as any;
+    m.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.7).mul(vec3(1.08, 1.02, 0.92));
+    limestones.set(lib, m);
+  }
+  return m;
+}
+
 /**
  * Lane tower: a tapered sandstone keep with marble pilasters, an open
  * colonnaded crown under a pyramid roof, and a floating team crystal that
@@ -54,7 +71,7 @@ export class TowerModel implements StructureModel {
   private readonly light: THREE.PointLight;
   private readonly shield: THREE.Mesh;
   private readonly rubble: Rubble;
-  private readonly damage: any;
+  private readonly wear = wearUniforms();
   private readonly seed: number;
   private fire = 0;
   private destroyed = 0;
@@ -65,13 +82,7 @@ export class TowerModel implements StructureModel {
     this.seed = seed;
     const style = TEAM_STYLE[team];
     const tm = teamMats ?? new TeamMaterials(lib, style);
-    // pale, sun-bleached limestone rather than orange sandstone, so the gold
-    // trim and team colors carry the tower
-    const limestone = lib.sandstone.clone() as THREE.MeshStandardNodeMaterial;
-    const sand = lib.sandstone.colorNode as any;
-    limestone.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.7).mul(vec3(1.08, 1.02, 0.92));
-    const { material: stone, damage } = crackedStone(limestone, style.glow);
-    this.damage = damage;
+    const stone = crackedStone(limestone(lib), style.glow);
     const add = (parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0) => {
       const mesh = new THREE.Mesh(g, m);
       mesh.position.set(x, y, z);
@@ -165,6 +176,7 @@ export class TowerModel implements StructureModel {
     this.root.add(this.rubble.group);
     mergeStatic(this.upper, [this.crystal]);
     mergeStatic(this.root, [this.upper, this.shield, this.rubble.group]);
+    showWear(this.root, stone, this.wear);
   }
 
   setShielded(on: boolean): void {
@@ -177,7 +189,7 @@ export class TowerModel implements StructureModel {
 
   setDamage(d: number): void {
     this.dmg = clamp01(d);
-    this.damage.value = this.dmg;
+    this.wear.damage = this.dmg;
   }
 
   setDestroyed(t: number): void {
