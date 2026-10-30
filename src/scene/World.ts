@@ -108,10 +108,25 @@ export class World {
     this.static.updateMatrixWorld(true);
     (this.dust.sprite as any).count = Math.round(600 * q.particles);
     // only the nearest fires get real lights on lower presets
-    this.maxLights = q.maxDynamicLights;
+    this.setLightPool(q.maxDynamicLights);
   }
 
-  private maxLights = 8;
+  /**
+   * The real point lights, a fixed set that moves to the nearest fires each
+   * frame. Shaders are built for one exact set of lights, so switching which
+   * fires are lit as the player walks would rebuild every material's shader.
+   */
+  private readonly pool: THREE.PointLight[] = [];
+
+  private setLightPool(n: number): void {
+    while (this.pool.length > n) this.pool.pop()!.removeFromParent();
+    while (this.pool.length < n) {
+      const l = new THREE.PointLight(0xffffff, 0, 10, 2);
+      l.castShadow = false;
+      this.pool.push(l);
+      this.scene.add(l);
+    }
+  }
 
   bakeLighting(renderer: THREE.WebGPURenderer): void {
     this.environment.bakeEnvironment(renderer, this.content.groundColor);
@@ -126,17 +141,34 @@ export class World {
     this.environment.update();
     this.content.update(dt, t, this.camera);
     this.grass.update(this.camera, focus);
-    // enable only the closest N fire lights
-    const lights = this.content.lights ?? this.content.fires.map((f) => f.light);
-    const p = new THREE.Vector3();
-    lights
-      .map((l) => ({ l, d: l.getWorldPosition(p).distanceToSquared(focus) }))
-      .sort((a, b) => a.d - b.d)
-      .forEach(({ l }, i) => (l.visible = i < this.maxLights));
+    // the map's own lights only say where the light is; the pool does the lighting
+    const near: { l: THREE.PointLight; p: THREE.Vector3; d: number }[] = [];
+    for (const l of this.content.lights ?? this.content.fires.map((f) => f.light)) {
+      l.visible = false;
+      if (l.intensity <= 0 || !shown(l.parent)) continue;
+      const p = l.getWorldPosition(new THREE.Vector3());
+      near.push({ l, p, d: p.distanceToSquared(focus) });
+    }
+    near.sort((a, b) => a.d - b.d);
+    this.pool.forEach((light, i) => {
+      const s = near[i];
+      light.intensity = s ? s.l.intensity : 0;
+      if (!s) return;
+      light.position.copy(s.p);
+      light.color.copy(s.l.color);
+      light.distance = s.l.distance;
+      light.decay = s.l.decay;
+    });
     for (const u of this.updaters) u(dt, t);
   }
 
   get spawn() {
     return this.content.spawn;
   }
+}
+
+/** True when the object and all its ancestors are visible. */
+function shown(o: THREE.Object3D | null): boolean {
+  for (; o; o = o.parent) if (!o.visible) return false;
+  return true;
 }
