@@ -4,7 +4,8 @@ import { anubis, loki, odin, thor, zeus } from '../game/gods';
 import { XP_TABLE } from '../game/progression';
 import type { GodDef } from '../game/types';
 import { GodBot } from './Bot';
-import { body, dummyUnit, godUnit, summonUnit } from './factory';
+import { Nav } from './Nav';
+import { body, dummyUnit, godUnit, structureUnit, summonUnit } from './factory';
 import { GROUND_WARNING, RECALL_TIME, Sim, type SimTerrain } from './Sim';
 import { WORLD_SCALE, type SimEvent, type Unit } from './Unit';
 
@@ -299,6 +300,57 @@ describe('skill shapes', () => {
 });
 
 describe('basic attacks', () => {
+  it('gods walk around a standing tower, not through it, and through its rubble', () => {
+    const sim = setup();
+    const t = god(sim, thor, 'order', 0, 0);
+    const tower = sim.add(structureUnit(thor, 'order', 'tower', { x: 0, z: -6, yaw: 0 }, 2.6, 10));
+    let closest = Infinity;
+    for (let i = 0; i < 240; i++) {
+      t.move = { x: 0, z: -1 };
+      sim.step(1 / 60);
+      closest = Math.min(closest, Math.hypot(t.x - tower.x, t.z - tower.z));
+    }
+    expect(closest).toBeGreaterThan(tower.radius + t.radius - 0.01);
+    expect(t.z).toBeLessThan(-9); // slid around it and kept going
+    tower.combatant.health = 0;
+    tower.combatant.alive = false;
+    tower.combatant.respawnTimer = Infinity;
+    sim.teleport(t, 0, 0, 0);
+    for (let i = 0; i < 40; i++) {
+      t.move = { x: 0, z: -1 };
+      sim.step(1 / 60);
+    }
+    expect(Math.abs(t.x)).toBeLessThan(0.01);
+  });
+
+  it('a point dead on a structure center still gets pushed out', () => {
+    const sim = setup();
+    const tower = sim.add(structureUnit(thor, 'order', 'tower', { x: 0, z: -8, yaw: 0 }, 2.6, 10));
+    const r = sim.solid(0, -8, 0.6, 0, { x: 0, z: -8 });
+    expect(Math.hypot(r.x - tower.x, r.z - tower.z)).toBeGreaterThan(tower.radius + 0.59);
+  });
+
+  it('routing reopens where something blocking goes away, once refreshed', () => {
+    let wall = true;
+    const nav = new Nav({ groundAt: () => 0, resolve: (x, z, r) => (wall && Math.abs(z) < 2 + r ? { x, z: z < 0 ? -2 - r : 2 + r } : { x, z }) }, 20);
+    const a = { x: 0, z: -10 };
+    const b = { x: 0, z: 10 };
+    expect(nav.clear(a, b)).toBe(false);
+    wall = false;
+    expect(nav.clear(a, b)).toBe(false); // cached until told
+    nav.refresh({ x: 0, z: 0 }, 4);
+    expect(nav.clear(a, b)).toBe(true);
+  });
+
+  it('a leap never lands inside a structure', () => {
+    const sim = setup();
+    const t = god(sim, thor, 'order', 0, 0);
+    const tower = sim.add(structureUnit(thor, 'order', 'tower', { x: 0, z: -8, yaw: 0 }, 2.6, 10));
+    castAt(sim, t, 'thor.tempest-leap', 0, -8);
+    run(sim, 2);
+    expect(Math.hypot(t.x - tower.x, t.z - tower.z)).toBeGreaterThan(tower.radius + t.radius - 0.01);
+  });
+
   it('a ranged basic spends its timer when fired and hurts when the shot arrives', () => {
     const sim = setup();
     const z = god(sim, zeus, 'order', 0, 0);

@@ -25,6 +25,8 @@ export class PlayerController implements Updatable {
    */
   movement: { speed: number; canMove: boolean } | null = null;
   readonly radius = 0.55;
+  /** Replaces plain terrain collision while walking; the combat sim adds its structures. */
+  resolve: ((x: number, z: number, radius: number, feetY: number, from: { x: number; z: number }) => { x: number; z: number }) | null = null;
   private readonly prevPosition = new THREE.Vector3();
   private readonly localDir = new THREE.Vector2();
   private verticalSpeed = 0;
@@ -79,7 +81,9 @@ export class PlayerController implements Updatable {
     this.prevPosition.copy(this.position);
     let nx = this.position.x + this.velocity.x * dt;
     let nz = this.position.z + this.velocity.z * dt;
-    const resolved = this.collision.resolve(nx, nz, this.radius, this.position.y);
+    const resolved = this.resolve
+      ? this.resolve(nx, nz, this.radius, this.position.y, this.prevPosition)
+      : this.collision.resolve(nx, nz, this.radius, this.position.y);
     nx = resolved.x;
     nz = resolved.z;
     const ground = this.collision.groundAt(nx, nz);

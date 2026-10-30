@@ -50,6 +50,8 @@ export function conquestBases(): Record<Team, BaseZone> {
  */
 export class Match {
   readonly structures = new Map<string, Unit>();
+  /** Whether each structure stood last step, to refresh routing when that changes. */
+  private readonly standing = new Map<Unit, boolean>();
   readonly titans = {} as Record<Team, Unit>;
   readonly brains = new Map<Unit, StructureBrain>();
   readonly gods: Unit[] = [];
@@ -75,7 +77,8 @@ export class Match {
   ) {
     this.buildStructures();
     this.jungle = new Jungle(sim, base);
-    this.nav = new Nav(sim.terrain, L.halfExtent);
+    // structures stand in the way like walls, so routes go around them
+    this.nav = new Nav({ groundAt: (x, z) => sim.terrain.groundAt(x, z), resolve: (x, z, r, y) => sim.solid(x, z, r, y) }, L.halfExtent);
     this.objectives = new Objectives(this.jungle, this.gods);
     sim.listeners.push((e) => this.onEvent(e));
   }
@@ -98,6 +101,12 @@ export class Match {
   step(dt: number): void {
     if (this.winner) return;
     this.time += dt;
+    // a fallen structure opens its ground to routing; a risen Phoenix closes it again
+    for (const u of this.structures.values()) {
+      if (this.standing.get(u) === u.alive) continue;
+      if (this.standing.has(u)) this.nav.refresh(u, u.radius + 2);
+      this.standing.set(u, u.alive);
+    }
     if (this.time >= this.nextWave) {
       this.queueWave();
       this.nextWave += WAVE_INTERVAL;

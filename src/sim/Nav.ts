@@ -76,15 +76,25 @@ export class Nav {
     if (this.open) return this.open;
     const n = this.size;
     const open = new Uint8Array(n * n);
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const x = this.origin + (i + 0.5) * CELL;
-        const z = this.origin + (j + 0.5) * CELL;
-        const r = this.terrain.resolve(x, z, CLEARANCE, this.terrain.groundAt(x, z));
-        open[j * n + i] = Math.hypot(r.x - x, r.z - z) < 0.05 ? 1 : 0;
-      }
-    }
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) open[j * n + i] = this.sample(i, j);
     return (this.open = open);
+  }
+
+  /** Re-sample the cells within `r` of `p`, after something there appeared or went away. */
+  refresh(p: Point, r: number): void {
+    const open = this.open;
+    if (!open) return;
+    const n = this.size;
+    const lo = (v: number) => Math.max(0, Math.floor((v - r - this.origin) / CELL));
+    const hi = (v: number) => Math.min(n - 1, Math.floor((v + r - this.origin) / CELL));
+    for (let j = lo(p.z); j <= hi(p.z); j++) for (let i = lo(p.x); i <= hi(p.x); i++) open[j * n + i] = this.sample(i, j);
+  }
+
+  private sample(i: number, j: number): number {
+    const x = this.origin + (i + 0.5) * CELL;
+    const z = this.origin + (j + 0.5) * CELL;
+    const r = this.terrain.resolve(x, z, CLEARANCE, this.terrain.groundAt(x, z));
+    return Math.hypot(r.x - x, r.z - z) < 0.05 ? 1 : 0;
   }
 
   private cellOf(p: Point): number {
