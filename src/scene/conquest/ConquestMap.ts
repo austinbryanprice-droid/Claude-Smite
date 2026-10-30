@@ -3,6 +3,7 @@ import { rng } from '../../core/random';
 import { baseOf, ConquestLayout as L } from '../../map/ConquestLayout';
 import type { QualitySettings } from '../../render/Quality';
 import type { Collider, CollisionWorld } from '../Collision';
+import { BaseColonnade } from '../structures/BaseColonnade';
 import { Fountain } from '../structures/Fountain';
 import { PhoenixModel } from '../structures/PhoenixModel';
 import { TitanModel } from '../structures/TitanModel';
@@ -121,6 +122,7 @@ export class ConquestMap implements MapContent {
       const f = new Fountain(this.materials, b.team, L.radii.fountain, teamMats[b.team]);
       f.group.position.set(b.fountain[0], this.terrain.heightAt(b.fountain[0], b.fountain[1]), b.fountain[1]);
       this.fountains.push(f);
+      this.group.add(this.colonnade(b.fountain[0], b.fountain[1], f.group.position.y, face(b.fountain[0], b.fountain[1], b.titan[0], b.titan[1]), teamMats[b.team]));
       this.fires.push(...f.fires);
       this.group.add(f.group);
     }
@@ -134,6 +136,21 @@ export class ConquestMap implements MapContent {
   private blockCamera(model: StructureModel, collider: Collider): void {
     this.collision.addCameraBlocker(collider);
     this.cameraBlockers.push({ model, collider, ground: model.root.position.y });
+  }
+
+  /** The marble colonnade set into the cliff behind a fountain, facing into the base. */
+  private colonnade(fx: number, fz: number, fy: number, yaw: number, tm: TeamMaterials): THREE.Group {
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    const toWorld = (x: number, z: number) => [fx + x * cos + z * sin, fz - x * sin + z * cos] as const;
+    const c = new BaseColonnade(this.materials, tm, 14.4, 1.05, (x, z) => this.terrain.heightAt(...toWorld(x, z)) - fy);
+    c.group.position.set(fx, fy, fz);
+    c.group.rotation.y = yaw;
+    for (const col of c.columns) {
+      const [x, z] = toWorld(col.x, col.z);
+      this.collision.addCameraBlocker({ kind: 'circle', x, z, r: col.r, top: Infinity });
+    }
+    return c.group;
   }
 
   /** Dims a buff camp's crystal while its buff is taken; camp ids come from `ConquestLayout.camps`. */
