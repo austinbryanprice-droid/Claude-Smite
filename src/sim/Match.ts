@@ -75,7 +75,8 @@ export class Match {
   ) {
     this.buildStructures();
     this.jungle = new Jungle(sim, base);
-    this.nav = new Nav(sim.terrain, L.halfExtent);
+    // structures stand in the way like walls, so routes go around them
+    this.nav = new Nav({ groundAt: (x, z) => sim.terrain.groundAt(x, z), resolve: (x, z, r, y) => sim.solid(x, z, r, y) }, L.halfExtent);
     this.objectives = new Objectives(this.jungle, this.gods);
     sim.listeners.push((e) => this.onEvent(e));
   }

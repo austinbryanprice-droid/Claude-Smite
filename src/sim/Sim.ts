@@ -753,7 +753,7 @@ export class Sim {
     for (let i = 1; i <= steps; i++) {
       const nx = u.x + dir.x * (dist * i) / steps;
       const nz = u.z + dir.z * (dist * i) / steps;
-      const r = this.terrain.resolve(nx, nz, u.radius, this.terrain.groundAt(nx, nz));
+      const r = this.solid(nx, nz, u.radius, this.terrain.groundAt(nx, nz));
       if (Math.hypot(r.x - nx, r.z - nz) > 0.05) break;
       x = nx;
       z = nz;
@@ -845,12 +845,47 @@ export class Sim {
     c.inBase = this.inBase(u);
   }
 
+  /**
+   * Terrain collision plus the standing structures, which nothing walks
+   * through. A walker heading straight at one slides around its side
+   * instead of stalling against it.
+   */
+  solid(x: number, z: number, radius: number, feetY: number, from: Point = { x, z }): Point {
+    let r = this.terrain.resolve(x, z, radius, feetY);
+    for (const s of this.units) {
+      if (!s.alive || !isStructure(s)) continue;
+      const min = s.radius + radius;
+      let dx = r.x - s.x;
+      let dz = r.z - s.z;
+      let d = Math.hypot(dx, dz);
+      if (d >= min) continue;
+      if (d < 1e-4) {
+        dx = from.x - s.x;
+        dz = from.z - s.z;
+        d = Math.hypot(dx, dz) || 1;
+      }
+      const nx = dx / d;
+      const nz = dz / d;
+      // the part of the step that runs along the wall survives; a head-on step turns aside
+      const mx = r.x - from.x;
+      const mz = r.z - from.z;
+      const along = mx * -nz + mz * nx;
+      const step = Math.hypot(mx, mz);
+      const slide = Math.abs(along) < step * 0.3 ? (along < 0 ? -step : step) : along;
+      const px = s.x + nx * min - nz * slide;
+      const pz = s.z + nz * min + nx * slide;
+      const pd = Math.hypot(px - s.x, pz - s.z) || 1;
+      r = this.terrain.resolve(s.x + ((px - s.x) / pd) * min, s.z + ((pz - s.z) / pd) * min, radius, feetY);
+    }
+    return r;
+  }
+
   private walk(u: Unit, dx: number, dz: number, dist: number): void {
     const len = Math.hypot(dx, dz);
     if (len < 1e-6) return;
     const nx = u.x + (dx / len) * dist;
     const nz = u.z + (dz / len) * dist;
-    const r = this.terrain.resolve(nx, nz, u.radius, u.body.y);
+    const r = this.solid(nx, nz, u.radius, u.body.y, u);
     u.body.x = r.x;
     u.body.z = r.z;
     u.body.y = this.terrain.groundAt(r.x, r.z);
@@ -862,8 +897,9 @@ export class Sim {
     f.remaining -= step;
     let nx = u.x + f.vx * step;
     let nz = u.z + f.vz * step;
-    if (f.collide) {
-      const r = this.terrain.resolve(nx, nz, u.radius, u.body.y);
+    if (f.collide || f.remaining <= 0) {
+      // leaps fly over everything but never land inside a structure
+      const r = f.collide ? this.solid(nx, nz, u.radius, u.body.y, u) : this.solid(nx, nz, u.radius, this.terrain.groundAt(nx, nz), u);
       nx = r.x;
       nz = r.z;
     }
