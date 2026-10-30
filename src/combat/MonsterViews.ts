@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionGeometry, sin, smoothstep, time, uniform, uv, vec3, vec4 } from '../render/tsl';
+import { abs, attribute, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionGeometry, sin, smoothstep, time, uniform, uv, vec2, vec3, vec4 } from '../render/tsl';
+import { spriteQuads } from '../render/shared';
 import type { CampKind } from '../map/ConquestLayout';
 import { skinRigid } from '../scene/merge';
 import { BUFF_COLOR } from '../scene/conquest/Props';
@@ -379,27 +380,39 @@ function giant(o: GiantOptions): MonsterView {
 
 const EMBERS = 26;
 let emberMat: THREE.SpriteNodeMaterial | null = null;
+let sparkMat: THREE.SpriteNodeMaterial | null = null;
+
+/** A soft molten spark; `at`, when given, places each instance (xyz, size). */
+function emberMaterial(at?: any): THREE.SpriteNodeMaterial {
+  const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const r = uv().sub(0.5).length().mul(2);
+  const f = smoothstep(1, 0, r).pow(2);
+  m.colorNode = vec4(vec3(1, 0.42, 0.08).mul(6).add(smoothstep(0.3, 0, r).mul(4)).mul(f), 1);
+  m.opacityNode = f;
+  if (at) {
+    m.positionNode = at.xyz;
+    m.scaleNode = vec2(at.w, at.w);
+  }
+  return m;
+}
 
 interface Embers {
   /** Advance the sparks; `rate` scales how fast they rise and how many show (0 lets them die out). */
   step(dt: number, rate: number): void;
 }
 
-/** Sparks that drift up off the Colossus's body and wink out. */
+/** Sparks that drift up off the Colossus's body and wink out, all in one draw. */
 function makeEmbers(parent: THREE.Object3D): Embers {
-  if (!emberMat) {
-    const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const r = uv().sub(0.5).length().mul(2);
-    const f = smoothstep(1, 0, r).pow(2);
-    m.colorNode = vec4(vec3(1, 0.42, 0.08).mul(6).add(smoothstep(0.3, 0, r).mul(4)).mul(f), 1);
-    m.opacityNode = f;
-    emberMat = m;
-  }
-  const sparks = Array.from({ length: EMBERS }, () => {
-    const s = new THREE.Sprite(emberMat!);
-    parent.add(s);
-    return { s, age: Math.random() * 2.5, life: 1.6 + Math.random() * 1.4, x: 0, y: 0, z: 0, vx: 0, vz: 0 };
-  });
+  emberMat ??= emberMaterial();
+  sparkMat ??= emberMaterial(attribute('spark', 'vec4'));
+  const sprite = new THREE.Sprite(sparkMat);
+  sprite.geometry = spriteQuads(EMBERS, true);
+  // each spark's xyz (in `parent`'s space) and size; a hidden one has size 0
+  const at = new THREE.InstancedBufferAttribute(new Float32Array(EMBERS * 4), 4).setUsage(THREE.DynamicDrawUsage);
+  sprite.geometry.setAttribute('spark', at);
+  sprite.frustumCulled = false;
+  parent.add(sprite);
+  const sparks = Array.from({ length: EMBERS }, () => ({ age: Math.random() * 2.5, life: 1.6 + Math.random() * 1.4, x: 0, y: 0, z: 0, vx: 0, vz: 0 }));
   const respawn = (p: (typeof sparks)[number]) => {
     const a = Math.random() * Math.PI * 2;
     const r = 0.5 + Math.random() * 1.1;
@@ -413,21 +426,20 @@ function makeEmbers(parent: THREE.Object3D): Embers {
   for (const p of sparks) respawn(p);
   return {
     step(dt, rate) {
-      for (const p of sparks) {
+      for (const [i, p] of sparks.entries()) {
         p.age += dt * Math.max(0.5, rate);
         if (p.age > p.life) {
           if (rate <= 0) {
-            p.s.visible = false;
+            at.setW(i, 0);
             continue;
           }
           respawn(p);
         }
         const k = p.age / p.life;
-        p.s.visible = true;
-        p.s.position.set(p.x + p.vx * p.age + Math.sin(p.age * 3 + p.life) * 0.08, p.y + p.age * 0.9, p.z + p.vz * p.age);
         // flare in, then shrink to nothing
-        p.s.scale.setScalar(0.14 * Math.min(1, k * 6) * (1 - k));
+        at.setXYZW(i, p.x + p.vx * p.age + Math.sin(p.age * 3 + p.life) * 0.08, p.y + p.age * 0.9, p.z + p.vz * p.age, 0.14 * Math.min(1, k * 6) * (1 - k));
       }
+      at.needsUpdate = true;
     },
   };
 }
