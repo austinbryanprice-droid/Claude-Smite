@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {
-  builtinAOContext, cdl, float, floor, Fn, hash, int, ivec2, max, min, mrt, normalView, output,
-  packNormalToRGB, pass, renderOutput, sample, screenUV, smoothstep, textureLoad, textureSize, time,
-  uniform, unpackRGBToNormal, vec3, vec4, velocity,
+  builtinAOContext, cdl, float, floor, Fn, hash, int, ivec2, max, min, mrt, output, pass,
+  renderOutput, screenUV, smoothstep, texture, textureLoad, textureSize, time, uniform, vec2, vec3,
+  vec4, velocity,
 } from './tsl';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
@@ -41,7 +41,7 @@ export const grading = {
 /**
  * Builds and owns the post-processing chain:
  *
- *   [depth/normal pre-pass] -> GTAO -> scene pass (AO feeds the ambient term)
+ *   scene pass (last frame's AO feeds the ambient term) -> GTAO from its depth
  *   -> TRAA (or SMAA/FXAA at the end) -> sharpen (with TRAA) -> bloom
  *   -> tone map -> color grade -> vignette + film grain
  *
@@ -74,20 +74,19 @@ export class PostFX {
     const scenePass = pass(scene, camera);
     let depthNode: any;
     let velocityNode: any;
+    let aoTouch: any = null;
 
     if (q.ao) {
-      // Pre-pass writes view normals + velocity so GTAO can run before lighting
-      // and modulate only indirect light (like UE's SSAO/GTAO in the base pass).
-      const prePass = pass(scene, camera);
-      prePass.name = 'Pre-Pass';
-      prePass.transparent = false;
-      prePass.setMRT(mrt({ output: packNormalToRGB(normalView), velocity }));
-      prePass.getTexture('output').type = THREE.UnsignedByteType;
-      const prePassNormal = sample((uv: any) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)));
-      depthNode = prePass.getTextureNode('depth');
-      velocityNode = prePass.getTextureNode('velocity');
-
-      const aoPass = ao(depthNode, prePassNormal, camera);
+      // One pass draws the scene, writing depth and motion as well. GTAO reads
+      // that depth (normals rebuilt from it) and the next frame's pass samples
+      // its result where each surface was a frame earlier, so AO still darkens
+      // only indirect light. A separate depth/normal pre-pass drew every object
+      // a second time, and on a fast GPU sending draws is the frame's bottleneck.
+      scenePass.setMRT(mrt({ output, velocity }));
+      depthNode = scenePass.getTextureNode('depth');
+      velocityNode = scenePass.getTextureNode('velocity');
+      // a plain texture, so the AO doesn't draw the scene pass from inside it
+      const aoPass = ao(texture(scenePass.getTexture('depth')), null as any, camera);
       aoPass.resolutionScale = q.aoResolution;
       aoPass.samples.value = q.aoSamples;
       aoPass.radius.value = 0.9;
@@ -95,8 +94,15 @@ export class PostFX {
       aoPass.thickness.value = 1.2;
       aoPass.scale.value = 1.0;
       aoPass.useTemporalFiltering = q.antiAliasing === 'traa';
-      this.disposables.push(aoPass, prePass);
-      scenePass.contextNode = builtinAOContext(aoPass.getTextureNode().sample(screenUV).r);
+      this.disposables.push(aoPass);
+      const aoMap: THREE.Texture = aoPass.getTextureNode().value;
+      const lastFrame = screenUV.sub(velocity.xy.mul(vec2(0.5, -0.5)));
+      scenePass.contextNode = builtinAOContext(texture(aoMap).sample(lastFrame).r);
+      // GTAO renders when a pass that samples it does, and the scene samples a
+      // plain texture, so the final pass samples it too (adding nothing). Built
+      // first there, it renders first each frame, from the previous frame's
+      // depth: a new map is never read before GTAO has drawn it.
+      aoTouch = aoPass.getTextureNode().sample(vec2(0.5)).r.mul(0);
     } else if (q.antiAliasing === 'traa') {
       scenePass.setMRT(mrt({ output, velocity }));
       depthNode = scenePass.getTextureNode('depth');
@@ -136,7 +142,7 @@ export class PostFX {
       return vec4(c, 1);
     })();
 
-    let out: any = graded;
+    let out: any = aoTouch ? aoTouch.add(graded) : graded;
     if (q.antiAliasing === 'smaa') out = smaa(graded);
     else if (q.antiAliasing === 'fxaa') out = fxaa(graded);
 

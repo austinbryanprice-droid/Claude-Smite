@@ -43,4 +43,19 @@ describe('PerfStats', () => {
     expect(text).toMatch(/180 ms at [\d.]+ s: the frame before ran [\d.]+ ms of game code and built 3 shaders/);
     expect(text).toContain('Display: 2560×1600 at 1.5x');
   });
+
+  it('reports draws per frame by kind', () => {
+    const perf = new PerfStats();
+    const draws: [number, number, number] = [0, 0, 0];
+    let now = 0;
+    for (let i = 0; i < 120; i++) {
+      perf.begin((now += 1000 / 60));
+      // shadow cascades take turns: 400 shadow draws on even frames, 200 on odd ones
+      draws[0] += 650;
+      draws[1] += i % 2 ? 200 : 400;
+      draws[2] += 15;
+      perf.end(0, draws);
+    }
+    expect(perf.report(info)).toContain('Draws per frame (avg / p99): scene 650 / 650 · shadow 300 / 400 · screen 15 / 15');
+  });
 });
