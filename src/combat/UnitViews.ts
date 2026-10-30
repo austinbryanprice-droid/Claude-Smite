@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { GodModel } from '../actors/GodModel';
 import { createGodModel } from './godModels';
-import { float, fract, length, mix, mx_noise_float, positionLocal, smoothstep, uv, vec3 } from '../render/tsl';
+import { float, fract, length, mix, mx_noise_float, positionGeometry, smoothstep, uv, vec3 } from '../render/tsl';
 import type { StructureKind } from '../sim/factory';
 import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
 import { MinionViews } from './MinionViews';
@@ -27,14 +27,14 @@ const dummyShadow: { geometry?: THREE.BufferGeometry } = {};
 function dummyMaterials(): NonNullable<typeof dummyLook> {
   if (dummyLook) return dummyLook;
   const wood = new THREE.MeshStandardNodeMaterial({ color: 0x6b4426, roughness: 0.8 });
-  wood.colorNode = mix(vec3(0.24, 0.14, 0.07), vec3(0.42, 0.27, 0.14), mx_noise_float(positionLocal.mul(vec3(2, 26, 2))).mul(0.5).add(0.5));
+  wood.colorNode = mix(vec3(0.24, 0.14, 0.07), vec3(0.42, 0.27, 0.14), mx_noise_float(positionGeometry.mul(vec3(2, 26, 2))).mul(0.5).add(0.5));
   const straw = new THREE.MeshStandardNodeMaterial({ roughness: 0.95 });
-  const fiber = mx_noise_float(positionLocal.mul(vec3(40, 3, 40))).mul(0.5).add(0.5);
+  const fiber = mx_noise_float(positionGeometry.mul(vec3(40, 3, 40))).mul(0.5).add(0.5);
   straw.colorNode = mix(vec3(0.45, 0.33, 0.12), vec3(0.85, 0.68, 0.3), fiber);
   const rope = new THREE.MeshStandardNodeMaterial({ color: 0x5a4630, roughness: 0.9 });
   const stone = new THREE.MeshStandardNodeMaterial({ color: 0x8c877c, roughness: 0.85 });
   const burlap = new THREE.MeshStandardNodeMaterial({ roughness: 1 });
-  burlap.colorNode = mix(vec3(0.4, 0.32, 0.22), vec3(0.55, 0.45, 0.32), mx_noise_float(positionLocal.mul(60)).mul(0.5).add(0.5));
+  burlap.colorNode = mix(vec3(0.4, 0.32, 0.22), vec3(0.55, 0.45, 0.32), mx_noise_float(positionGeometry.mul(60)).mul(0.5).add(0.5));
   const paint = new THREE.MeshStandardNodeMaterial({ roughness: 0.6, metalness: 0.1 });
   const r = length(uv().sub(0.5)).mul(2);
   const ring = fract(r.mul(2.5)).step(0.5);
@@ -42,18 +42,14 @@ function dummyMaterials(): NonNullable<typeof dummyLook> {
   const red = vec3(0.6, 0.06, 0.04);
   const cream = vec3(0.85, 0.78, 0.6);
   const gold = vec3(0.9, 0.65, 0.2);
-  paint.colorNode = mix(mix(cream, red, ring), gold, bull).mul(float(0.85).add(mx_noise_float(positionLocal.mul(30)).mul(0.15)));
+  paint.colorNode = mix(mix(cream, red, ring), gold, bull).mul(float(0.85).add(mx_noise_float(positionGeometry.mul(30)).mul(0.15)));
   dummyLook = { wood, straw, rope, stone, burlap, paint };
   for (const [name, m] of Object.entries(dummyLook)) m.name = `dummy-${name}`;
   return dummyLook;
 }
 
-/**
- * A wooden training post with a straw body and a painted target shield.
- * Every dummy shares its materials and its shadow caster's geometry (the
- * loading screen draws one, so none builds a shader mid-match).
- */
-export function buildDummy(): THREE.Group {
+/** A wooden training post with a straw body and a painted target shield: the parts `DummyCrowd` poses. */
+function buildDummy(): THREE.Group {
   const g = new THREE.Group();
   const { wood, straw, rope, stone, burlap, paint } = dummyMaterials();
 
@@ -79,6 +75,80 @@ export function buildDummy(): THREE.Group {
   castStaticAsOne(g, dummyShadow);
   return g;
 }
+
+/** Room for this many training dummies at once. */
+const DUMMY_CAPACITY = 8;
+
+/**
+ * Every training dummy in one draw per material and one shadow caster, where
+ * each dummy's dozen parts were a draw each: a BatchedMesh per material holds
+ * the post's parts, posed per dummy. The materials read `positionGeometry`,
+ * each part's own unposed position, so their grain sits on the parts as before.
+ */
+class DummyCrowd {
+  readonly group = new THREE.Group();
+  /** Each part of the post: its batch, its geometry there, and its place on the post. */
+  private readonly parts: { mesh: THREE.BatchedMesh; geometry: number; matrix: THREE.Matrix4 }[] = [];
+  private readonly ids = new Map<THREE.Object3D, number[]>();
+  private readonly m = new THREE.Matrix4();
+
+  constructor() {
+    this.group.name = 'dummies';
+    const post = buildDummy();
+    post.updateMatrixWorld(true);
+    const byMat = new Map<THREE.Material, THREE.Mesh[]>();
+    post.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const list = byMat.get(m.material as THREE.Material);
+      if (list) list.push(m);
+      else byMat.set(m.material as THREE.Material, [m]);
+    });
+    for (const [material, meshes] of byMat) {
+      const vertices = meshes.reduce((n, m) => n + m.geometry.getAttribute('position').count, 0);
+      const indices = meshes.reduce((n, m) => n + (m.geometry.index?.count ?? 0), 0);
+      const batch = new THREE.BatchedMesh(DUMMY_CAPACITY * meshes.length, vertices, indices, material);
+      // (a handful of posts: culling and sorting them would cost more than drawing them)
+      batch.perObjectFrustumCulled = false;
+      batch.sortObjects = false;
+      batch.frustumCulled = false;
+      // the parts' shadow settings, and the stand-in's shadow-only layer
+      batch.name = meshes[0]!.name;
+      batch.castShadow = meshes[0]!.castShadow;
+      batch.receiveShadow = meshes[0]!.receiveShadow;
+      batch.layers.mask = meshes[0]!.layers.mask;
+      batch.visible = false;
+      for (const m of meshes) this.parts.push({ mesh: batch, geometry: batch.addGeometry(m.geometry), matrix: m.matrixWorld.clone() });
+      this.group.add(batch);
+    }
+  }
+
+  /** Gives a dummy, posed by `root`, its parts. */
+  add(root: THREE.Object3D): void {
+    this.ids.set(root, this.parts.map((p) => p.mesh.addInstance(p.geometry)));
+    for (const p of this.parts) p.mesh.visible = true;
+  }
+
+  remove(root: THREE.Object3D): void {
+    const ids = this.ids.get(root);
+    if (!ids) return;
+    this.parts.forEach((p, i) => p.mesh.deleteInstance(ids[i]!));
+    this.ids.delete(root);
+    if (!this.ids.size) for (const p of this.parts) p.mesh.visible = false;
+  }
+
+  /** Poses a dummy's parts where its root stands (in this group's space), or hides them with it. */
+  place(root: THREE.Object3D): void {
+    const ids = this.ids.get(root);
+    if (!ids) return;
+    root.updateMatrix();
+    this.parts.forEach((p, i) => {
+      p.mesh.setMatrixAt(ids[i]!, this.m.multiplyMatrices(root.matrix, p.matrix));
+      p.mesh.setVisibleAt(ids[i]!, root.visible);
+    });
+  }
+}
+
 
 /** How often (in frames) a god model off screen is animated. */
 const OFFSCREEN_EVERY = 8;
@@ -126,6 +196,8 @@ interface UnitView {
 export class UnitViews {
   readonly group = new THREE.Group();
   readonly minions = new MinionViews();
+  /** Built with the first training dummy. */
+  private dummies: DummyCrowd | null = null;
   private readonly views = new Map<Unit, UnitView>();
   private readonly prev = new Map<Unit, THREE.Vector3>();
   private readonly cur = new Map<Unit, THREE.Vector3>();
@@ -145,6 +217,15 @@ export class UnitViews {
   ) {
     this.group.name = 'units';
     this.group.add(this.minions.group);
+  }
+
+  /**
+   * Builds the training dummies' views now, so the loading screen draws their
+   * batches: three keys a batch's shaders to the batch itself, so drawing
+   * any other copy would not spare these a build mid-match.
+   */
+  prime(units: readonly Unit[]): void {
+    for (const u of units) if (u.kind === 'dummy' && !this.views.has(u)) this.create(u);
   }
 
   /** After a god switch: the old player's view is dropped (its model belongs to the controller). */
@@ -196,6 +277,7 @@ export class UnitViews {
     for (const [u, v] of this.views) {
       if (seen.has(u)) continue;
       if (u !== this.player) this.group.remove(v.root);
+      if (u.kind === 'dummy') this.dummies?.remove(v.root);
       this.views.delete(u);
       this.prev.delete(u);
       this.cur.delete(u);
@@ -266,9 +348,11 @@ export class UnitViews {
       model = this.playerModel;
       root = model.root;
     } else if (u.kind === 'dummy') {
-      root = buildDummy();
+      // drawn by the batched crowd; this root only carries the pose
+      root = new THREE.Group();
       height = 2.3;
-      this.group.add(root);
+      if (!this.dummies) this.group.add((this.dummies = new DummyCrowd()).group);
+      this.dummies.add(root);
     } else if (u.kind === 'minion') {
       // drawn by the instanced crowd; this root only carries the position
       root = new THREE.Group();
@@ -361,6 +445,7 @@ export class UnitViews {
       const fall = v.deathTime < 0 ? 0 : Math.min(1, v.deathTime / 0.6);
       v.root.rotation.x = fall * fall * 1.45 + v.wobble * 0.12;
       v.root.visible = v.deathTime < 2.5;
+      this.dummies?.place(v.root);
       return;
     }
     if (u.kind === 'minion') {
