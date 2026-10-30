@@ -115,6 +115,8 @@ export const SOUNDS: Record<string, Recipe> = {
   'teleport': { peak: 0.7, make: (r) => layer([whoosh(r, 0.4, 3000, 400, { q: 1 }), 1], [shimmer(r, 0.5, 1200, { rise: 0.5, peak: 0.1 }), 0.6]) },
   'heal': { variants: 2, peak: 0.45, make: (r) => layer([shimmer(r, 0.8, 784, { rise: 1.25, peak: 0.25 }), 1], [chime(r, 0.8, 1568, { gain: 0.5 }), 0.6]) },
   'favor': { variants: 3, peak: 0.4, make: (r) => coin(r) },
+  // the big kill moments (multi-kills, shutdowns, streaks): a close thunderclap under a rising chorus and a bell
+  'kill.big': { peak: 0.9, make: (r) => layer([thunder(r, 1.2, { crack: 1.3, rumble: 0.8 }), 0.8], [impact(r, 2, { tone: 90, crunch: 0.4, sub: 1.4, room: 0.35 }), 0.7], [choir(r, 2.2, 261.6, { env: (t) => ahr(t, 0.08, 0.5, 1.5) }), 0.55, 0.05], [choir(r, 2, 392, { env: (t) => ahr(t, 0.12, 0.4, 1.4) }), 0.4, 0.08], [clang(r, 2.2, 523, { decay: 1.6, gain: 0.6 }), 0.5, 0.02]) },
   'kill.confirm': { peak: 0.8, make: (r) => layer([clang(r, 1.4, 523, { decay: 1, gain: 0.7 }), 1], [thump(r, 0.4, 100, 40, { drive: 2 }), 0.8], [chime(r, 1.2, 1046.5), 0.5, 0.05]) },
 
   // -- herald stings and player feedback
