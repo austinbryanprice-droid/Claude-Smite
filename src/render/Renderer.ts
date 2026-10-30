@@ -9,6 +9,22 @@ export interface RendererInfo {
 }
 
 /**
+ * three gives every texture node made without uv coordinates, and every copy
+ * `.sample()` or `.load()` makes of one, a uv-transform matrix that it
+ * refreshes and uploads on every draw: on the WebGL backend that was ~11,500
+ * a frame on Conquest, from the bone textures of skinned meshes. None of the
+ * game's textures uses offset, repeat or rotation, so textures left at the
+ * identity transform sample with their uv as is. A texture that will be
+ * transformed must set `userData.uvTransform` before its shader is built.
+ */
+const transformedUV = THREE.TextureNode.prototype.getTransformedUV;
+THREE.TextureNode.prototype.getTransformedUV = function (this: THREE.TextureNode, uvNode: any) {
+  const t = this.value;
+  const identity = t.offset.x === 0 && t.offset.y === 0 && t.repeat.x === 1 && t.repeat.y === 1 && t.rotation === 0;
+  return identity && t.userData.uvTransform !== true ? uvNode : transformedUV.call(this, uvNode);
+};
+
+/**
  * Creates the renderer. WebGPU is preferred; three.js falls back to its WebGL2
  * backend automatically when WebGPU is missing. `?webgl` (or the title screen's
  * compatibility switch) forces the fallback.

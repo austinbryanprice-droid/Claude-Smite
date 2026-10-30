@@ -97,7 +97,7 @@ export class PostFX {
       this.disposables.push(aoPass);
       const aoMap: THREE.Texture = aoPass.getTextureNode().value;
       const lastFrame = screenUV.sub(velocity.xy.mul(vec2(0.5, -0.5)));
-      scenePass.contextNode = builtinAOContext(texture(aoMap).sample(lastFrame).r);
+      scenePass.contextNode = builtinAOContext(texture(aoMap, lastFrame).r);
       // GTAO renders when a pass that samples it does, and the scene samples a
       // plain texture, so the final pass samples it too (adding nothing). Built
       // first there, it renders first each frame, from the previous frame's
