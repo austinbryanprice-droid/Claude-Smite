@@ -144,7 +144,7 @@ export class Grass {
     // Fake subsurface: blades glow when the sun is behind them.
     const viewDir = normalize(pos.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
-    const back = pow(dot(viewDir, sun).max(0), float(3)).mul(h).mul(0.1);
+    const back = pow(dot(viewDir, sun).max(0), float(3)).mul(h).mul(0.05);
     mat.emissiveNode = col.mul(vec3(1.0, 0.95, 0.7)).mul(back).mul(1.0);
     return mat;
   }

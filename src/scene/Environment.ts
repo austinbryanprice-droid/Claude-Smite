@@ -17,6 +17,12 @@ import type { QualitySettings } from '../render/Quality';
 export class Environment {
   readonly sky: SkyMesh;
   readonly sun: THREE.DirectionalLight;
+  /**
+   * Soft, shadowless sky light from opposite the sun. Surfaces turned away
+   * from the sun (cliff walls, a god's back) get only ambient light otherwise,
+   * which reads as flat navy; this keeps their shape and color visible.
+   */
+  readonly fill: THREE.DirectionalLight;
   readonly sunDirection = new THREE.Vector3();
   private csm: CSMShadowNode | null = null;
   private frame = 0;
@@ -24,10 +30,10 @@ export class Environment {
 
   /** Brightness multiplier that puts the sky model in the same units as the sun. */
   readonly skyScale = uniform(0.5);
-  readonly fogDensity = uniform(0.005);
+  readonly fogDensity = uniform(0.0035);
   readonly fogHeightFalloff = uniform(0.022);
   /** Meters around the camera with no fog at all, so the fight itself stays clear. */
-  readonly fogStart = uniform(30);
+  readonly fogStart = uniform(35);
   /** Soft blue haze, so jungle layers separate with distance as in the references. */
   readonly fogColor = uniform(new THREE.Color(0.5, 0.58, 0.86));
   /** Light that the ambient sky fills shadowed areas with, against the sun's 6.6. */
@@ -64,6 +70,10 @@ export class Environment {
     scene.add(this.sun);
     scene.add(this.sun.target);
 
+    this.fill = new THREE.DirectionalLight(new THREE.Color(0.78, 0.84, 1.0), 2.2);
+    scene.add(this.fill);
+    scene.add(this.fill.target);
+
     this.updateSunDirection();
     this.scene.fogNode = this.buildFog();
   }
@@ -75,6 +85,8 @@ export class Environment {
     this.sky.sunPosition.value.copy(this.sunDirection);
     this.sun.position.copy(this.sunDirection).multiplyScalar(200);
     this.sun.target.position.set(0, 0, 0);
+    // opposite the sun in azimuth, from higher up, like the open sky behind you
+    this.fill.position.set(-this.sunDirection.x, 1.4, -this.sunDirection.z).multiplyScalar(200);
   }
 
   /**
