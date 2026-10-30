@@ -171,7 +171,7 @@ async function main(): Promise<void> {
       autoDrops++;
       resize();
       hud.notice(`Lowered the render resolution to ${Math.round(scale * 100)}% for a smoother frame rate. Picking a quality at the bottom right resets it.`);
-    });
+    }, () => perf.gpuAverage(4));
   }
 
   const loop = new Loop();

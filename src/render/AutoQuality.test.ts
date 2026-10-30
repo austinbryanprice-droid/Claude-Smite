@@ -40,6 +40,19 @@ describe('AutoQuality', () => {
     expect(scale).toBe(0.85);
   });
 
+  it('keeps the resolution when the GPU is idle for much of each frame', () => {
+    let scale = 1;
+    let gpu: number | null = 8;
+    const auto = new AutoQuality((s) => (scale = s), () => gpu);
+    // 30 fps, but the GPU works only 8 ms of each 33 ms frame
+    run(auto, 30, 30);
+    expect(scale).toBe(1);
+    // the GPU busy for most of the frame: it is the limit
+    gpu = 28;
+    run(auto, 30, 5);
+    expect(scale).toBe(0.85);
+  });
+
   it('ignores stalls such as a hidden tab', () => {
     let scale = 1;
     const auto = new AutoQuality((s) => (scale = s));

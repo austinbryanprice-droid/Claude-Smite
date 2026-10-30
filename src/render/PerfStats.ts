@@ -117,6 +117,20 @@ export class PerfStats {
     this.timer = { pool: () => backend.timestampQueryPool?.render, frames: 0 };
   }
 
+  /** Average GPU time per frame over the last `seconds`, or null when there are no samples. */
+  gpuAverage(seconds: number): number | null {
+    const from = performance.now() - seconds * 1000;
+    let sum = 0;
+    let count = 0;
+    for (let k = this.gpuN - 1; k >= Math.max(0, this.gpuN - SIZE); k--) {
+      const j = k % SIZE;
+      if (this.gpuAt[j]! < from) break;
+      sum += this.gpu[j]!;
+      count++;
+    }
+    return count ? sum / count : null;
+  }
+
   /** Call first thing in a frame, with the animation frame's timestamp. */
   begin(now: number): void {
     const i = this.n % SIZE;
