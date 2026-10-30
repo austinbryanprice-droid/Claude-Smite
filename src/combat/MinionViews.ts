@@ -1,16 +1,19 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Side as Team } from '../game/combatant';
-import { abs, float, mix, mx_noise_float, positionLocal, smoothstep, vec3 } from '../render/tsl';
+import { abs, float, mix, mx_noise_float, positionGeometry, smoothstep, vec3 } from '../render/tsl';
 import { lathe } from '../scene/Architecture';
 import type { MinionType } from '../sim/factory';
 import type { Unit } from '../sim/Unit';
 
 /**
- * Lane minions, drawn with instancing: every (team, type, body part,
- * material) is one InstancedMesh, so a hundred minions cost a few dozen draw
- * calls. Each minion is four rigid parts (body, two legs, weapon arm) posed
- * per instance: a walk cycle, attack swings, a hit flinch and a fall on death.
+ * Lane minions, batched: every (team, material) is one BatchedMesh holding
+ * each minion type's body parts, so the whole army costs one draw call per
+ * material per pass (three draws a BatchedMesh's instances in a native loop,
+ * without its per-object overhead). Each minion is four rigid parts (body, two
+ * legs, weapon arm) posed per instance: a walk cycle, attack swings, a hit
+ * flinch and a fall on death. Materials read `positionGeometry`, the part's
+ * unposed position, so their patterns stay on the minion as it walks.
  *
  * Minions are mortal soldiers, about 1.75 m (gods are 2.45 m); brutes are
  * hulking at about 2.6 m. Order wears blue and gold, Chaos crimson and black
@@ -177,11 +180,11 @@ function buildBrute(kit: Kit): Rig {
 
 function materials(team: Team): Record<Mat, THREE.Material> {
   const look = TEAM_LOOK[team];
-  const n = (s: number) => mx_noise_float(positionLocal.mul(s)).mul(0.5).add(0.5);
+  const n = (s: number) => mx_noise_float(positionGeometry.mul(s)).mul(0.5).add(0.5);
   const cloth = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.85, sheen: 0.8, sheenRoughness: 0.5, sheenColor: new THREE.Color(look.cloth).multiplyScalar(1.4), side: THREE.DoubleSide });
   const c = new THREE.Color(look.cloth);
   // painted cloth: vertical folds, darker toward the hem, a woven grain
-  const pl = positionLocal;
+  const pl = positionGeometry;
   const folds = mx_noise_float(vec3(pl.x.mul(11), pl.y.mul(1.2), pl.z.mul(11))).mul(0.5).add(0.5);
   const ramp = smoothstep(-0.6, 1.4, pl.y).mul(0.45).add(0.6);
   cloth.colorNode = vec3(c.r, c.g, c.b).mul(ramp).mul(float(0.72).add(folds.mul(0.45))).mul(float(0.92).add(n(60).mul(0.12)));
@@ -193,7 +196,7 @@ function materials(team: Team): Record<Mat, THREE.Material> {
   leather.colorNode = mix(vec3(0.16, 0.09, 0.05), vec3(0.3, 0.18, 0.1), n(25));
   const skin = new THREE.MeshPhysicalNodeMaterial({ color: look.skin, roughness: 0.55, sheen: 0.3, sheenColor: new THREE.Color(0xffc4a0) });
   const wood = new THREE.MeshStandardNodeMaterial({ roughness: 0.75 });
-  wood.colorNode = mix(vec3(0.22, 0.13, 0.06), vec3(0.4, 0.25, 0.12), mx_noise_float(positionLocal.mul(vec3(3, 30, 3))).mul(0.5).add(0.5));
+  wood.colorNode = mix(vec3(0.22, 0.13, 0.06), vec3(0.4, 0.25, 0.12), mx_noise_float(positionGeometry.mul(vec3(3, 30, 3))).mul(0.5).add(0.5));
   // team-colored glowing details (gems, eyes, arrowheads) so a wave reads at a glance
   const glow = new THREE.MeshStandardNodeMaterial({ roughness: 0.3 });
   const g = new THREE.Color(look.glow);
@@ -202,10 +205,18 @@ function materials(team: Team): Record<Mat, THREE.Material> {
   return { cloth, trim, metal, leather, skin, wood, glow };
 }
 
+/** One material's share of a (team, type, part): the batch and an instance per minion slot. */
+interface Slot {
+  mesh: THREE.BatchedMesh;
+  ids: number[];
+}
+
 interface Batch {
   rig: Rig;
-  meshes: Record<Part, THREE.InstancedMesh[]>;
+  slots: Record<Part, Slot[]>;
   count: number;
+  /** Minion slots whose instances are visible. */
+  shown: number;
 }
 
 interface Pose {
@@ -231,26 +242,43 @@ export class MinionViews {
     this.group.name = 'minions';
     for (const team of ['order', 'chaos'] as const) {
       const mats = materials(team);
+      const byMat = new Map<Mat, { type: MinionType; part: Part; geo: THREE.BufferGeometry }[]>();
       for (const type of TYPES) {
         const kit: Kit = { body: {}, legL: {}, legR: {}, arm: {} };
         const rig = BUILDERS[type](kit);
-        const meshes = { body: [], legL: [], legR: [], arm: [] } as Record<Part, THREE.InstancedMesh[]>;
-        for (const p of PARTS) {
-          for (const [mat, geos] of Object.entries(kit[p]) as [Mat, THREE.BufferGeometry[]][]) {
-            const merged = mergeGeometries(geos, false);
-            if (!merged) continue;
-            const mesh = new THREE.InstancedMesh(merged, mats[mat], CAPACITY[type]);
-            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            mesh.frustumCulled = false;
-            mesh.count = 0;
-            mesh.visible = false;
-            meshes[p].push(mesh);
-            this.group.add(mesh);
+        this.batches.set(`${team}:${type}`, { rig, slots: { body: [], legL: [], legR: [], arm: [] }, count: 0, shown: 0 });
+        for (const part of PARTS) {
+          for (const [mat, geos] of Object.entries(kit[part]) as [Mat, THREE.BufferGeometry[]][]) {
+            const geo = mergeGeometries(geos, false);
+            if (!geo) continue;
+            let list = byMat.get(mat);
+            if (!list) byMat.set(mat, (list = []));
+            list.push({ type, part, geo });
           }
         }
-        this.batches.set(`${team}:${type}`, { rig, meshes, count: 0 });
+      }
+      for (const [mat, list] of byMat) {
+        const instances = list.reduce((n, e) => n + CAPACITY[e.type], 0);
+        const vertices = list.reduce((n, e) => n + e.geo.getAttribute('position').count, 0);
+        const mesh = new THREE.BatchedMesh(instances, vertices, 0, mats[mat]);
+        // instances only change when minions spawn or die, and a few hundred
+        // native draws cost less than culling and sorting them every pass
+        mesh.perObjectFrustumCulled = false;
+        mesh.sortObjects = false;
+        mesh.frustumCulled = false;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.visible = false;
+        for (const e of list) {
+          const geometry = mesh.addGeometry(e.geo);
+          const ids = Array.from({ length: CAPACITY[e.type] }, () => {
+            const id = mesh.addInstance(geometry);
+            mesh.setVisibleAt(id, false);
+            return id;
+          });
+          this.batches.get(`${team}:${e.type}`)!.slots[e.part].push({ mesh, ids });
+        }
+        this.group.add(mesh);
       }
     }
   }
@@ -281,14 +309,15 @@ export class MinionViews {
       b.count++;
     }
     for (const u of this.poses.keys()) if (!seen.has(u)) this.poses.delete(u);
+    for (const mesh of this.group.children) mesh.visible = false;
     for (const b of this.batches.values()) {
       for (const p of PARTS) {
-        for (const mesh of b.meshes[p]) {
-          mesh.count = b.count;
-          mesh.visible = b.count > 0;
-          mesh.instanceMatrix.needsUpdate = true;
+        for (const { mesh, ids } of b.slots[p]) {
+          for (let i = Math.min(b.count, b.shown); i < Math.max(b.count, b.shown); i++) mesh.setVisibleAt(ids[i]!, i < b.count);
+          if (b.count > 0) mesh.visible = true;
         }
       }
+      b.shown = b.count;
     }
   }
 
@@ -319,7 +348,7 @@ export class MinionViews {
     const write = (p: Part) => {
       this.part.updateMatrix();
       this.m.multiplyMatrices(this.root.matrix, this.part.matrix);
-      for (const mesh of b.meshes[p]) mesh.setMatrixAt(index, this.m);
+      for (const { mesh, ids } of b.slots[p]) mesh.setMatrixAt(ids[index]!, this.m);
     };
     this.part.scale.set(1, 1, 1);
     this.part.position.set(0, 0, 0);

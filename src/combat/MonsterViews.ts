@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
-import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionLocal, sin, smoothstep, time, uniform, uv, vec3, vec4 } from '../render/tsl';
+import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionGeometry, sin, smoothstep, time, uniform, uv, vec3, vec4 } from '../render/tsl';
 import type { CampKind } from '../map/ConquestLayout';
+import { skinRigid } from '../scene/merge';
 import { BUFF_COLOR } from '../scene/conquest/Props';
 import { MonsterBrain } from '../sim/Jungle';
 import type { Unit } from '../sim/Unit';
@@ -13,7 +14,10 @@ import type { Unit } from '../sim/Unit';
  *  - Wardens: hulking mossy stone guardians that keep the buff altars, with
  *    a crystal heart, eye slit and rune bands lit in the buff's color, and
  *    shards orbiting their heads. They wind up a two-fisted slam.
- * Each monster is a small hierarchy of rigid parts posed every frame.
+ * Each monster is a small hierarchy of rigid parts posed every frame, drawn
+ * as one skinned mesh per material (`skinRigid`): the pivots are its bones.
+ * Materials read `positionGeometry`, the part's unposed position, so patterns
+ * stay on the body as it moves.
  */
 
 /** Buff camp colors: the map's altar crystal colors, so a Warden matches its altar. */
@@ -34,14 +38,14 @@ export interface MonsterView {
 let shared: ReturnType<typeof buildShared> | null = null;
 const glowCache = new Map<number, THREE.Material>();
 
-function n(s: number, p = positionLocal) {
+function n(s: number, p = positionGeometry) {
   return mx_noise_float(p.mul(s)).mul(0.5).add(0.5);
 }
 
 function buildShared() {
   // shaggy fur: dark umber with moss-green tips, darker underneath
   const fur = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.92, sheen: 0.6, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x8fa060) });
-  const streak = mx_noise_float(vec3(positionLocal.x.mul(18), positionLocal.y.mul(5), positionLocal.z.mul(18))).mul(0.5).add(0.5);
+  const streak = mx_noise_float(vec3(positionGeometry.x.mul(18), positionGeometry.y.mul(5), positionGeometry.z.mul(18))).mul(0.5).add(0.5);
   const top = smoothstep(-0.2, 0.8, normalWorld.y);
   fur.colorNode = mix(vec3(0.09, 0.06, 0.035), mix(vec3(0.24, 0.16, 0.08), vec3(0.3, 0.34, 0.12), n(4).mul(top)), streak.mul(0.6).add(top.mul(0.4)));
   // bare hide on the snout and legs
@@ -120,6 +124,11 @@ function mesh(parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material
   return o;
 }
 
+/** Room for every pose of a monster `height` tall: raised fists, a lunge, a tail sweep. */
+function bounds(height: number): THREE.Sphere {
+  return new THREE.Sphere(new THREE.Vector3(0, height / 2, 0), height * 0.9 + 1);
+}
+
 function pivot(parent: THREE.Object3D, x: number, y: number, z: number): THREE.Group {
   const g = new THREE.Group();
   g.position.set(x, y, z);
@@ -185,6 +194,7 @@ function thornback(alpha: boolean): MonsterView {
     mesh(leg, geo('tb-hoof', () => new THREE.CylinderGeometry(0.07, 0.085, 0.08, 10)), m.hoof, 0, -0.56, 0.03);
     legs.push(leg);
   }
+  skinRigid(root, alpha ? 'thornback-alpha' : 'thornback', rig, [], bounds(1.25 * s));
 
   let phase = Math.random() * 10;
   let breath = Math.random() * 10;
@@ -305,6 +315,7 @@ function giant(o: GiantOptions): MonsterView {
     mesh(arm, geo('wd-fist', () => rock(0.64, 20).scale(1.05, 0.95, 1.1)), stone, 0, -1.95, 0.1);
     arms.push(arm);
   }
+  skinRigid(root, o.molten ? 'colossus' : 'warden', body, [heart, ring, ...shards], bounds(3.6 * o.scale));
 
   let phase = Math.random() * 10;
   let t = Math.random() * 10;
@@ -355,8 +366,9 @@ function giant(o: GiantOptions): MonsterView {
         for (const arm of arms) arm.rotation.x = k * 0.8;
         heart.scale.setScalar(Math.max(0.01, 1 - k));
         core?.scale.setScalar(Math.max(0.001, 1.3 * (1 - k)));
-        orbit.visible = k < 0.4;
-      } else orbit.visible = true;
+        // (the shards are skinned: shrink them away rather than hiding the pivot)
+        orbit.scale.setScalar(k < 0.4 ? 1 : 1e-4);
+      } else orbit.scale.setScalar(1);
     },
   };
 }
@@ -426,7 +438,7 @@ function lavaStone(): THREE.Material {
   if (lava) return lava;
   const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.9 });
   // object space, so the cracks stay put on the Colossus's body as it moves
-  const p = positionLocal;
+  const p = positionGeometry;
   const basalt = mix(vec3(0.05, 0.04, 0.04), vec3(0.17, 0.13, 0.12), n(2.5, p).mul(0.7).add(n(11, p).mul(0.3)));
   // noise zero-crossings make a branching crack network; a finer octave adds hairline cracks
   const wide = smoothstep(0.06, 0.0, abs(mx_noise_float(p.mul(0.9))));
@@ -472,7 +484,7 @@ function bezier(out: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, c: THREE
 function wyrm(): MonsterView {
   const scales = new THREE.MeshPhysicalNodeMaterial({ metalness: 0.8, roughness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.3 });
   // object space: the coils move every frame, and world-space scales would slide across them
-  const cell = mx_worley_noise_float(positionLocal.mul(3.2));
+  const cell = mx_worley_noise_float(positionGeometry.mul(3.2));
   const rim = smoothstep(0.15, 0.55, cell);
   const belly = smoothstep(-0.05, -0.45, normalWorld.y);
   const gold = mix(vec3(1, 0.8, 0.32), vec3(0.5, 0.27, 0.06), rim);
@@ -508,6 +520,7 @@ function wyrm(): MonsterView {
   const jaw = pivot(head, 0, -0.15, 0.15);
   mesh(jaw, geo('wy-jaw', () => new THREE.SphereGeometry(0.36, 16, 10).scale(0.85, 0.35, 1.7)), scales, 0, -0.1, 0.5);
   for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) mesh(jaw, geo('wy-tooth', () => new THREE.ConeGeometry(0.035, 0.16, 6)), ivory, sx * (0.12 + i * 0.07), 0.02, 0.95 - i * 0.18);
+  skinRigid(root, 'wyrm', root, [...segs, ...fins.filter((f) => f !== null)], bounds(5.6));
 
   const P = Array.from({ length: WYRM_SEGMENTS }, () => new THREE.Vector3());
   const a = new THREE.Vector3();

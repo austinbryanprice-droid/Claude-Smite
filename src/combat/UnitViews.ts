@@ -64,6 +64,12 @@ function buildDummy(): THREE.Group {
 const OFFSCREEN_EVERY = 8;
 /** The longest step GodModel.animate takes without dropping time. */
 const MAX_ANIM_DT = 1 / 20;
+/**
+ * Gods and monsters farther than this from the camera cast no shadow. The sun's
+ * far cascades cover the whole map, so every jungle camp otherwise drew its
+ * dozens of parts into them each frame: most of a frame's draw calls.
+ */
+const SHADOW_RANGE = 55;
 
 interface UnitView {
   root: THREE.Group;
@@ -87,6 +93,9 @@ interface UnitView {
   animDt: number;
   /** Staggers reduced-rate animation so gods don't all update on the same frame. */
   stagger: number;
+  /** The meshes that cast shadows when near the camera, collected on first use. */
+  casters?: THREE.Mesh[];
+  shadows?: boolean;
 }
 
 /**
@@ -153,6 +162,7 @@ export class UnitViews {
       seen.add(u);
       const v = this.views.get(u) ?? this.create(u);
       this.animate(u, v, dt, alpha);
+      if (!v.structure && this.camera) this.setShadows(v, this.camera.position.distanceToSquared(v.root.position) < SHADOW_RANGE ** 2);
       if (u.kind === 'minion') minions.push(u);
       if (v.structure && !v.external) v.structure.update(dt, time);
     }
@@ -170,6 +180,18 @@ export class UnitViews {
       this.prev.delete(u);
       this.cur.delete(u);
     }
+  }
+
+  private setShadows(v: UnitView, on: boolean): void {
+    if (v.shadows === on) return;
+    if (!v.casters) {
+      v.casters = [];
+      v.root.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh && o.castShadow) v.casters!.push(o as THREE.Mesh);
+      });
+    }
+    v.shadows = on;
+    for (const m of v.casters) m.castShadow = on;
   }
 
   onEvent(e: SimEvent): void {

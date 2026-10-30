@@ -117,6 +117,10 @@ interface Loco {
   speed: number;
 }
 
+function sameSkeleton(a: THREE.Skeleton, b: THREE.Skeleton): boolean {
+  return a.bones.length === b.bones.length && a.bones.every((bone, i) => bone === b.bones[i] && a.boneInverses[i]!.equals(b.boneInverses[i]!));
+}
+
 /**
  * A god: a skinned MakeHuman-based body with armor, hair and cloth, built
  * offline by tools/gods/build.py, on the shared UAL skeleton. Animation
@@ -205,6 +209,15 @@ export class GodModel {
       sphere.radius += 1.2;
       mesh.boundingSphere = sphere;
       mesh.frustumCulled = true;
+    });
+    // the clone gives every piece its own skeleton: share one, so the bones are
+    // computed and uploaded once a frame instead of once per piece
+    let skeleton: THREE.Skeleton | null = null;
+    scene.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (!mesh.isSkinnedMesh) return;
+      if (!skeleton) skeleton = mesh.skeleton;
+      else if (sameSkeleton(mesh.skeleton, skeleton)) mesh.bind(skeleton, mesh.bindMatrix);
     });
     const bone = (n: string) => this.bones.get(n.replace(/\./g, ''))!;
     this.head = bone('DEF-head');

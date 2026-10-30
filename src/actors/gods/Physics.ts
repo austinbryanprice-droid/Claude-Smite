@@ -106,7 +106,10 @@ class Sheet {
     this.mesh.name = spec.name;
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
-    this.mesh.frustumCulled = false;
+    // vertices are rewritten every frame in the god's space: cull against a fixed
+    // sphere around the body that a flaring cape never leaves, so a god off
+    // screen (or outside a shadow cascade) skips its cloth too
+    this.geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.1, 0), 2.6);
   }
 
   private targetOf(i: number, out: THREE.Vector3): THREE.Vector3 {
