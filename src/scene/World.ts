@@ -4,7 +4,7 @@ import { arenaTerrain } from './ArenaTerrain';
 import { CollisionWorld } from './Collision';
 import { ConquestMap } from './conquest/ConquestMap';
 import { conquestTerrain } from './conquest/ConquestTerrain';
-import { DustMotes, type Fire } from './Effects';
+import { DustMotes, FireBatch, type Fire } from './Effects';
 import { Environment } from './Environment';
 import { occlusionFocus } from './Foliage';
 import { Grass } from './Grass';
@@ -61,6 +61,8 @@ export class World {
   readonly materials: MaterialLibrary;
   readonly collision: CollisionWorld;
   readonly dust: DustMotes;
+  /** The flames and embers of every fire on the map, drawn together. */
+  private readonly fireBatch = new FireBatch();
   /**
    * Point lights the combat effects move onto the brightest spells each frame.
    * They belong to the map, not the match, so the shaders prepared while
@@ -100,7 +102,7 @@ export class World {
     this.static.add(this.content.group, this.grass.group);
     if (this.content.dynamic) this.scene.add(this.content.dynamic);
     this.dust = new DustMotes(600, this.environment.sunDirection);
-    this.vfx.add(this.dust.sprite);
+    this.vfx.add(this.dust.sprite, this.fireBatch.group);
     for (let i = 0; i < SPELL_LIGHTS; i++) {
       const l = new THREE.PointLight(0xffffff, 0, 14, 2);
       l.castShadow = false;
@@ -114,6 +116,7 @@ export class World {
       o.matrixAutoUpdate = false;
     });
     this.static.updateMatrixWorld(true);
+    this.fireBatch.update();
   }
 
   async applyQuality(renderer: THREE.WebGPURenderer, q: QualitySettings): Promise<void> {
@@ -190,6 +193,7 @@ export class World {
     occlusionFocus.value.copy(focus);
     this.environment.update();
     this.content.update(dt, t, this.camera);
+    this.fireBatch.update();
     this.grass.update(this.camera, focus);
     // the map's own lights only say where the light is; the pool does the lighting
     const near = this.near;

@@ -1,19 +1,30 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, cameraPosition, color, float, fract, hash, instanceIndex, mix, mx_fractal_noise_float, mx_noise_float,
+  abs, attribute, cameraPosition, color, float, fract, hash, instanceIndex, mix, mx_fractal_noise_float, mx_noise_float,
   pow, sin, cos, smoothstep, time, uniform, uv, vec2, vec3, vec4,
 } from '../render/tsl';
-import { Layers } from '../render/Layers';
-import { instancedSprite, objectUniforms, useUniforms } from '../render/shared';
+import { spriteQuads } from '../render/shared';
 
 type FirePalette = { low: number; high: number; ember: number; light: number };
 
-/** Each fire's own values for the flame and ember materials every fire shares. */
-const fireUniforms = () => ({ seed: 0, size: 1, strength: 1, low: new THREE.Color(), high: new THREE.Color(), ember: new THREE.Color() });
+/** Embers each fire throws up. */
+const EMBERS = 28;
 let fireMaterials: { flame: THREE.SpriteNodeMaterial; embers: THREE.SpriteNodeMaterial } | null = null;
 
+/**
+ * The flame and ember materials of `FireBatch`, which reads each fire's own
+ * values from per-copy attributes: `fireAt` (where the fire's base is, and its
+ * size, 0 while hidden), `fireState` (seed and strength) and its colours.
+ */
 function makeFireMaterials(): NonNullable<typeof fireMaterials> {
-  const { seed: s, size: sz, strength, low, high, ember } = objectUniforms(fireUniforms());
+  const at = attribute('fireAt', 'vec4');
+  const state = attribute('fireState', 'vec2');
+  const sz = at.w;
+  const s = state.x;
+  const strength = state.y;
+  const low = attribute('fireLow', 'vec3');
+  const high = attribute('fireHigh', 'vec3');
+  const ember = attribute('fireEmber', 'vec3');
   const flame = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const u = uv();
   const t = time.mul(1.6).add(s);
@@ -28,6 +39,7 @@ function makeFireMaterials(): NonNullable<typeof fireMaterials> {
   const col = mix(low, high, heat).mul(mix(float(2.2), float(9.0), heat));
   flame.colorNode = vec4(col.mul(lick).mul(strength), 1);
   flame.opacityNode = lick.mul(strength);
+  flame.positionNode = at.xyz.add(vec3(0, sz.mul(0.62), 0));
   flame.scaleNode = vec2(0.85, 1.5).mul(sz);
 
   // Embers: instanced sprites whose motion is computed entirely on the GPU.
@@ -36,11 +48,11 @@ function makeFireMaterials(): NonNullable<typeof fireMaterials> {
   const life = fract(time.mul(hash(id.add(s)).mul(0.35).add(0.3)).add(hash(id.mul(3.1))));
   const ang = hash(id.mul(7.7)).mul(6.283).add(time.mul(0.8));
   const spread = life.mul(0.55).mul(sz);
-  embers.positionNode = vec3(
+  embers.positionNode = at.xyz.add(vec3(
     cos(ang).mul(spread).add(sin(life.mul(9).add(id)).mul(0.08)),
     life.mul(2.6).add(0.4).mul(sz),
     sin(ang).mul(spread),
-  );
+  ));
   const emberSize = float(0.035).mul(float(1).sub(life)).mul(sz).mul(hash(id.mul(1.7)).add(0.5));
   embers.scaleNode = vec2(emberSize, emberSize);
   const dot = smoothstep(0.5, 0.0, uv().sub(0.5).length());
@@ -49,64 +61,137 @@ function makeFireMaterials(): NonNullable<typeof fireMaterials> {
   return { flame, embers };
 }
 
+/** Fires made since a `FireBatch` last took them in. */
+const unbatched: Fire[] = [];
+
 /**
  * Fire for braziers and torches: a billboarded flame shader (HDR, so it
- * feeds bloom), rising embers, and a flickering point light. Every fire
- * shares the same two materials (and shaders), with its own seed, size,
- * colours and strength.
+ * feeds bloom), rising embers, and a flickering point light. A `FireBatch`
+ * draws the flame and embers of every fire; the fire's group says where it
+ * is and whether it shows.
  */
 export class Fire {
   readonly group = new THREE.Group();
   readonly light: THREE.PointLight;
-  private readonly seed: number;
+  readonly low: THREE.Color;
+  readonly high: THREE.Color;
+  readonly ember: THREE.Color;
+  /** 0..1 master strength, for fires that die down or flare. */
+  strength = 1;
   private readonly baseIntensity: number;
-  private readonly values = fireUniforms();
 
   constructor(
-    position: THREE.Vector3, size = 1, seed = Math.random() * 100, lightIntensity = 30,
+    position: THREE.Vector3, readonly size = 1, readonly seed = Math.random() * 100, lightIntensity = 30,
     palette: FirePalette = { low: 0xff3a08, high: 0xffc46a, ember: 0xff8a2a, light: 0xff8a3c },
   ) {
-    this.seed = seed;
     this.baseIntensity = lightIntensity;
     this.group.position.copy(position);
     this.group.name = 'fire';
-    const v = this.values;
-    v.seed = seed;
-    v.size = size;
-    v.low.setHex(palette.low);
-    v.high.setHex(palette.high);
-    v.ember.setHex(palette.ember);
-    const materials = (fireMaterials ??= makeFireMaterials());
-
-    const flame = new THREE.Sprite(materials.flame);
-    flame.position.y = 0.62 * size;
-    flame.layers.set(Layers.WORLD);
-    flame.renderOrder = 10;
-    const embers = instancedSprite(materials.embers, 28);
-    embers.frustumCulled = false;
-    embers.renderOrder = 11;
-    this.group.add(flame, embers);
-    useUniforms(v, flame, embers);
-
+    this.low = new THREE.Color(palette.low);
+    this.high = new THREE.Color(palette.high);
+    this.ember = new THREE.Color(palette.ember);
     this.light = new THREE.PointLight(palette.light, lightIntensity, 18 * size, 2);
     this.light.position.y = 0.9 * size;
     this.light.castShadow = false;
     this.group.add(this.light);
-  }
-
-  /** 0..1 master strength, for fires that die down or flare. */
-  get strength(): number {
-    return this.values.strength;
-  }
-
-  set strength(k: number) {
-    this.values.strength = k;
+    unbatched.push(this);
   }
 
   update(time: number): void {
     const f = Math.sin(time * 11.3 + this.seed) * 0.08 + Math.sin(time * 23.7 + this.seed * 2) * 0.05 + Math.sin(time * 5.1) * 0.06;
-    this.light.intensity = this.baseIntensity * (1 + f) * this.values.strength;
+    this.light.intensity = this.baseIntensity * (1 + f) * this.strength;
   }
+}
+
+/** Per-copy attributes of one of `FireBatch`'s sprites. */
+interface FireCopies {
+  at: THREE.InstancedBufferAttribute;
+  state: THREE.InstancedBufferAttribute;
+}
+
+/**
+ * Draws the flames and embers of every fire: two draw calls in all, where
+ * each fire's own sprites cost two (about 70 a frame on Conquest, the embers
+ * drawn even off screen). `update` copies where each fire is, its size (0
+ * while its group is hidden) and its strength into per-copy attributes.
+ */
+export class FireBatch {
+  readonly group = new THREE.Group();
+  private readonly fires: Fire[] = [];
+  private flames: FireCopies | null = null;
+  private embers: FireCopies | null = null;
+  private readonly at = new THREE.Vector3();
+
+  constructor() {
+    this.group.name = 'fires';
+  }
+
+  update(): void {
+    if (unbatched.length) this.build();
+    const flames = this.flames;
+    const embers = this.embers;
+    if (!flames || !embers) return;
+    let moved = false;
+    for (let i = 0; i < this.fires.length; i++) {
+      const f = this.fires[i]!;
+      const m = f.group.matrixWorld.elements;
+      const at = this.at.set(m[12]!, m[13]!, m[14]!);
+      const size = shown(f.group) ? f.size * Math.hypot(m[0]!, m[1]!, m[2]!) : 0;
+      const a = flames.at.array;
+      if (a[i * 4] === at.x && a[i * 4 + 1] === at.y && a[i * 4 + 2] === at.z && a[i * 4 + 3] === size && flames.state.array[i * 2 + 1] === f.strength) continue;
+      moved = true;
+      for (const [copies, first, count] of [[flames, i, 1], [embers, i * EMBERS, EMBERS]] as const) {
+        for (let k = first; k < first + count; k++) {
+          copies.at.setXYZW(k, at.x, at.y, at.z, size);
+          copies.state.setXY(k, f.seed, f.strength);
+        }
+      }
+    }
+    if (!moved) return;
+    for (const c of [flames, embers]) c.at.needsUpdate = c.state.needsUpdate = true;
+  }
+
+  /**
+   * Takes in the fires made since the last build. Fires are all made while
+   * the map loads, so this runs once; the old geometries are left to the
+   * garbage collector because disposing them would destroy the sprite quad
+   * they share.
+   */
+  private build(): void {
+    this.fires.push(...unbatched.splice(0));
+    const n = this.fires.length;
+    const materials = (fireMaterials ??= makeFireMaterials());
+    const sprite = (material: THREE.SpriteNodeMaterial, copies: number, colors: [string, (f: Fire) => THREE.Color][], renderOrder: number) => {
+      const s = new THREE.Sprite(material);
+      const g = (s.geometry = spriteQuads(copies, true));
+      const per = copies / n;
+      const at = new THREE.InstancedBufferAttribute(new Float32Array(copies * 4), 4).setUsage(THREE.DynamicDrawUsage);
+      const state = new THREE.InstancedBufferAttribute(new Float32Array(copies * 2), 2).setUsage(THREE.DynamicDrawUsage);
+      g.setAttribute('fireAt', at);
+      g.setAttribute('fireState', state);
+      for (const [name, pick] of colors) {
+        const c = new THREE.InstancedBufferAttribute(new Float32Array(copies * 3), 3);
+        for (let k = 0; k < copies; k++) pick(this.fires[Math.floor(k / per)]!).toArray(c.array, k * 3);
+        g.setAttribute(name, c);
+      }
+      s.frustumCulled = false;
+      s.renderOrder = renderOrder;
+      this.group.add(s);
+      return { at, state };
+    };
+    this.group.clear();
+    this.flames = sprite(materials.flame, n, [['fireLow', (f) => f.low], ['fireHigh', (f) => f.high]], 10);
+    this.embers = sprite(materials.embers, n * EMBERS, [['fireEmber', (f) => f.ember]], 11);
+  }
+}
+
+/** True when the object and all its ancestors are visible, up to a scene. */
+function shown(o: THREE.Object3D | null): boolean {
+  for (; o; o = o.parent) {
+    if (!o.visible) return false;
+    if ((o as THREE.Scene).isScene) return true;
+  }
+  return false;
 }
 
 /**
