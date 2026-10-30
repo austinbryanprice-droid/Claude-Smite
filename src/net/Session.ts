@@ -12,7 +12,7 @@ export interface Msg {
 const PREFIX = 'ascendant-lobby-';
 /** No 0/O or 1/I, so a code read aloud or typed from a screenshot comes out right. */
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const JOIN_TIMEOUT = 20000;
+const JOIN_TIMEOUT = 45000;
 
 function newCode(): string {
   let s = '';
