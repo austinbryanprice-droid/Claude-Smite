@@ -49,6 +49,8 @@ export class Hud {
     this.help.innerHTML = `<div class="help-panel"><h3>Controls</h3>${controlsHtml()}
       <h3 class="help-gap">Settings</h3>
       <label class="help-row">Mouse sensitivity <input class="help-sens" type="range" min="0.25" max="3" step="0.05"><span class="help-sens-val"></span></label>
+      <h3 class="help-gap">Performance</h3>
+      <div class="help-row"><button class="help-report">Copy performance report</button><span class="help-report-note">Frame timings from the last minute of play, to paste into a lag report.</span></div>
       <div class="help-actions"><button class="help-resume">Resume</button><button class="help-quit">Quit to title</button></div>
       <div class="help-foot">Press H to close.</div></div>`;
     this.help.addEventListener('click', (e) => {
@@ -74,6 +76,7 @@ export class Hud {
         /* storage unavailable */
       }
     });
+    this.help.querySelector('.help-report')!.addEventListener('click', () => this.copyReport());
     document.body.appendChild(this.help);
     this.fps = this.root.querySelector('.hud-fps')!;
     this.stats = this.root.querySelector('.hud-stats')!;
@@ -89,6 +92,30 @@ export class Hud {
   }
 
   setQuality: (q: QualityName) => void;
+
+  /** Builds the text the performance report button copies. */
+  report: (() => string) | null = null;
+
+  private copyReport(): void {
+    if (!this.report) return;
+    const text = this.report();
+    const note = this.help.querySelector<HTMLSpanElement>('.help-report-note')!;
+    const show = () => {
+      // no clipboard access: show the text selected, ready for Ctrl+C
+      let box = this.help.querySelector<HTMLTextAreaElement>('.help-report-text');
+      if (!box) {
+        box = document.createElement('textarea');
+        box.className = 'help-report-text';
+        box.readOnly = true;
+        this.help.querySelector('.help-report')!.parentElement!.after(box);
+      }
+      box.value = text;
+      box.select();
+      note.textContent = 'Press Ctrl+C to copy the selected report.';
+    };
+    if (!navigator.clipboard) return show();
+    navigator.clipboard.writeText(text).then(() => (note.textContent = 'Copied. Paste it into your message.'), show);
+  }
 
   progress(f: number, text?: string): void {
     this.bar.style.width = `${Math.round(f * 100)}%`;
