@@ -1,4 +1,5 @@
 import type * as THREE from 'three/webgpu';
+import { DRAW_KINDS } from './AsyncPipelines';
 
 /** Seconds of play the report covers. */
 const WINDOW = 60;
@@ -66,6 +67,8 @@ export class PerfStats {
   private readonly interval = new Float32Array(SIZE);
   private readonly cpu = new Float32Array(SIZE);
   private readonly phase = PHASES.map(() => new Float32Array(SIZE));
+  private readonly draws = DRAW_KINDS.map(() => new Float32Array(SIZE));
+  private readonly drawsSeen = DRAW_KINDS.map(() => 0);
   private readonly gpuAt = new Float64Array(SIZE);
   private readonly gpu = new Float32Array(SIZE);
   private n = 0;
@@ -159,11 +162,15 @@ export class PerfStats {
   }
 
   /**
-   * Call last thing in a frame with the running count of shaders generated;
-   * returns the milliseconds the frame's code took.
+   * Call last thing in a frame with the running count of shaders generated
+   * and of draws by kind; returns the milliseconds the frame's code took.
    */
-  end(shaders: number): number {
+  end(shaders: number, draws: readonly number[] = this.drawsSeen): number {
     const i = this.n % SIZE;
+    for (let k = 0; k < DRAW_KINDS.length; k++) {
+      this.draws[k]![i] = draws[k]! - this.drawsSeen[k]!;
+      this.drawsSeen[k] = draws[k]!;
+    }
     const cpu = performance.now() - this.t0;
     this.cpu[i] = cpu;
     this.lastCpu = cpu;
@@ -255,6 +262,10 @@ export class PerfStats {
       `  by phase (avg / p99): ${PHASES.map((name, k) => {
         const v = this.recent(this.phase[k]!, this.at, this.n);
         return `${name} ${ms(v.reduce((s, x) => s + x, 0) / Math.max(1, v.length))} / ${ms(percentile(v, 0.99))}`;
+      }).join(' · ')}`,
+      `Draws per frame (avg / p99): ${DRAW_KINDS.map((name, k) => {
+        const v = this.recent(this.draws[k]!, this.at, this.n);
+        return `${name} ${Math.round(v.reduce((s, x) => s + x, 0) / Math.max(1, v.length))} / ${Math.round(percentile(v, 0.99))}`;
       }).join(' · ')}`,
       gpu.length ? `GPU ms/frame: ${dist(gpu)}` : 'GPU ms/frame: not measurable in this browser',
       `Stalls since load: ${this.counts.over50} over 50 ms · ${this.counts.over100} over 100 ms · ${this.counts.over250} over 250 ms · ${this.counts.over1000} over 1 s`,

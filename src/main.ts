@@ -267,7 +267,7 @@ async function main(): Promise<void> {
     input.endFrame();
     hud.frame(dt);
     // (not inside the call below: `?.` would skip it when auto quality is off)
-    const cpu = perf.end(pipelines.built);
+    const cpu = perf.end(pipelines.built, pipelines.draws);
     // the real interval: the loop's dt is clamped to 100 ms, which would make a
     // very slow GPU look CPU bound and hide stalls from auto quality
     autoQuality?.frame(perf.gap / 1000, cpu);

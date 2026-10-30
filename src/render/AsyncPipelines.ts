@@ -23,7 +23,11 @@ interface DrawInternals {
 interface RenderObjectLike {
   _nodeBuilderState: unknown;
   object: { isQuadMesh?: boolean };
+  camera: { isOrthographicCamera?: boolean };
 }
+
+/** The kinds of draw counted apart: scene passes, shadow maps, and full-screen effects. */
+export const DRAW_KINDS = ['scene', 'shadow', 'screen'] as const;
 
 /** What three hands its node-builder hook: a render object, or a compute node. */
 interface BuiltFor {
@@ -70,6 +74,8 @@ export class AsyncPipelines {
   readonly builtFor = new Map<string, number>();
   /** Draws put off to a later frame because the frame's shader budget was spent. */
   deferred = 0;
+  /** Draws sent since start, by `DRAW_KINDS`. */
+  readonly draws = DRAW_KINDS.map(() => 0);
   private idle: (() => void)[] = [];
   /** Milliseconds of shader generation a frame may spend, once `limitShaderBuilds` is on. */
   private shaderBudget: number | null = null;
@@ -91,7 +97,10 @@ export class AsyncPipelines {
       const draw = backend.draw.bind(backend);
       // full-screen passes still run, on the empty scene
       backend.draw = (renderObject, info) => {
-        if (!this.preparing || renderObject.object.isQuadMesh) draw(renderObject, info);
+        const screen = renderObject.object.isQuadMesh === true;
+        if (this.preparing && !screen) return;
+        this.draws[screen ? 2 : renderObject.camera.isOrthographicCamera ? 1 : 0]!++;
+        draw(renderObject, info);
       };
     }
     const cache = (renderer as unknown as { _pipelines?: PipelineCache })._pipelines;
