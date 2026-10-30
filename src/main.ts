@@ -21,6 +21,7 @@ import { mapFromUrl, World } from './scene/World';
 import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
 import { monsterWarmup } from './combat/MonsterViews';
+import { buildDummy } from './combat/UnitViews';
 import { GODS, godById } from './game/gods';
 import { savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
 import { installErrorHandlers, showFatal } from './ui/Fatal';
@@ -144,7 +145,10 @@ async function main(): Promise<void> {
     // every god and monster, kept until the match's own last preparation
     const models = new THREE.Group();
     for (const g of GODS) models.add(new GodModel(g.id).root);
+    // Odin's Einherjar (summons are drawn on the fallback god's body, in their own colors)
+    models.add(new GodModel('zeus', 'einherjar').root);
     if (mode === 'conquest') for (const root of monsterWarmup()) models.add(root);
+    else models.add(buildDummy());
     world.actors.add(models);
     await prepareShaders(world, post, 0.85, 0.86);
     return { world, post, models };

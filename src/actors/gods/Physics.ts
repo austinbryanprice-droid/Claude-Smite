@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ClothSpec, GodMeta } from './assets';
 
 /** One capsule collider in a bone's space (a == b makes a sphere). */
@@ -13,8 +14,7 @@ interface Collider {
 
 /** A simulated sheet: capes, skirt panels, loincloths, hair locks and ribbons. */
 class Sheet {
-  readonly mesh: THREE.Mesh;
-  private readonly n: number;
+  readonly n: number;
   private readonly pos: Float32Array;
   private readonly prev: Float32Array;
   /** Rest point of each particle in its drive bone's space. */
@@ -31,14 +31,15 @@ class Sheet {
   private readonly rows: number;
   private readonly cols: number;
   private readonly target = new THREE.Vector3();
-  private readonly geo: THREE.BufferGeometry;
+  /** This sheet's vertices in its mesh, shared with the god's other sheets of the same material. */
+  private positions!: Float32Array;
+  private normals!: Float32Array;
   private initialized = false;
 
   constructor(
     spec: ClothSpec,
     bones: Map<string, THREE.Bone>,
     bind: (bone: THREE.Bone) => THREE.Matrix4,
-    material: THREE.Material,
     private readonly colliders: Collider[],
     private readonly gravity: number,
     private readonly damping: number,
@@ -90,44 +91,12 @@ class Sheet {
       this.share[k * 2] = (2 * wa) / sum;
       this.share[k * 2 + 1] = (2 * wb) / sum;
     }
+  }
 
-    this.geo = new THREE.BufferGeometry();
-    this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.n * 3), 3));
-    this.geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(this.n * 3), 3));
-    const uv = new Float32Array(this.n * 2);
-    const color = new Float32Array(this.n * 4);
-    for (let i = 0; i < this.n; i++) {
-      const u = spec.uvs?.[i];
-      uv[i * 2] = u ? u[0]! : (i % cols) / (cols - 1);
-      uv[i * 2 + 1] = u ? u[1]! : Math.floor(i / cols) / (rows - 1);
-      color[i * 4] = Math.floor(i / cols) / (rows - 1);
-      color[i * 4 + 1] = 0.5;
-    }
-    this.geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    this.geo.setAttribute('color', new THREE.BufferAttribute(color, 4));
-    const ones = new Float32Array(this.n).fill(1);
-    this.geo.setAttribute('_edge', new THREE.BufferAttribute(ones, 1));
-    this.geo.setAttribute('_side', new THREE.BufferAttribute(ones.slice(), 1));
-    // occlusion: shadowed where the sheet tucks under its belt or collar
-    const ao = new Float32Array(this.n);
-    for (let i = 0; i < this.n; i++) ao[i] = 0.55 + 0.45 * Math.min(1, Math.floor(i / cols) / Math.max(1, (rows - 1) * 0.2));
-    this.geo.setAttribute('_ao', new THREE.BufferAttribute(ao, 1));
-    const index: number[] = [];
-    for (let r = 0; r < rows - 1; r++) {
-      for (let c = 0; c < cols - 1; c++) {
-        const a = id(r, c), b = id(r, c + 1), d = id(r + 1, c), e = id(r + 1, c + 1);
-        index.push(a, d, b, b, d, e);
-      }
-    }
-    this.geo.setIndex(index);
-    this.mesh = new THREE.Mesh(this.geo, material);
-    this.mesh.name = spec.name;
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-    // vertices are rewritten every frame in the god's space: cull against a fixed
-    // sphere around the body that a flaring cape never leaves, so a god off
-    // screen (or outside a shadow cascade) skips its cloth too
-    this.geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.1, 0), 2.6);
+  /** Draws this sheet as the `n` vertices from `at` in a mesh's position and normal arrays. */
+  attach(positions: Float32Array, normals: Float32Array, at: number): void {
+    this.positions = positions.subarray(at * 3, (at + this.n) * 3);
+    this.normals = normals.subarray(at * 3, (at + this.n) * 3);
   }
 
   private targetOf(i: number, out: THREE.Vector3): THREE.Vector3 {
@@ -229,8 +198,7 @@ class Sheet {
 
   /** Copies the particles into the mesh, in the space of `space` (the god's root). */
   write(inverse: THREE.Matrix4): void {
-    const attr = this.geo.getAttribute('position') as THREE.BufferAttribute;
-    const out = attr.array as Float32Array;
+    const out = this.positions;
     const e = inverse.elements;
     const p = this.pos;
     for (let o = 0; o < this.n * 3; o += 3) {
@@ -239,7 +207,6 @@ class Sheet {
       out[o + 1] = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
       out[o + 2] = e[2]! * x + e[6]! * y + e[10]! * z + e[14]!;
     }
-    attr.needsUpdate = true;
     this.gridNormals(out);
   }
 
@@ -249,8 +216,7 @@ class Sheet {
    * cheaper than computeVertexNormals walking every face.
    */
   private gridNormals(p: Float32Array): void {
-    const attr = this.geo.getAttribute('normal') as THREE.BufferAttribute;
-    const out = attr.array as Float32Array;
+    const out = this.normals;
     const { rows, cols } = this;
     for (let r = 0; r < rows; r++) {
       const up = Math.max(0, r - 1) * cols;
@@ -269,7 +235,6 @@ class Sheet {
         out[o] = nx / len; out[o + 1] = ny / len; out[o + 2] = nz / len;
       }
     }
-    attr.needsUpdate = true;
   }
 
   /** Average distance moved by the drive targets since the last step (teleport detection). */
@@ -280,14 +245,54 @@ class Sheet {
   }
 }
 
+/** A sheet's mesh data: a rows x cols grid whose positions and normals `Sheet.write` fills in. */
+function sheetGeometry(spec: ClothSpec): THREE.BufferGeometry {
+  const { rows, cols } = spec;
+  const n = rows * cols;
+  const id = (r: number, c: number) => r * cols + c;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const uv = new Float32Array(n * 2);
+  const color = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const u = spec.uvs?.[i];
+    uv[i * 2] = u ? u[0]! : (i % cols) / (cols - 1);
+    uv[i * 2 + 1] = u ? u[1]! : Math.floor(i / cols) / (rows - 1);
+    color[i * 4] = Math.floor(i / cols) / (rows - 1);
+    color[i * 4 + 1] = 0.5;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(color, 4));
+  const ones = new Float32Array(n).fill(1);
+  geo.setAttribute('_edge', new THREE.BufferAttribute(ones, 1));
+  geo.setAttribute('_side', new THREE.BufferAttribute(ones.slice(), 1));
+  // occlusion: shadowed where the sheet tucks under its belt or collar
+  const ao = new Float32Array(n);
+  for (let i = 0; i < n; i++) ao[i] = 0.55 + 0.45 * Math.min(1, Math.floor(i / cols) / Math.max(1, (rows - 1) * 0.2));
+  geo.setAttribute('_ao', new THREE.BufferAttribute(ao, 1));
+  const index: number[] = [];
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const a = id(r, c), b = id(r, c + 1), d = id(r + 1, c), e = id(r + 1, c + 1);
+      index.push(a, d, b, b, d, e);
+    }
+  }
+  geo.setIndex(index);
+  return geo;
+}
+
 /**
  * Secondary motion for capes, cloth strips and hair locks: Verlet sheets in
  * world space, pulled toward their animated (skinned) rest shape with a
  * strength that fades from the pinned edge to the hem, colliding with
- * capsules on the body. Runs at a fixed 60 Hz.
+ * capsules on the body. Runs at a fixed 60 Hz. A god's sheets of one material
+ * are one mesh, so a cape and loincloth draw once (and once per shadow cascade).
  */
 export class SecondaryPhysics {
   private readonly sheets: Sheet[] = [];
+  /** The position and normal attributes of the cloth meshes, rewritten every frame. */
+  private readonly outputs: THREE.BufferAttribute[] = [];
   private readonly colliders: Collider[] = [];
   private acc = 0;
   private readonly inv = new THREE.Matrix4();
@@ -320,11 +325,35 @@ export class SecondaryPhysics {
         wa: new THREE.Vector3(), wb: new THREE.Vector3(),
       });
     }
+    const byMaterial = new Map<THREE.Material, { sheets: Sheet[]; geos: THREE.BufferGeometry[] }>();
     for (const spec of meta.cloths) {
       const mat = materials.get(spec.material) ?? materials.get('default')!;
-      const sheet = new Sheet(spec, bones, bind, mat, this.colliders, spec.gravity ?? 9.8, spec.damping ?? 0.03);
+      const sheet = new Sheet(spec, bones, bind, this.colliders, spec.gravity ?? 9.8, spec.damping ?? 0.03);
       this.sheets.push(sheet);
-      root.add(sheet.mesh);
+      let group = byMaterial.get(mat);
+      if (!group) byMaterial.set(mat, (group = { sheets: [], geos: [] }));
+      group.sheets.push(sheet);
+      group.geos.push(sheetGeometry(spec));
+    }
+    for (const [material, { sheets, geos }] of byMaterial) {
+      const geometry = mergeGeometries(geos, false)!;
+      // vertices are rewritten every frame in the god's space: cull against a fixed
+      // sphere around the body that a flaring cape never leaves, so a god off
+      // screen (or outside a shadow cascade) skips its cloth too
+      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.1, 0), 2.6);
+      const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+      const normal = geometry.getAttribute('normal') as THREE.BufferAttribute;
+      let at = 0;
+      for (const sheet of sheets) {
+        sheet.attach(position.array as Float32Array, normal.array as Float32Array, at);
+        at += sheet.n;
+      }
+      this.outputs.push(position, normal);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = 'cloth';
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      root.add(mesh);
     }
   }
 
@@ -343,5 +372,6 @@ export class SecondaryPhysics {
     }
     this.inv.copy(this.root.matrixWorld).invert();
     for (const s of this.sheets) s.write(this.inv);
+    for (const a of this.outputs) a.needsUpdate = true;
   }
 }

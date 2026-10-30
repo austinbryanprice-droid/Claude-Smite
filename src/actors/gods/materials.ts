@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
   abs, attribute, color, float, fract, max, min, mix, mx_fractal_noise_float, mx_noise_float, normalView,
-  positionLocal, positionView, pow, saturate, sin, smoothstep, time, uv, vec3,
+  positionLocal, positionView, pow, saturate, select, sin, smoothstep, time, uv, vec3,
 } from '../../render/tsl';
 
 /**
@@ -323,4 +323,80 @@ function buildMaterials(id: string, variant?: string): Map<string, THREE.Materia
     if (nm.colorNode && name !== 'glow' && name !== 'eye') nm.colorNode = nm.colorNode.mul(mix(float(1), ao(), 0.92));
   }
   return m;
+}
+
+/**
+ * The part materials each combined material draws, in the order of the
+ * `_part` vertex attribute. Metals share the studio reflections; everything
+ * else is the body.
+ */
+export const COMBINED: Record<string, readonly string[]> = {
+  metal: ['gold', 'goldplain', 'steel'],
+  body: ['skin', 'cloth', 'clothplain', 'cloth2', 'stripes', 'leather', 'hair', 'fur', 'eye', 'gem', 'glow'],
+};
+
+const combinedCache = new Map<string, Map<string, THREE.Material>>();
+
+/**
+ * One material per `COMBINED` group for one god (shared by every instance),
+ * shading each vertex's part (`_part`) exactly as that part's own material
+ * does, so a god draws in two calls instead of one per material. Only the
+ * `present` parts are compiled in.
+ */
+export function combinedMaterials(id: string, variant: string | undefined, present: ReadonlySet<string>): Map<string, THREE.Material> {
+  const key = `${id}/${variant ?? ''}`;
+  let out = combinedCache.get(key);
+  if (!out) {
+    const mats = godMaterials(id, variant);
+    out = new Map();
+    for (const [name, parts] of Object.entries(COMBINED)) {
+      const used = parts.map((p) => (present.has(p) ? (mats.get(p) as THREE.MeshPhysicalNodeMaterial) : undefined));
+      if (used.some(Boolean)) out.set(name, combine(name, used));
+    }
+    combinedCache.set(key, out);
+  }
+  return out;
+}
+
+function combine(name: string, parts: readonly (THREE.MeshPhysicalNodeMaterial | undefined)[]): THREE.MeshPhysicalNodeMaterial {
+  const part = attribute('_part', 'float');
+  // Every part's nodes run and the vertex's part picks one (`uniformFlow`
+  // makes each pick a select() rather than an if: values shared between parts,
+  // like the vertex data, would otherwise be computed only inside the first
+  // part's branch). Parts are small on screen, so the extra math is cheap.
+  const pick = (of: (m: THREE.MeshPhysicalNodeMaterial, lit: boolean) => any): any => {
+    let node: any = null;
+    parts.forEach((m, i) => {
+      if (!m) return;
+      const v = of(m, !(m as unknown as THREE.MeshBasicNodeMaterial).isMeshBasicNodeMaterial);
+      node = node === null ? v : select(part.sub(i).abs().lessThan(0.5), v, node).uniformFlow();
+    });
+    // As a variable: a uniform-flow select built a second time (three reads
+    // metalness twice) returns a variable it never assigned, which shaded
+    // metal with full diffuse, grey instead of mirror-dark.
+    return node.toVar();
+  };
+  const used = parts.filter((m): m is THREE.MeshPhysicalNodeMaterial => !!m);
+  const c = new THREE.MeshPhysicalNodeMaterial({ side: used.some((m) => m.side === THREE.DoubleSide) ? THREE.DoubleSide : THREE.FrontSide });
+  // an unlit glow becomes pure emission
+  c.colorNode = pick((m, lit) => (lit ? vec3(m.colorNode ?? color(m.color)) : vec3(0)));
+  c.emissiveNode = pick((m, lit) => (lit ? vec3(m.emissiveNode ?? color(m.emissive).mul(m.emissiveIntensity)) : vec3(m.colorNode)));
+  c.roughnessNode = pick((m, lit) => (lit ? float(m.roughnessNode ?? m.roughness) : float(1)));
+  c.metalnessNode = pick((m, lit) => (lit ? float(m.metalnessNode ?? m.metalness) : float(0)));
+  // zero sheen and zero clearcoat shade exactly as a material without them
+  if (used.some((m) => m.sheen > 0)) {
+    c.sheenNode = pick((m, lit) => (lit && m.sheen > 0 ? color(m.sheenColor).mul(m.sheen) : vec3(0)));
+    c.sheenRoughnessNode = pick((m, lit) => float(lit ? m.sheenRoughness : 1));
+  }
+  if (used.some((m) => m.clearcoat > 0)) {
+    c.clearcoatNode = pick((m, lit) => float(lit ? m.clearcoat : 0));
+    c.clearcoatRoughnessNode = pick((m, lit) => float(lit ? m.clearcoatRoughness : 0));
+  }
+  const env = used.find((m) => m.envMap);
+  if (env) {
+    c.envMap = env.envMap;
+    c.envMapIntensity = env.envMapIntensity;
+  }
+  c.name = name;
+  return c;
 }

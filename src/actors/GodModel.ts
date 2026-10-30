@@ -1,9 +1,9 @@
 import * as THREE from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { godAsset, type GodAsset } from './gods/assets';
-import { godMaterials } from './gods/materials';
+import { combinedMaterials, COMBINED, godMaterials } from './gods/materials';
 import { SecondaryPhysics } from './gods/Physics';
-import { castSkinnedAsOne } from '../scene/merge';
+import { castSkinnedAsOne, mergeSkinned } from '../scene/merge';
 import { color, luminance } from '../render/tsl';
 
 /** Locomotion input the model animates from. All values are per frame. */
@@ -23,6 +23,10 @@ export interface LocomotionState {
  * baked AO already darkens them in contact. Saves ~100k triangles per cascade.
  */
 const NO_SHADOW = new Set(['hair', 'eye', 'gem', 'glow']);
+
+/** Geometry every model of one god shares: shadow stand-ins and pieces merged per combined material. */
+const standIns = new Map<string, { geometry?: THREE.BufferGeometry }>();
+const combinedPieces = new Map<string, THREE.BufferGeometry>();
 
 /**
  * Per-god body language layered on the shared cast clip, so each god casts in
@@ -187,7 +191,10 @@ export class GodModel {
   private stanceWeight = 1;
   private readonly tmpV = new THREE.Vector3();
 
-  /** `shadowStandIn: false` leaves each piece casting its own shadow, for callers that re-dress the model (see `castSkinnedAsOne`). */
+  /**
+   * `shadowStandIn: false` leaves each piece in its own material and casting
+   * its own shadow, for callers that re-dress the model (see `castSkinnedAsOne`).
+   */
   constructor(god: string | object = 'zeus', variant?: string, { shadowStandIn = true } = {}) {
     this.id = typeof god === 'string' ? god : 'zeus';
     this.asset = godAsset(this.id);
@@ -223,7 +230,10 @@ export class GodModel {
       if (!skeleton) skeleton = mesh.skeleton;
       else if (sameSkeleton(mesh.skeleton, skeleton)) mesh.bind(skeleton, mesh.bindMatrix);
     });
-    if (shadowStandIn) castSkinnedAsOne(scene);
+    if (shadowStandIn) {
+      castSkinnedAsOne(scene, standIns);
+      this.combineParts(scene, variant);
+    }
     const bone = (n: string) => this.bones.get(n.replace(/\./g, ''))!;
     this.head = bone('DEF-head');
     this.chest = bone('DEF-spine.003');
@@ -297,6 +307,33 @@ export class GodModel {
   }
 
   /**
+   * Redraws each piece in its part's combined material and merges the pieces
+   * that share one, so the god draws twice (metal and body) instead of once
+   * per material (see `combinedMaterials`). The pieces' `_part` attribute
+   * tells the combined material which part each vertex is.
+   */
+  private combineParts(scene: THREE.Object3D, variant?: string): void {
+    const meshes: THREE.SkinnedMesh[] = [];
+    scene.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.layers.isEnabled(0)) meshes.push(o as THREE.SkinnedMesh);
+    });
+    const present = new Set(meshes.map((m) => (m.material as THREE.Material).name));
+    const combined = combinedMaterials(this.asset.id, variant, present);
+    for (const mesh of meshes) {
+      const name = (mesh.material as THREE.Material).name;
+      for (const [group, parts] of Object.entries(COMBINED)) {
+        const part = parts.indexOf(name);
+        if (part < 0) continue;
+        // (the geometry is the asset's, shared by every model of this god)
+        const geo = mesh.geometry;
+        if (!geo.getAttribute('_part')) geo.setAttribute('_part', new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute('position').count).fill(part), 1));
+        mesh.material = combined.get(group)!;
+      }
+    }
+    mergeSkinned(scene, combinedPieces);
+  }
+
+  /**
    * Recolors this instance's metal armor (gold and steel), e.g. a team color on a
    * Titan statue. Clones the shared materials, so other gods are unaffected.
    */
@@ -306,7 +343,7 @@ export class GodModel {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       const src = mesh.material as THREE.MeshPhysicalNodeMaterial;
-      if (!/^(gold|goldplain|steel)$/.test(src.name)) return;
+      if (!/^(metal|gold|goldplain|steel)$/.test(src.name)) return;
       let m = done.get(src);
       if (!m) {
         const c = src.clone();

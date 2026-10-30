@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, float, max, min, normalView, positionView, pow, saturate, smoothstep, uniform, uv, vec3, vec4 } from '../render/tsl';
+import { abs, float, max, min, normalView, positionView, pow, saturate, smoothstep, uv, vec3, vec4 } from '../render/tsl';
 import type { CCKind } from '../game/types';
 import type { Unit } from '../sim/Unit';
 
@@ -23,7 +23,7 @@ function starMaterial(hex: number): THREE.SpriteNodeMaterial {
   return m;
 }
 
-function ringMaterial(hex: number, fade: ReturnType<typeof uniform>): THREE.MeshBasicNodeMaterial {
+function ringMaterial(hex: number, fade: number): THREE.MeshBasicNodeMaterial {
   const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
   const c = new THREE.Color(hex);
   // drawn on a flat quad: a soft band near the edge, clear inside
@@ -43,31 +43,36 @@ function shieldMaterial(): THREE.MeshBasicNodeMaterial {
   return m;
 }
 
+/** The materials every god's status shares, so a new status builds no shader. */
+interface StatusLook {
+  star: THREE.SpriteNodeMaterial;
+  shield: THREE.MeshBasicNodeMaterial;
+  root: THREE.MeshBasicNodeMaterial;
+  slow: THREE.MeshBasicNodeMaterial;
+  ring: THREE.PlaneGeometry;
+  bubble: THREE.SphereGeometry;
+}
+
 /** What one god shows: stars when dazed, a ground ring when rooted or slowed, a bubble while shielded. */
 class Status {
   readonly group = new THREE.Group();
-  private readonly stars: THREE.Sprite[] = [];
-  private readonly ring: THREE.Mesh;
-  private readonly rootMat: THREE.MeshBasicNodeMaterial;
-  private readonly slowMat: THREE.MeshBasicNodeMaterial;
-  private readonly bubble: THREE.Mesh;
-  private readonly ringFade = uniform(1);
+  readonly stars: THREE.Sprite[] = [];
+  readonly ring: THREE.Mesh;
+  readonly bubble: THREE.Mesh;
 
-  constructor(starMat: THREE.SpriteNodeMaterial, shieldMat: THREE.MeshBasicNodeMaterial, ringGeo: THREE.PlaneGeometry, bubbleGeo: THREE.SphereGeometry) {
+  constructor(private readonly look: StatusLook) {
     for (let i = 0; i < 3; i++) {
-      const s = new THREE.Sprite(starMat);
+      const s = new THREE.Sprite(look.star);
       s.scale.setScalar(0.6);
       s.renderOrder = 14;
       this.stars.push(s);
       this.group.add(s);
     }
-    this.rootMat = ringMaterial(ROOT, this.ringFade);
-    this.slowMat = ringMaterial(SLOW, this.ringFade);
-    this.ring = new THREE.Mesh(ringGeo, this.rootMat);
+    this.ring = new THREE.Mesh(look.ring, look.root);
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.renderOrder = 12;
     this.group.add(this.ring);
-    this.bubble = new THREE.Mesh(bubbleGeo, shieldMat);
+    this.bubble = new THREE.Mesh(look.bubble, look.shield);
     this.bubble.renderOrder = 12;
     this.group.add(this.bubble);
   }
@@ -96,12 +101,11 @@ class Status {
     }
     this.ring.visible = rooted || slowed;
     if (this.ring.visible) {
-      this.ring.material = rooted ? this.rootMat : this.slowMat;
+      this.ring.material = rooted ? this.look.root : this.look.slow;
       const pulse = 1 + Math.sin(t * (rooted ? 9 : 4)) * 0.06;
       const r = (u.radius + 0.55) * 2 * pulse;
       this.ring.scale.set(r, r, 1);
       this.ring.position.set(x, y + 0.12, z);
-      this.ringFade.value = rooted ? 1 : 0.7;
     }
     this.bubble.visible = shielded;
     if (shielded) {
@@ -122,13 +126,34 @@ export class StatusAuras {
   readonly group = new THREE.Group();
   private readonly live = new Map<Unit, Status>();
   private readonly pool: Status[] = [];
-  private readonly starMat = starMaterial(STAR);
-  private readonly shieldMat = shieldMaterial();
-  private readonly ringGeo = new THREE.PlaneGeometry(1, 1);
-  private readonly bubbleGeo = new THREE.SphereGeometry(1, 20, 14);
+  private readonly look: StatusLook = {
+    star: starMaterial(STAR),
+    shield: shieldMaterial(),
+    root: ringMaterial(ROOT, 1),
+    slow: ringMaterial(SLOW, 0.7),
+    ring: new THREE.PlaneGeometry(1, 1),
+    bubble: new THREE.SphereGeometry(1, 20, 14),
+  };
 
   constructor() {
     this.group.name = 'status-auras';
+  }
+
+  /**
+   * Shows every part of two idle statuses (the ring rooted on one, slowed on
+   * the other) until the returned function puts them away, so that a loading
+   * frame prepares their shaders: the first stun or root of a match built them.
+   */
+  prime(): () => void {
+    const shown = [new Status(this.look), new Status(this.look)];
+    shown[1]!.ring.material = this.look.slow;
+    for (const s of shown) this.group.add(s.group);
+    return () => {
+      for (const s of shown) {
+        this.group.remove(s.group);
+        this.pool.push(s);
+      }
+    };
   }
 
   frame(units: readonly Unit[], t: number, visible: (u: Unit) => boolean): void {
@@ -137,7 +162,7 @@ export class StatusAuras {
       if (u.kind !== 'god' || !u.alive || !visible(u)) continue;
       let s = this.live.get(u);
       if (!s) {
-        s = this.pool.pop() ?? new Status(this.starMat, this.shieldMat, this.ringGeo, this.bubbleGeo);
+        s = this.pool.pop() ?? new Status(this.look);
         if (!s.place(u, t)) {
           this.pool.push(s);
           continue;

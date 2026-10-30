@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  attribute, bool, cameraPosition, dFdx, dFdy, dot, float, floor, hash, length, log2, max, mix,
+  attribute, cameraPosition, dFdx, dFdy, dot, float, floor, frontFacing, hash, length, log2, max, mix,
   normalViewGeometry, normalize, positionWorld, pow, screenCoordinate, sin, smoothstep, step, texture,
   time, uniform, uv, vec3,
 } from '../render/tsl';
@@ -8,11 +8,13 @@ import { rng } from '../core/random';
 import type { TextureLibrary } from './Materials';
 import { hypot } from '../core/math';
 import { placedGeometry, placeInstances } from '../render/shared';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
  * Procedural trees, bushes and ferns. Each species is grown on the CPU into a
- * few variant meshes (a bark trunk and leaf cards from the foliage atlas),
- * then drawn as instanced chunks so frustum and shadow culling still work.
+ * few variant meshes (a bark trunk and leaf cards from the foliage atlas, in
+ * one geometry and one material so a tree is one draw), then drawn as
+ * instanced chunks so frustum and shadow culling still work.
  *
  * Leaf cards carry normals pointing out of their cluster, so each canopy
  * shades as one soft volume rather than a scatter of flat planes; this is the
@@ -205,11 +207,10 @@ function fronds(b: GeoBuilder, origin: THREE.Vector3, count: number, length: num
 }
 
 interface Variant {
-  trunk: THREE.BufferGeometry | null;
-  leaves: THREE.BufferGeometry;
+  /** Trunk and leaves together; the `leaf` attribute is 1 on leaves, 0 on bark. */
+  hi: THREE.BufferGeometry;
   /** Distant level of detail: fewer, larger cards and thinner tubes. */
-  trunkLo: THREE.BufferGeometry | null;
-  leavesLo: THREE.BufferGeometry;
+  lo: THREE.BufferGeometry;
   /** Footprint radius for spacing and collision. */
   radius: number;
 }
@@ -217,7 +218,19 @@ interface Variant {
 function grow(species: SpeciesName, seed: number): Variant {
   const hi = growDetail(species, seed, 1);
   const lo = growDetail(species, seed, 0);
-  return { trunk: hi.trunk, leaves: hi.leaves, trunkLo: lo.trunk, leavesLo: lo.leaves, radius: hi.radius };
+  return { hi: oneMesh(hi.trunk, hi.leaves), lo: oneMesh(lo.trunk, lo.leaves), radius: hi.radius };
+}
+
+/** A trunk and its leaves as one geometry, told apart by the `leaf` attribute. */
+function oneMesh(trunk: THREE.BufferGeometry | null, leaves: THREE.BufferGeometry): THREE.BufferGeometry {
+  const flag = (g: THREE.BufferGeometry, v: number) => {
+    g.setAttribute('leaf', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position!.count).fill(v), 1));
+    return g;
+  };
+  if (!trunk) return flag(leaves, 1);
+  const g = mergeGeometries([flag(trunk, 0), flag(leaves, 1)])!;
+  g.computeBoundingSphere();
+  return g;
 }
 
 /** Grows one level of detail; the shape (branches, clusters) is the same for both. */
@@ -362,7 +375,7 @@ interface Part {
 /** Floats per instance in `Batch.placements`: x, y, z, scale, cos(yaw), sin(yaw). */
 const PLACEMENT = 6;
 
-/** Every instance of one species variant's trunk or leaves, map-wide. */
+/** Every instance of one species variant, map-wide. */
 interface Batch {
   /**
    * Near instances with the detailed geometry; farther ones, low detail, still
@@ -397,8 +410,7 @@ function place(part: Part, at: number, b: Batch, i: number): void {
 export class Foliage {
   readonly group = new THREE.Group();
   private readonly variants = new Map<SpeciesName, Variant[]>();
-  private readonly bark: THREE.MeshStandardNodeMaterial;
-  private readonly leaves: THREE.MeshStandardNodeMaterial;
+  private readonly material: THREE.MeshStandardNodeMaterial;
   readonly wind = { strength: uniform(1) };
   private batches: Batch[] = [];
   /** Camera position (x, z) at the last split. */
@@ -424,8 +436,7 @@ export class Foliage {
     for (const s of Object.keys(VARIANTS) as SpeciesName[]) {
       this.variants.set(s, Array.from({ length: VARIANTS[s] }, () => grow(s, seed++)));
     }
-    this.bark = this.buildBark(textures);
-    this.leaves = this.buildLeaves(textures);
+    this.material = this.buildMaterial(textures);
   }
 
   /** Footprint radius of a species, for spacing. */
@@ -433,72 +444,78 @@ export class Foliage {
     return Math.max(...this.variants.get(species)!.map((v) => v.radius));
   }
 
-  /** Wind sway shared by trunks and leaves, from the instance-placed position: bends with height, phase per instance. */
-  private swayNode(placed: any, extraFlutter: boolean): any {
+  /**
+   * Wind sway shared by trunks and leaves, from the instance-placed position:
+   * bends with height, phase per instance. Leaves (`flutter` 1) also flutter.
+   */
+  private swayNode(placed: any, flutter: any): any {
     const s = attribute('sway', 'float');
     const phase = hash(attribute('seed', 'float')).mul(6.283);
     const t = time.mul(1.1).add(phase);
     const k = this.wind.strength.mul(s);
-    let offset = vec3(sin(t).mul(0.22), 0, sin(t.mul(0.83).add(1.7)).mul(0.16)).mul(k);
-    if (extraFlutter) {
-      const f = sin(time.mul(5.3).add(placed.x.mul(2.1)).add(placed.z.mul(1.7)).add(phase)).mul(0.035);
-      offset = offset.add(vec3(f, f.mul(0.6), f.negate())).mul(1);
-    }
-    return placed.add(offset);
+    const offset = vec3(sin(t).mul(0.22), 0, sin(t.mul(0.83).add(1.7)).mul(0.16)).mul(k);
+    const f = sin(time.mul(5.3).add(placed.x.mul(2.1)).add(placed.z.mul(1.7)).add(phase)).mul(0.035).mul(flutter);
+    return placed.add(offset).add(vec3(f, f.mul(0.6), f.negate()));
   }
 
-  private buildBark(textures: TextureLibrary): THREE.MeshStandardNodeMaterial {
-    const set = textures.get('bark');
-    const mat = new THREE.MeshStandardNodeMaterial();
-    const c = texture(set.albedo, uv());
-    const nr = texture(set.nr, uv());
-    mat.positionNode = this.swayNode(placeInstances(mat), false);
-    mat.colorNode = c.rgb.mul(mix(vec3(0.9, 0.86, 0.8), vec3(1.08, 1.0, 0.92), hash(attribute('seed', 'float').add(7))));
-    mat.roughnessNode = nr.z;
-    mat.metalnessNode = float(0);
-    mat.maskNode = keepUnoccluded();
-    mat.maskShadowNode = bool(true);
-    mat.name = 'bark';
-    return mat;
-  }
-
-  private buildLeaves(textures: TextureLibrary): THREE.MeshStandardNodeMaterial {
+  /**
+   * Bark and leaves in one material, so a tree is one draw: the `leaf`
+   * attribute picks between them per vertex. (Both textures are sampled
+   * everywhere: WGSL only allows implicit-mip sampling in uniform control
+   * flow.) Trunks are closed tubes, so drawing them double-sided like the
+   * leaf cards only adds hidden back faces.
+   */
+  private buildMaterial(textures: TextureLibrary): THREE.MeshStandardNodeMaterial {
     const mat = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
+    const leaf = attribute('leaf', 'float');
+    const seed = attribute('seed', 'float');
+
+    // bark: tinted per instance, roughness from the bark set
+    const set = textures.get('bark');
+    const barkTex = texture(set.albedo, uv());
+    const nr = texture(set.nr, uv());
+    const barkColor = barkTex.rgb.mul(mix(vec3(0.9, 0.86, 0.8), vec3(1.08, 1.0, 0.92), hash(seed.add(7))));
+
     const tex = texture(textures.foliage, uv());
     // Keep alpha-tested cards from thinning out in the distance: scale alpha
     // up with the mip level (Ben Golus's coverage fix).
     const texel = uv().mul(1024);
     const d = max(dot(dFdx(texel), dFdx(texel)), dot(dFdy(texel), dFdy(texel)));
     const mip = max(float(0), log2(d).mul(0.5));
-    mat.opacityNode = tex.a.mul(float(1).add(mip.mul(0.3)));
+    mat.opacityNode = mix(float(1), tex.a.mul(float(1).add(mip.mul(0.3))), leaf);
     // As a node, not `alphaTest`: shadow passes copy `alphaTest` onto their
     // shared material, and every flip between 0 and non-zero bumps its version,
     // which made every shadow draw rebuild its material key, every frame.
     // (Shadows never used it: leaf cards cast with alpha 1 either way.)
     mat.alphaTestNode = float(0.5);
-    mat.positionNode = this.swayNode(placeInstances(mat), true);
+    mat.positionNode = this.swayNode(placeInstances(mat), leaf);
 
     // Per-instance hue shift between yellow-green and blue-green.
     // (a stable seed, not instanceIndex: instances move between the near and far meshes)
-    const seed = attribute('seed', 'float');
     const tint = mix(mix(vec3(1.0, 1.02, 0.6), vec3(0.82, 1.0, 0.84), smoothish(hash(seed))), vec3(0.7, 0.95, 1.0), smoothish(hash(seed.add(3))).mul(0.5));
+    // bark has shade 1, so this only darkens leaves
     const shade = attribute('shade', 'float');
     // deep, cool greens with dark crown interiors, as in the reference jungle
-    const col = tex.rgb.mul(tint).mul(0.88);
-    mat.colorNode = col;
+    const leafColor = tex.rgb.mul(tint).mul(0.88);
+    mat.colorNode = mix(barkColor, leafColor, leaf);
     mat.aoNode = shade.mul(shade);
-    // Normals come from the cluster shape and must not flip on back faces.
+    // Leaf normals come from the cluster shape and must not flip on back faces;
+    // on bark, the front faces are the only ones seen, and keep their normals.
     mat.normalNode = normalViewGeometry;
-    mat.roughnessNode = float(0.62);
+    mat.roughnessNode = mix(nr.z, float(0.62), leaf);
     mat.metalnessNode = float(0);
     // Fake subsurface: leaves glow when the sun is behind them.
     const viewDir = normalize(positionWorld.sub(cameraPosition));
     const sun = uniform(this.sunDirection);
     const back = pow(max(dot(viewDir, sun), float(0)), float(4)).mul(0.3).add(0.03);
-    mat.emissiveNode = col.mul(vec3(1.0, 0.92, 0.55)).mul(back).mul(shade);
-    mat.maskNode = keepUnoccluded();
-    mat.maskShadowNode = bool(true);
-    mat.name = 'leaves';
+    mat.emissiveNode = leafColor.mul(vec3(1.0, 0.92, 0.55)).mul(back).mul(shade).mul(leaf);
+    // Bark keeps only its front faces, as when it had a front-sided material of
+    // its own. (Trunk tubes are wound inward, so that is the far wall, lit like
+    // the tree's sunny side; the map's look was tuned with it.) It casts from
+    // its back faces, as a front-sided material does. Leaves draw and cast both.
+    mat.maskNode = keepUnoccluded().and(leaf.greaterThan(0.5).or(frontFacing));
+    mat.maskShadowNode = leaf.greaterThan(0.5).or(frontFacing.not());
+    mat.name = 'foliage';
     return mat;
 
     function smoothish(x: any): any {
@@ -627,8 +644,7 @@ export class Foliage {
         bounds.radius += parts[0]!.reach * maxScale;
         this.batches.push({ parts, placements, seeds, bounds });
       };
-      if (variant.trunk) make(variant.trunk, variant.trunkLo!, this.bark);
-      make(variant.leaves, variant.leavesLo, this.leaves);
+      make(variant.hi, variant.lo, this.material);
     }
   }
 }
