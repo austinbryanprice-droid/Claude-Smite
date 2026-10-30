@@ -131,10 +131,14 @@ export class PerfStats {
     return count ? sum / count : null;
   }
 
+  /** Milliseconds since the previous frame, unclamped; 0 after a hidden tab or on the first frame. */
+  gap = 0;
+
   /** Call first thing in a frame, with the animation frame's timestamp. */
   begin(now: number): void {
     const i = this.n % SIZE;
     const gap = this.skip || this.lastNow < 0 ? 0 : now - this.lastNow;
+    this.gap = gap;
     this.interval[i] = gap;
     this.skip = false;
     this.lastNow = now;

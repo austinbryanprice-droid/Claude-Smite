@@ -234,7 +234,9 @@ async function main(): Promise<void> {
     hud.frame(dt);
     // (not inside the call below: `?.` would skip it when auto quality is off)
     const cpu = perf.end(pipelines.done + pipelines.pending);
-    autoQuality?.frame(dt, cpu);
+    // the real interval: the loop's dt is clamped to 100 ms, which would make a
+    // very slow GPU look CPU bound and hide stalls from auto quality
+    autoQuality?.frame(perf.gap / 1000, cpu);
   };
   // `?capture` leaves the loop stopped so automated screenshots can step frames
   // themselves (software GPUs in CI can't keep up with a live loop).

@@ -164,7 +164,8 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
       copy.className = 'sm-compat';
       copy.textContent = 'Copy flag address';
       copy.addEventListener('click', () => {
-        void navigator.clipboard?.writeText(advice.copy!).then(() => (copy.textContent = 'Copied: paste it in the address bar'));
+        // (a refused clipboard leaves the address in the text above to copy by hand)
+        navigator.clipboard?.writeText(advice.copy!).then(() => (copy.textContent = 'Copied: paste it in the address bar'), () => (copy.textContent = 'Copy it from the text above'));
       });
       warn.appendChild(copy);
     }
