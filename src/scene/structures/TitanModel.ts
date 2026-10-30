@@ -5,6 +5,7 @@ import { lathe } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
 import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, showWear, TEAM_STYLE, TeamMaterials, wearUniforms } from './common';
 import type { StructureModel } from './TowerModel';
+import { castSkinnedAsOne } from '../merge';
 
 /** Seconds from `attack()` to the moment the slam lands. */
 export const TITAN_HIT_DELAY = 0.35;
@@ -61,7 +62,7 @@ export class TitanModel implements StructureModel {
     }
 
     // The statue reuses a god rig, re-dressed in stone, team trim and team cloth.
-    this.statue = new GodModel('zeus');
+    this.statue = new GodModel('zeus', undefined, { shadowStandIn: false });
     const dress: Record<string, THREE.Material> = {
       gold: tm.trim, goldplain: tm.trim, steel: tm.trim, leather: lib.bronze,
       cloth: tm.banner, clothplain: tm.banner, gem: tm.crystal, glow: tm.crystal,
@@ -81,6 +82,7 @@ export class TitanModel implements StructureModel {
         o.receiveShadow = true;
       }
     });
+    castSkinnedAsOne(this.statue.root);
 
     this.light = new THREE.PointLight(style.fire.light, 40, 22, 2);
     this.light.position.set(0, DAIS_TOP + 0.5, 0);

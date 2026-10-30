@@ -20,4 +20,9 @@ export const Layers = {
    * give the main camera's layers (it does for a camera on layer 0 alone).
    */
   FAR_SHADOW: 4,
+  /**
+   * Shadow stand-ins (see `castAsOne` in scene/merge.ts): one mesh casting the
+   * shadow of a model's meshes. Only the shadow cascades' cameras see it.
+   */
+  SHADOW_ONLY: 5,
 } as const;
