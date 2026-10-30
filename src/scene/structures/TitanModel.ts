@@ -19,6 +19,9 @@ const DAIS_TOP = 1.05;
 export class TitanModel implements StructureModel {
   readonly root = new THREE.Group();
   readonly height = DAIS_TOP + 2.45 * SCALE + 0.6;
+  get solidTop(): number {
+    return this.destroyed > 0.5 ? DAIS_TOP + 0.6 : Infinity;
+  }
   readonly muzzle = new THREE.Object3D();
   private readonly statue: GodModel;
   private readonly body = new THREE.Group();

@@ -21,6 +21,8 @@ export interface StructureModel {
   setDamage(d: number): void;
   /** 0 = standing, 1 = rubble. */
   setDestroyed(t: number): void;
+  /** Height above the root that still blocks the follow camera: everything while standing, the rubble once fallen. */
+  readonly solidTop: number;
   update(dt: number, time: number): void;
 }
 
@@ -42,6 +44,9 @@ function frustum(bottom: number, top: number, y0: number, y1: number): THREE.Buf
 export class TowerModel implements StructureModel {
   readonly root = new THREE.Group();
   readonly height = 11.8;
+  get solidTop(): number {
+    return this.destroyed > 0.5 ? 1.2 : Infinity;
+  }
   readonly muzzle = new THREE.Object3D();
   private readonly upper = new THREE.Group();
   private readonly crystal: THREE.Mesh;

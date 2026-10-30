@@ -30,6 +30,7 @@ export type GroundSurface = (x: number, z: number) => number | null;
 
 export class CollisionWorld {
   readonly colliders: Collider[] = [];
+  private readonly cameraBlockers: Collider[] = [];
   private readonly surfaces: GroundSurface[] = [];
   /** Signed distance to the edge of the walkable area (positive inside), if the map has walls. */
   private walkable: ((x: number, z: number) => number) | null = null;
@@ -42,6 +43,15 @@ export class CollisionWorld {
 
   addBox(x: number, z: number, hx: number, hz: number, yaw: number, top = Infinity): void {
     this.colliders.push({ kind: 'box', x, z, hx, hz, yaw, top });
+  }
+
+  /**
+   * Adds an obstacle only the camera ray sees (units and shots pass through,
+   * e.g. structures the sim already handles). Returned so its `top` can change.
+   */
+  addCameraBlocker(c: Collider): Collider {
+    this.cameraBlockers.push(c);
+    return c;
   }
 
   /** Confines movement to where `field` is positive (meters to the nearest wall). */
@@ -140,6 +150,9 @@ export class CollisionWorld {
    */
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxDist: number, radius = 0.3): number {
     const best = maxDist;
+    // Units can walk through camera-only blockers; when the ray starts inside
+    // one (the player is in a tower), ignore it rather than pin the camera there.
+    const blockers = this.cameraBlockers.filter((c) => !hitsAny([c], ox, oy, oz, 0));
     const steps = Math.ceil(maxDist / 0.25);
     for (let i = 1; i <= steps; i++) {
       const t = (i / steps) * maxDist;
@@ -147,19 +160,25 @@ export class CollisionWorld {
       const y = oy + dy * t;
       const z = oz + dz * t;
       if (y < this.groundAt(x, z) + 0.25) return Math.max(0, t - 0.25);
-      for (const c of this.colliders) {
-        if (y > c.top) continue;
-        if (c.kind === 'circle') {
-          if (Math.hypot(x - c.x, z - c.z) < c.r + radius) return Math.max(0, t - 0.25);
-        } else {
-          const cos = Math.cos(c.yaw);
-          const sin = Math.sin(c.yaw);
-          const lx = (x - c.x) * cos - (z - c.z) * sin;
-          const lz = (x - c.x) * sin + (z - c.z) * cos;
-          if (Math.abs(lx) < c.hx + radius && Math.abs(lz) < c.hz + radius) return Math.max(0, t - 0.25);
-        }
-      }
+      if (hitsAny(this.colliders, x, y, z, radius) || hitsAny(blockers, x, y, z, radius)) return Math.max(0, t - 0.25);
     }
     return best;
   }
+}
+
+/** Whether a sphere-ish probe of `radius` at (x, y, z) is inside any collider below its top. */
+function hitsAny(colliders: readonly Collider[], x: number, y: number, z: number, radius: number): boolean {
+  for (const c of colliders) {
+    if (y > c.top) continue;
+    if (c.kind === 'circle') {
+      if (Math.hypot(x - c.x, z - c.z) < c.r + radius) return true;
+    } else {
+      const cos = Math.cos(c.yaw);
+      const sin = Math.sin(c.yaw);
+      const lx = (x - c.x) * cos - (z - c.z) * sin;
+      const lz = (x - c.x) * sin + (z - c.z) * cos;
+      if (Math.abs(lx) < c.hx + radius && Math.abs(lz) < c.hz + radius) return true;
+    }
+  }
+  return false;
 }
