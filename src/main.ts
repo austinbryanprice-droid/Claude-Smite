@@ -10,6 +10,7 @@ import { ThirdPersonCamera } from './player/ThirdPersonCamera';
 import { grading, PostFX } from './render/PostFX';
 import { AsyncPipelines } from './render/AsyncPipelines';
 import { AutoQuality } from './render/AutoQuality';
+import { PerfStats } from './render/PerfStats';
 import { shareShaders } from './render/instancing';
 import { createRenderer, gpuName } from './render/Renderer';
 import { gpuAdvice } from './render/gpuAdvice';
@@ -32,6 +33,7 @@ import { installUiSounds, mountAudioPanel } from './ui/AudioPanel';
 
 async function main(): Promise<void> {
   installErrorHandlers();
+  const perf = new PerfStats();
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
   let autoQuality: AutoQuality | null = null;
   let sensitivity = 1;
@@ -82,6 +84,7 @@ async function main(): Promise<void> {
   let quality = QUALITY_PRESETS[initialQuality(isWebGPU, slowGpu !== null)];
   /** Lowered by AutoQuality when the frame rate stays low. */
   let renderScale = 1;
+  let autoDrops = 0;
   const resize = () => {
     const pr = Math.min(window.devicePixelRatio * quality.resolutionScale, quality.maxPixelRatio) * renderScale;
     renderer.setPixelRatio(pr);
@@ -165,6 +168,7 @@ async function main(): Promise<void> {
   if (!params.has('quality')) {
     autoQuality = new AutoQuality((scale) => {
       renderScale = scale;
+      autoDrops++;
       resize();
       hud.notice(`Lowered the render resolution to ${Math.round(scale * 100)}% for a smoother frame rate. Picking a quality at the bottom right resets it.`);
     });
@@ -190,6 +194,18 @@ async function main(): Promise<void> {
   clearTimeout(slow);
   hud.ready();
   if (advice) hud.notice(advice.text, 15);
+  const shadersAtStart = pipelines.done + pipelines.pending;
+  perf.watchGpu(renderer);
+  hud.report = () => perf.report({
+    gpu,
+    backend: isWebGPU ? 'WebGPU' : 'WebGL 2',
+    quality: quality.label,
+    renderScale,
+    autoDrops,
+    canvas: renderer.domElement,
+    mode: `${choice.mode}${choice.net ? ' online' : ''}`,
+    shaders: pipelines.done + pipelines.pending - shadersAtStart,
+  });
   combat.netReady();
 
   window.addEventListener('keydown', (e) => {
@@ -198,21 +214,27 @@ async function main(): Promise<void> {
   document.addEventListener('pointerlockchange', () => hud.setLocked(input.locked));
 
   const frame = (now: number) => {
-    const start = performance.now();
+    perf.begin(now);
     player.look();
     const wheel = input.consumeWheel();
     if (wheel) follow.zoom(wheel);
     const dt = loop.tick(now);
+    perf.mark(0);
     player.render(dt, loop.alpha);
     combat.frame(dt, loop.alpha, loop.time);
     gameAudio.frame(dt);
     showcase?.update(dt);
     follow.update(dt);
+    perf.mark(1);
     world.update(dt, loop.time, player.model.root.position);
+    perf.mark(2);
     post.render();
+    perf.mark(3);
     input.endFrame();
     hud.frame(dt);
-    autoQuality?.frame(dt, performance.now() - start);
+    // (not inside the call below: `?.` would skip it when auto quality is off)
+    const cpu = perf.end(pipelines.done + pipelines.pending);
+    autoQuality?.frame(dt, cpu);
   };
   // `?capture` leaves the loop stopped so automated screenshots can step frames
   // themselves (software GPUs in CI can't keep up with a live loop).
@@ -242,7 +264,7 @@ async function main(): Promise<void> {
   };
 
   // Hooks for automated screenshots and for gameplay code during development.
-  const debug = { pipelines, grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
+  const debug = { perf, pipelines, grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
   (window as unknown as { __game: typeof debug }).__game = debug;
 }
 
