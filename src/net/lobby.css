@@ -1,0 +1,24 @@
+/* The title screen's multiplayer box and the in-game network banner. */
+.sm-net { display: flex; flex-direction: column; gap: 8px; }
+.lb-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lb-btn { flex: 1; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(231, 194, 122, 0.3); border-radius: 6px; }
+.lb-btn b { font-size: 16px; letter-spacing: 0.08em; }
+.lb-btn span { font-family: Georgia, serif; font-size: 13px; opacity: 0.8; }
+.lb-btn:hover:not(:disabled) { border-color: #e7c27a; }
+.lb-code { width: 9em; padding: 7px 10px; font: 16px 'Cinzel', Georgia, serif; letter-spacing: 0.2em; text-transform: uppercase; color: #ffe3a3; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(231, 194, 122, 0.4); border-radius: 4px; }
+.lb-small { padding: 6px 14px; background: rgba(231, 194, 122, 0.15); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 4px; }
+.lb-start { margin-left: auto; padding: 8px 22px; letter-spacing: 0.12em; color: #1a1209 !important; background: linear-gradient(180deg, #ffe3a3, #c8963e); border: none; border-radius: 4px; }
+.sm button:disabled { opacity: 0.5; cursor: default; }
+.lb-msg { font-family: Georgia, serif; font-size: 13px; opacity: 0.75; }
+.lb-err { color: #ffb08a; opacity: 1; }
+.lb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: Georgia, serif; }
+.lb-show { font-family: 'Cinzel', Georgia, serif; font-size: 22px; letter-spacing: 0.2em; color: #ffe3a3; margin-left: 6px; }
+.lb-players { display: flex; flex-direction: column; gap: 4px; }
+.lb-player { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 6px 10px; font-family: Georgia, serif; font-size: 14px; background: rgba(0, 0, 0, 0.25); border-radius: 4px; }
+.lb-player i { opacity: 0.6; }
+.lb-team { font-family: 'Cinzel', Georgia, serif; font-size: 12px; letter-spacing: 0.1em; }
+.lb-order { color: #9fd0ff; }
+.lb-chaos { color: #ff9f8a; }
+.sm-play.held { opacity: 0.35; pointer-events: none; }
+.net-status { position: fixed; top: 22%; left: 50%; transform: translateX(-50%); z-index: 28; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 22px; font: 16px 'Cinzel', Georgia, serif; letter-spacing: 0.06em; color: #ffe3a3; background: rgba(12, 10, 8, 0.88); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 6px; pointer-events: auto; text-align: center; }
+.net-status button { font: inherit; font-size: 14px; color: inherit; cursor: pointer; padding: 6px 16px; background: rgba(231, 194, 122, 0.15); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 4px; }

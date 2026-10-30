@@ -27,6 +27,12 @@ Best in desktop Chrome or Edge (WebGPU). Other browsers fall back to WebGL 2.
 
 If it runs slowly, lower the quality at the top right.
 
+### Playing with friends
+
+Under **Play with friends** on the title screen, one player presses **Host co-op** (everyone on one team against bots) or **Host versus** (players on both teams; switch teams in the lobby) and shares the 5-letter code or the invite link. Others enter the code and press **Join**. The host presses **Start match** when everyone is in; bots play every empty slot, and a bot takes over the god of anyone who leaves.
+
+The host's browser runs the match, so the player with the fastest computer and connection should host. Players connect directly (WebRTC); the free public PeerJS server only introduces them.
+
 ## Development
 
 ```sh
@@ -40,4 +46,4 @@ URL options: `?map=conquest` or `?map=arena` skip the title screen (`&god=thor` 
 
 The title screen's god face cards are baked from the real models into `public/portraits/` by `node tools/portraits/bake.mjs` (needs Playwright and a running `vite preview`); re-run it after god model changes.
 
-Design notes are in `docs/design.md`.
+Design notes are in `docs/design.md`; how multiplayer works is in `docs/multiplayer.md`.

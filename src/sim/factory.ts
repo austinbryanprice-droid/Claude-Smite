@@ -11,7 +11,9 @@ export function body(x: number, z: number, yaw = 0): Body {
 }
 
 export function godUnit(god: GodDef, team: Team, home: { x: number; z: number; yaw: number }, b: Body = body(home.x, home.z, home.yaw)): Unit {
-  return new Unit('god', god.name, new Combatant(god, team), b, GOD_RADIUS, home);
+  const u = new Unit('god', god.name, new Combatant(god, team), b, GOD_RADIUS, home);
+  u.origin = { f: 'god', god: god.id };
+  return u;
 }
 
 /**
@@ -36,7 +38,9 @@ export function dummyUnit(base: GodDef, team: Team, at: { x: number; z: number; 
     physicalProtection: 20,
     magicalProtection: 20,
   });
-  return new Unit('dummy', def.name, new Combatant(def, team), body(at.x, at.z, at.yaw), 0.55, at);
+  const u = new Unit('dummy', def.name, new Combatant(def, team), body(at.x, at.z, at.yaw), 0.55, at);
+  u.origin = { f: 'dummy' };
+  return u;
 }
 
 const SUMMONS: Record<string, { name: string; health: number; speed: number }> = {
@@ -53,7 +57,9 @@ export function summonUnit(owner: Unit, kind: string, at: Point, index: number):
   const spread = kind === 'decoy' ? 0 : 1.6;
   const x = at.x + Math.sin(angle) * spread;
   const z = at.z + Math.cos(angle) * spread;
-  return new Unit('summon', info.name, new Combatant(def, owner.team), body(x, z, owner.body.yaw), 0.55, { x, z, yaw: owner.body.yaw });
+  const u = new Unit('summon', info.name, new Combatant(def, owner.team), body(x, z, owner.body.yaw), 0.55, { x, z, yaw: owner.body.yaw });
+  u.origin = { f: 'summon', kind, index };
+  return u;
 }
 
 export type MinionType = 'melee' | 'archer' | 'brute';
@@ -96,6 +102,7 @@ export function minionUnit(
   const u = new Unit('minion', def.name, new Combatant(def, team), body(at.x, at.z, at.yaw), m.radius, at);
   u.respawns = false;
   u.tag = type;
+  u.origin = { f: 'minion', type, wave: opts.wave, empowered: opts.empowered };
   return u;
 }
 
@@ -131,6 +138,7 @@ export function monsterUnit(base: GodDef, type: MonsterType, at: { x: number; z:
   const u = new Unit('monster', def.name, new Combatant(def, 'neutral'), body(at.x, at.z, at.yaw), m.radius, at);
   u.respawns = false;
   u.bounty = { xp: Math.round(m.xp * grow), favor: m.favor };
+  u.origin = { f: 'monster', type, minutes };
   return u;
 }
 
@@ -154,5 +162,6 @@ export function structureUnit(base: GodDef, team: Team, kind: StructureKind, at:
   );
   const u = new Unit(kind, def.name, new Combatant(def, team), body(at.x, at.z, at.yaw), radius, at);
   u.respawns = false;
+  u.origin = { f: 'structure' };
   return u;
 }

@@ -1,4 +1,4 @@
-import { basicAttackRaw, CCState, ccClass, computeDamage, type DamageResult } from './combat';
+import { basicAttackRaw, CCState, ccClass, computeDamage, type ActiveCC, type DamageResult } from './combat';
 import { skillById, swapSkill, ULTIMATE_SLOT, type Loadout, type LoadoutError } from './loadout';
 import { levelForXp, ranked, skillRank, treePointsEarned, XP_TABLE, MAX_LEVEL } from './progression';
 import { addStats, effectiveAttackSpeed, effectiveMoveSpeed, finalizeStats, statsAtLevel } from './stats';
@@ -61,6 +61,22 @@ export interface BasicShot {
 }
 
 export type CastError = 'dead' | 'locked' | 'cc' | 'cooldown' | 'mana' | 'emptySlot';
+
+/** A combatant's state besides health and mana, as a networked match copies it (see src/net). */
+export interface CombatantNet {
+  xp: number;
+  favor: number;
+  inBase: boolean;
+  respawnTimer: number;
+  basicCooldown: number;
+  cooldowns: [string, number][];
+  cc: ActiveCC[];
+  mods: TimedMod[];
+  shields: Shield[];
+  stacks: { count: number; remaining: number };
+  loadout: Loadout;
+  allocation: Allocation;
+}
 
 export class Combatant {
   readonly god: GodDef;
@@ -178,6 +194,49 @@ export class Combatant {
     if (!r.ok) return r.error;
     this.loadout = r.loadout;
     return null;
+  }
+
+  /** Take a whole build at once: a networked player's loadout and tree points. */
+  setBuild(loadout: Loadout, allocation: Allocation): void {
+    this.loadout = loadout;
+    this.setAllocation(allocation);
+  }
+
+  netState(): CombatantNet {
+    return {
+      xp: this.xp,
+      favor: this.favor,
+      inBase: this.inBase,
+      respawnTimer: this.respawnTimer,
+      basicCooldown: this.basicCooldown,
+      cooldowns: [...this.cooldowns],
+      cc: this.cc.active,
+      mods: this.mods,
+      shields: this.shields,
+      stacks: this.stacks,
+      loadout: this.loadout,
+      allocation: this.allocation,
+    };
+  }
+
+  /** Copy the host's state; `build` false keeps this player's own loadout and tree points. */
+  applyNet(s: CombatantNet, build: boolean): void {
+    this.xp = s.xp;
+    this.favor = s.favor;
+    this.inBase = s.inBase;
+    this.respawnTimer = s.respawnTimer;
+    this.basicCooldown = s.basicCooldown;
+    this.cooldowns = new Map(s.cooldowns);
+    this.cc.active = s.cc;
+    this.mods = s.mods;
+    this.shields = s.shields;
+    this.stacks = s.stacks;
+    if (build) {
+      this.loadout = s.loadout;
+      this.allocation = s.allocation;
+      this.bonuses = treeBonuses(this.trees, s.allocation);
+    }
+    this.invalidate();
   }
 
   private setAllocation(alloc: Allocation): void {

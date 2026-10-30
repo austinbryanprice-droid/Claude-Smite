@@ -110,6 +110,11 @@ export class Sim {
     for (const l of this.listeners) l(e);
   }
 
+  /** An event that happened in the host's copy of a networked match (see src/net). */
+  inject(e: SimEvent): void {
+    this.emit(e);
+  }
+
   drainEvents(): SimEvent[] {
     const e = this.events;
     this.events = [];

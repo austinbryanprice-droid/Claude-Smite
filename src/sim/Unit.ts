@@ -54,6 +54,15 @@ export interface Forced {
   land?: () => void;
 }
 
+/** How a unit was made, so a networked copy of the match can make the same one (see src/net). */
+export type SpawnOrigin =
+  | { f: 'god'; god: string }
+  | { f: 'dummy' }
+  | { f: 'summon'; kind: string; index: number }
+  | { f: 'minion'; type: string; wave: number; empowered: boolean }
+  | { f: 'monster'; type: string; minutes: number }
+  | { f: 'structure' };
+
 /** Decides what a sim-driven unit does each step. */
 export interface Brain {
   update(dt: number): void;
@@ -99,6 +108,8 @@ export class Unit {
   bounty: { xp: number; favor: number } | null = null;
   /** Free-form tag the match uses (lane, minion type). */
   tag = '';
+  /** Set by the factory functions. */
+  origin: SpawnOrigin | null = null;
 
   constructor(
     readonly kind: UnitKind,

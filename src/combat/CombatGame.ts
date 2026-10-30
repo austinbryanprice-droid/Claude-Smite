@@ -26,6 +26,10 @@ import { BuffAuras } from './BuffAuras';
 import { StatusAuras } from './StatusAuras';
 import { monsterWarmup } from './MonsterViews';
 import { CombatVfx } from './Vfx';
+import { NetGuest, NetHost } from '../net/NetGame';
+import type { Roster } from '../net/Replica';
+import { roster, type Slot } from '../net/roster';
+import type { NetSession } from '../net/Session';
 
 const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'] as const;
 
@@ -48,6 +52,8 @@ export interface CombatDeps {
   camera: THREE.PerspectiveCamera;
   /** Adds camera shake (0..1 trauma). */
   shake?: (amount: number) => void;
+  /** A multiplayer Conquest match: the lobby's players take god slots, bots fill the rest. */
+  net?: NetSession;
 }
 
 /** Until the Conquest scene lands, a match on another map follows its ground but ignores its walls. */
@@ -89,6 +95,12 @@ export class CombatGame implements Updatable {
   private suppressBasic = false;
   private readonly ray = new THREE.Vector3();
   private readonly groundAt: (x: number, z: number) => number;
+  /** Set when hosting a multiplayer match. */
+  private netHost: NetHost | null = null;
+  /** Set when playing in someone else's match. */
+  private netGuest: NetGuest | null = null;
+  /** Whether the basic attack button is held this frame (sent to the host by a guest). */
+  private basicHeld = false;
 
   constructor(private readonly deps: CombatDeps) {
     const { world, player } = deps;
@@ -96,7 +108,11 @@ export class CombatGame implements Updatable {
     const onConquestMap = (world as unknown as { map?: string }).map === 'conquest';
     const terrain: SimTerrain = conquest && !onConquestMap ? openGround(world.collision) : world.collision;
     this.groundAt = (x, z) => terrain.groundAt(x, z);
-    const spawn = conquest ? spawnPoint('order', 1) : world.spawn;
+    const net = conquest ? deps.net : undefined;
+    const slots = net ? roster(net.players) : null;
+    const mySlot = slots?.find((s) => s.player === net!.me) ?? null;
+    const myTeam = mySlot?.team ?? 'order';
+    const spawn = conquest ? spawnPoint(myTeam, mySlot?.spot ?? 1) : world.spawn;
     this.bases = conquest
       ? conquestBases()
       : {
@@ -142,8 +158,8 @@ export class CombatGame implements Updatable {
     world.vfx.add(this.shapeDecal.mesh, this.rangeDecal.mesh);
 
     if (conquest) player.spawn(spawn.x, spawn.z, spawn.yaw);
-    const mine = godById(deps.god ?? 'zeus') ?? GODS[0]!;
-    this.player = godUnit(mine, 'order', { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
+    const mine = godById(mySlot?.god ?? deps.god ?? 'zeus') ?? GODS[0]!;
+    this.player = godUnit(mine, myTeam, { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
     // the Conquest map builds and places its own Tower, Phoenix and Titan models
     // the map dims a buff altar's crystal while its Warden is down (when the map supports it)
@@ -182,9 +198,12 @@ export class CombatGame implements Updatable {
       this.match.nav.warm();
       // and compile the jungle's shaders now, not when the first camp grows
       this.warmup(world.actors);
-      this.match.addGod(this.player);
-      this.addTeam('order', GODS.filter((g) => g.id !== mine.id), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
-      this.addTeam('chaos', GODS, ROLES, [0, 1, 2, 3, 4]);
+      if (net && slots) this.addRoster(net, slots);
+      else {
+        this.match.addGod(this.player);
+        this.addTeam('order', GODS.filter((g) => g.id !== mine.id), ['solo', 'duo', 'duo', 'roam'], [0, 2, 3, 4]);
+        this.addTeam('chaos', GODS, ROLES, [0, 1, 2, 3, 4]);
+      }
       this.matchHud = new MatchHud(this.match, this.player);
       this.sim.drainEvents();
       return;
@@ -226,6 +245,41 @@ export class CombatGame implements Updatable {
     });
   }
 
+  /**
+   * A multiplayer match's gods, slot by slot in the same order on every end.
+   * The host runs the match: bots think there, and guests' gods follow their
+   * inputs. A guest's copy only mirrors the host's.
+   */
+  private addRoster(net: NetSession, slots: readonly Slot[]): void {
+    const match = this.match!;
+    const host = net.isHost ? new NetHost(net, this.sim, (u, s) => (u.brain = new LaneBot(this.sim, match, u, s.role)), (t) => this.hud.toast(t)) : null;
+    const units = slots.map((s) => {
+      if (s.player === net.me) return this.player;
+      const at = spawnPoint(s.team, s.spot);
+      const u = godUnit(godById(s.god) ?? GODS[0]!, s.team, at, host && s.player ? host.bodyFor(s, at) : undefined);
+      if (host && !s.player) u.brain = new LaneBot(this.sim, match, u, s.role);
+      return u;
+    });
+    for (const u of units) match.addGod(u);
+    const r: Roster = { slots: units, structures: match.structures };
+    if (host) {
+      host.bind(match, r, slots);
+      this.netHost = host;
+    } else {
+      // the host's events arrive ready-made: the match's own reactions to them would count everything twice
+      this.sim.listeners.length = 0;
+      const guest = new NetGuest(net, this.sim, match, r, this.player, this.deps.player);
+      this.netGuest = guest;
+      this.vfx.targets = () => guest.targets();
+    }
+  }
+
+  /** Called once this end has loaded: a multiplayer match starts when every player has. */
+  netReady(): void {
+    this.netHost?.ready();
+    this.netGuest?.ready();
+  }
+
   private isHomeTeleport(x: number, z: number): boolean {
     return Math.hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
   }
@@ -236,10 +290,18 @@ export class CombatGame implements Updatable {
   update(dt: number): void {
     // after a Titan falls the world keeps moving a few seconds, then freezes behind the end screen
     if (this.match?.winner) this.endTimer += dt;
-    if (this.endTimer < 4) {
+    if (this.netGuest) {
+      this.netGuest.basic = this.basicHeld;
       this.views.beforeStep(this.sim.units);
+      this.netGuest.step(dt);
+      this.views.afterStep(this.sim.units);
+    } else if (this.netHost && !this.netHost.started) this.netHost.wait(dt);
+    else if (this.endTimer < 4) {
+      this.views.beforeStep(this.sim.units);
+      this.netHost?.beforeStep();
       this.match?.step(dt);
       this.sim.step(dt);
+      this.netHost?.afterStep(dt);
       this.views.afterStep(this.sim.units);
     }
 
@@ -271,7 +333,9 @@ export class CombatGame implements Updatable {
     if (input.wasPressed('KeyK')) this.toggleMenu();
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
 
+    this.basicHeld = false;
     if (!this.menu.isOpen && !this.match?.winner) this.handleCombatInput();
+    this.netGuest?.syncBuild();
 
     for (const e of this.sim.drainEvents()) {
       this.vfx.onEvent(e);
@@ -317,7 +381,12 @@ export class CombatGame implements Updatable {
     const u = this.player;
 
     if (input.wasPressed('KeyB')) {
-      if (this.sim.startRecall(u)) this.cancelPreview();
+      if (this.netGuest) {
+        if (u.alive && u.recall <= 0 && !u.combatant.inBase) {
+          this.netGuest.recall();
+          this.cancelPreview();
+        }
+      } else if (this.sim.startRecall(u)) this.cancelPreview();
     }
 
     SLOT_CODES.forEach((code, slot) => {
@@ -346,7 +415,8 @@ export class CombatGame implements Updatable {
     }
 
     if (!input.isMouseDown(0)) this.suppressBasic = false;
-    if (!this.preview && !this.suppressBasic && input.locked && input.isMouseDown(0) && u.alive) this.sim.basic(u);
+    this.basicHeld = !this.preview && !this.suppressBasic && input.locked && input.isMouseDown(0) && u.alive;
+    if (this.basicHeld && !this.netGuest) this.sim.basic(u);
   }
 
   private syncCamps(): void {
@@ -391,6 +461,13 @@ export class CombatGame implements Updatable {
 
   private castSlot(slot: number): void {
     this.preview = null;
+    if (this.netGuest) {
+      // the host decides; this copy of the god's state only catches the obvious refusals
+      const err = this.player.combatant.canCast(slot) ?? (this.player.forced ? 'forced' : null);
+      if (err) this.denied(slot, err);
+      else this.netGuest.cast(slot);
+      return;
+    }
     const err = this.sim.cast(this.player, slot);
     if (err) this.denied(slot, err);
   }
