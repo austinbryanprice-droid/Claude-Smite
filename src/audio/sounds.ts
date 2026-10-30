@@ -63,7 +63,7 @@ export const SOUNDS: Record<string, Recipe> = {
   'basic.colossus': { variants: 2, peak: 0.95, make: (r) => layer([thump(r, 0.9, 60, 25, { click: 0.4, noise: 0.8, drive: 2.5 }), 1, 0.35], [whoosh(r, 0.5, 120, 400, { q: 0.8, peak: 0.8, gain: 1.2 }), 0.8], [fire(r, 0.9, { gain: 0.4 }), 1, 0.3]) },
 
   // -- projectile loops in flight
-  'travel.zeus': { loop: true, peak: 0.5, make: (r) => layer([zap(r, 1.2, 180, { chaos: 0.8, fall: 1, hiss: 0.8 }), 0.5], [shape(crackleBed(r, 1.2, 5000, 220), () => 1), 1]) },
+  'travel.zeus': { loop: true, peak: 0.5, make: (r) => layer([zap(r, 1.2, 180, { chaos: 0.8, fall: 1, hiss: 0.8 }), 0.6], [shape(crackleBed(r, 1.2, 5000, 220), () => 1), 0.55], [rumble(r, 1.2, { tone: 130, attack: 0.01 }), 0.7]) },
   'travel.anubis': { loop: true, peak: 0.45, make: (r) => shape(sand(r, 1.2, { tone: 2200, peak: 0.5, grains: 1400 }), () => 1) },
   'travel.arrow': { loop: true, peak: 0.25, make: (r) => shape(whoosh(r, 0.8, 2200, 2200, { q: 3, peak: 0.5 }), () => 1) },
   'travel.tower': { loop: true, peak: 0.45, make: (r) => towerHum(r, 1) },
@@ -80,7 +80,7 @@ export const SOUNDS: Record<string, Recipe> = {
   'hit.crit': { variants: 2, peak: 0.85, make: (r) => layer([impact(r, 1.7, { tone: 120, crunch: 1, sub: 1.3, room: 0.25 }), 1], [clang(r, 0.6, 1500, { decay: 0.4, gain: 0.6 }), 0.6], [whoosh(r, 0.15, 6000, 3000, { q: 0.8 }), 0.5]) },
   'hit.monster': { variants: 3, peak: 0.8, make: (r) => layer([hitFlesh(r, 1.2), 1], [vowel(r, 0.2, (t) => glide(300, 200, t, 0.2), VOWELS.eh, { breath: 0.5, growl: 0.2, gain: 0.3 }), 1]) },
   // your skill connecting with an enemy god: a tight, bright thwack that cuts through a fight
-  'hit.confirm': { variants: 3, peak: 0.7, make: (r) => layer([impact(r, 0.7, { tone: 190 + r() * 20, crunch: 0.8, snap: 1.4, sub: 0.6, room: 0.1 }), 1], [knock(r, 0.05, 2900 + r() * 300), 0.4]) },
+  'hit.confirm': { variants: 3, peak: 0.75, make: (r) => layer([impact(r, 0.9, { tone: 150 + r() * 20, crunch: 0.7, snap: 1.1, sub: 1.1, room: 0.12 }), 1], [knock(r, 0.05, 2600 + r() * 300), 0.25]) },
 
   // -- minions
   'minion.death': { variants: 4, peak: 0.6, make: (r) => layer([vowel(r, 0.32, (t) => glide(190 + r() * 40, 110, t, 0.3), VOWELS.oh, { breath: 0.3, gain: 0.7, env: (t) => perc(t, 0.01, 0.3) }), 0.8], [debris(r, 0.5, { density: 12, gain: 0.5, tone: 1900 }), 1, 0.12], [thump(r, 0.2, 110, 50), 0.5, 0.25]) },
