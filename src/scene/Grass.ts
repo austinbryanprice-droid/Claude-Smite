@@ -196,9 +196,11 @@ export class Grass {
         const count = A.length / 4;
         if (count === 0) continue;
         const geo = new THREE.InstancedBufferGeometry();
-        geo.index = this.bladeGeometry.index;
-        geo.setAttribute('position', this.bladeGeometry.getAttribute('position'));
-        geo.setAttribute('normal', this.bladeGeometry.getAttribute('normal'));
+        // own copies of the (tiny) blade buffers: disposing a chunk on a quality
+        // change destroys its GPU buffers, which must not be shared with others
+        geo.index = this.bladeGeometry.index!.clone();
+        geo.setAttribute('position', this.bladeGeometry.getAttribute('position').clone());
+        geo.setAttribute('normal', this.bladeGeometry.getAttribute('normal').clone());
         geo.setAttribute('bladeA', new THREE.InstancedBufferAttribute(new Float32Array(A), 4));
         geo.setAttribute('bladeB', new THREE.InstancedBufferAttribute(new Float32Array(B), 4));
         geo.instanceCount = count;

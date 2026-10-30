@@ -47,3 +47,21 @@ export async function createRenderer(container: HTMLElement): Promise<RendererIn
   }
   return { renderer, isWebGPU: backend.isWebGPUBackend === true };
 }
+
+/**
+ * A short name for the graphics card in use, so a laptop running the game on
+ * its integrated GPU instead of the dedicated one is easy to spot.
+ */
+export function gpuName(renderer: THREE.WebGPURenderer): string {
+  const backend = renderer.backend as unknown as {
+    device?: { adapterInfo?: { vendor?: string; architecture?: string; description?: string } };
+    gl?: WebGL2RenderingContext;
+  };
+  const info = backend.device?.adapterInfo;
+  if (info) return (info.description || [info.vendor, info.architecture].filter(Boolean).join(' ')).trim();
+  const gl = backend.gl;
+  const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+  const name = ext ? String(gl!.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+  // "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Laptop GPU (0x...) Direct3D11 ...)" -> the card
+  return (/ANGLE \([^,]*, ([^(,]+)/.exec(name)?.[1] ?? name).trim();
+}

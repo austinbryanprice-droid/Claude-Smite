@@ -1,28 +1,27 @@
-import type { QualityName } from './Quality';
-
-const ORDER: QualityName[] = ['low', 'medium', 'high', 'ultra'];
-/** Below this average, a step down in quality is worth the looks it costs. */
+/** Render-resolution steps tried in turn while the frame rate stays low. */
+const SCALES = [1, 0.85, 0.7, 0.55];
+/** Below this average, a step down in resolution is worth the sharpness it costs. */
 const MIN_FPS = 45;
 /** Seconds of play averaged per check. */
 const WINDOW = 4;
-/** Seconds to wait after the match starts or quality changes (shaders still settling). */
+/** Seconds to wait after the match starts or the resolution changes (shaders still settling). */
 const SETTLE = 6;
 
 /**
- * Steps the quality preset down while the frame rate stays low, so a slower
- * machine ends up smooth without the player hunting for the setting. It only
- * ever lowers, and stops for good once the player picks a quality themselves.
+ * Lowers the render resolution while the frame rate stays low, so a slower
+ * machine ends up smooth without the player hunting for the setting. Only the
+ * resolution changes: switching presets mid-match would rebuild shadows and
+ * shaders, a hitch of its own. It only ever lowers, and stops for good once the
+ * player picks a quality themselves.
  */
 export class AutoQuality {
   private wait = SETTLE;
   private time = 0;
   private frames = 0;
+  private step = 0;
   private stopped = false;
 
-  constructor(
-    private readonly current: () => QualityName,
-    private readonly lower: (to: QualityName) => void,
-  ) {}
+  constructor(private readonly setScale: (scale: number) => void) {}
 
   /** The player chose a quality: leave it alone from now on. */
   stop(): void {
@@ -39,12 +38,11 @@ export class AutoQuality {
     const fps = this.frames / this.time;
     this.time = this.frames = 0;
     if (fps >= MIN_FPS) return;
-    const i = ORDER.indexOf(this.current());
-    if (i <= 0) {
+    if (this.step >= SCALES.length - 1) {
       this.stopped = true;
       return;
     }
     this.wait = SETTLE;
-    this.lower(ORDER[i - 1]!);
+    this.setScale(SCALES[++this.step]!);
   }
 }
