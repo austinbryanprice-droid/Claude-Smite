@@ -110,6 +110,8 @@ export class Hud {
 
   setLocked(locked: boolean): void {
     this.hint.classList.toggle('hidden', locked);
+    // keys in play must not type into a focused control (the quality picker jumps on letters)
+    if (locked && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }
 
   setInfo(text: string): void {
