@@ -12,6 +12,7 @@ import { MaterialLibrary, TextureLibrary } from './Materials';
 import { Temple } from './Temple';
 import { Terrain } from './Terrain';
 import type { QualitySettings } from '../render/Quality';
+import { hypot } from '../core/math';
 
 export type MapName = 'arena' | 'conquest';
 
@@ -81,7 +82,7 @@ export class World {
         round: true,
         density: 1,
         maxHeight: 7,
-        reject: (x, z) => Math.hypot(x, z) < plazaR,
+        reject: (x, z) => hypot(x, z) < plazaR,
       });
     }
     this.static.add(this.content.group, this.grass.group);
@@ -117,6 +118,10 @@ export class World {
    * fires are lit as the player walks would rebuild every material's shader.
    */
   private readonly pool: THREE.PointLight[] = [];
+  /** Reused every frame: one entry per map light that is on. */
+  private readonly spots: LightSpot[] = [];
+  private readonly near: LightSpot[] = [];
+  private fireLights: THREE.PointLight[] | null = null;
 
   private setLightPool(n: number): void {
     while (this.pool.length > n) this.pool.pop()!.removeFromParent();
@@ -142,23 +147,27 @@ export class World {
     this.content.update(dt, t, this.camera);
     this.grass.update(this.camera, focus);
     // the map's own lights only say where the light is; the pool does the lighting
-    const near: { l: THREE.PointLight; p: THREE.Vector3; d: number }[] = [];
-    for (const l of this.content.lights ?? this.content.fires.map((f) => f.light)) {
+    const near = this.near;
+    near.length = 0;
+    for (const l of this.content.lights ?? (this.fireLights ??= this.content.fires.map((f) => f.light))) {
       l.visible = false;
       if (l.intensity <= 0 || !shown(l.parent)) continue;
-      const p = l.getWorldPosition(new THREE.Vector3());
-      near.push({ l, p, d: p.distanceToSquared(focus) });
+      const s = (this.spots[near.length] ??= { l, p: new THREE.Vector3(), d: 0 });
+      s.l = l;
+      s.d = l.getWorldPosition(s.p).distanceToSquared(focus);
+      near.push(s);
     }
-    near.sort((a, b) => a.d - b.d);
-    this.pool.forEach((light, i) => {
+    near.sort(closest);
+    for (let i = 0; i < this.pool.length; i++) {
+      const light = this.pool[i]!;
       const s = near[i];
       light.intensity = s ? s.l.intensity : 0;
-      if (!s) return;
+      if (!s) continue;
       light.position.copy(s.p);
       light.color.copy(s.l.color);
       light.distance = s.l.distance;
       light.decay = s.l.decay;
-    });
+    }
     for (const u of this.updaters) u(dt, t);
   }
 
@@ -166,6 +175,15 @@ export class World {
     return this.content.spawn;
   }
 }
+
+interface LightSpot {
+  l: THREE.PointLight;
+  p: THREE.Vector3;
+  /** Squared distance to the focus. */
+  d: number;
+}
+
+const closest = (a: LightSpot, b: LightSpot) => a.d - b.d;
 
 /** True when the object and all its ancestors are visible. */
 function shown(o: THREE.Object3D | null): boolean {

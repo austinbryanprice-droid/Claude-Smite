@@ -1,6 +1,7 @@
 import { fbm2, simplex2, smoothstep as sstep } from '../core/random';
 import { Arena, laneDistance, pathDistance } from './ArenaLayout';
 import type { TerrainDef } from './Terrain';
+import { hypot } from '../core/math';
 
 /**
  * The temple arena's terrain: a grassy valley floor around the temple, rising
@@ -18,7 +19,7 @@ export function arenaTerrain(): TerrainDef {
       const edgeNoise = fbm2(n, x * 0.25, z * 0.25, 3);
       const pd = pathDistance(x, z) + edgeNoise * 0.9;
       const ld = laneDistance(x, z) + edgeNoise * 0.5;
-      const r = Math.hypot(x, z);
+      const r = hypot(x, z);
       const dirt = 1 - sstep(-0.6, 1.4, pd);
       // dirt apron around the temple base and lane borders
       const apron = (1 - sstep(Arena.plaza.baseRadius - 0.5, Arena.plaza.baseRadius + 3.5 + edgeNoise * 2, r));
@@ -37,7 +38,7 @@ function arenaHeight(): (x: number, z: number) => number {
   const n3 = simplex2(37);
   const { valleyRadius, plaza } = Arena;
   return (x, z) => {
-    const r = Math.hypot(x, z);
+    const r = hypot(x, z);
     // gentle undulation on the valley floor
     let h = fbm2(n1, x * 0.018, z * 0.018, 4) * 1.6 + fbm2(n2, x * 0.07, z * 0.07, 2) * 0.25;
     // cliffs: warped radius so the rim is irregular

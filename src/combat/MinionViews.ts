@@ -5,6 +5,7 @@ import { abs, float, mix, mx_noise_float, positionGeometry, smoothstep, vec3 } f
 import { lathe } from '../scene/Architecture';
 import type { MinionType } from '../sim/factory';
 import type { Unit } from '../sim/Unit';
+import { hypot } from '../core/math';
 
 /**
  * Lane minions, batched: every (team, material) is one BatchedMesh holding
@@ -226,6 +227,8 @@ interface Pose {
   flinchVel: number;
   /** -1 or 1: which way this minion twists when it falls. */
   side: number;
+  /** The frame this minion was last drawn. */
+  seen: number;
 }
 
 const BUILDERS: Record<MinionType, (k: Kit) => Rig> = { melee: buildMelee, archer: buildArcher, brute: buildBrute };
@@ -234,6 +237,9 @@ export class MinionViews {
   readonly group = new THREE.Group();
   private readonly batches = new Map<string, Batch>();
   private readonly poses = new Map<Unit, Pose>();
+  /** Each minion's type and batch, worked out once instead of from its tag every frame. */
+  private readonly kinds = new WeakMap<Unit, { type: MinionType; batch: Batch | undefined }>();
+  private frameNo = 0;
   private readonly root = new THREE.Object3D();
   private readonly part = new THREE.Object3D();
   private readonly m = new THREE.Matrix4();
@@ -294,21 +300,25 @@ export class MinionViews {
    */
   frame(minions: readonly Unit[], dt: number, at: (u: Unit) => THREE.Vector3, deathTime: (u: Unit) => number, visible: (u: Unit) => boolean): void {
     for (const b of this.batches.values()) b.count = 0;
-    const seen = new Set<Unit>();
+    const frame = ++this.frameNo;
     for (const u of minions) {
-      const type = u.tag.split(':')[1] as MinionType;
-      const b = this.batches.get(`${u.team}:${type}`);
+      let kind = this.kinds.get(u);
+      if (!kind) {
+        const type = u.tag.split(':')[1] as MinionType;
+        this.kinds.set(u, (kind = { type, batch: this.batches.get(`${u.team}:${type}`) }));
+      }
+      const { type, batch: b } = kind;
       if (!b || b.count >= CAPACITY[type] || !visible(u)) continue;
-      seen.add(u);
       let pose = this.poses.get(u);
       if (!pose) {
-        pose = { phase: Math.random() * 6, speed: 0, flinch: 0, flinchVel: 0, side: Math.random() < 0.5 ? -1 : 1 };
+        pose = { phase: Math.random() * 6, speed: 0, flinch: 0, flinchVel: 0, side: Math.random() < 0.5 ? -1 : 1, seen: frame };
         this.poses.set(u, pose);
       }
+      pose.seen = frame;
       this.pose(u, b, pose, dt, at(u), deathTime(u), type);
       b.count++;
     }
-    for (const u of this.poses.keys()) if (!seen.has(u)) this.poses.delete(u);
+    for (const [u, pose] of this.poses) if (pose.seen !== frame) this.poses.delete(u);
     for (const mesh of this.group.children) mesh.visible = false;
     for (const b of this.batches.values()) {
       for (const p of PARTS) {
@@ -323,7 +333,7 @@ export class MinionViews {
 
   private pose(u: Unit, b: Batch, pose: Pose, dt: number, pos: THREE.Vector3, death: number, type: MinionType): void {
     const rig = b.rig;
-    const speedNow = Math.hypot(u.vx, u.vz);
+    const speedNow = hypot(u.vx, u.vz);
     pose.speed += (speedNow - pose.speed) * (1 - Math.exp(-dt * 10));
     pose.phase += dt * pose.speed * (type === 'brute' ? 1.7 : 2.6);
     pose.flinchVel += (-pose.flinch * 90 - pose.flinchVel * 9) * dt;

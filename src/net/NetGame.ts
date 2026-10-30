@@ -8,6 +8,7 @@ import { F, GuestSync, HostSync, SNAPSHOT_EVERY, type Roster, type Snapshot } fr
 import type { Slot } from './roster';
 import { encode, type Msg, type NetSession } from './Session';
 import { showNetStatus } from './status';
+import { hypot } from '../core/math';
 
 /** The host starts without guests that are still loading after this long; they catch up when ready. */
 const READY_TIMEOUT = 180;
@@ -112,7 +113,7 @@ export class NetHost {
       u.aim.z = i.a[1];
       rp.basic = i.b === 1;
       if (i.s !== rp.seq || !u.alive || !this.sim.canMove(u)) continue;
-      const moved = Math.hypot(i.p[0] - u.x, i.p[2] - u.z);
+      const moved = hypot(i.p[0] - u.x, i.p[2] - u.z);
       u.body.x = i.p[0];
       u.body.y = i.p[1];
       u.body.z = i.p[2];
@@ -261,7 +262,7 @@ export class NetGuest {
     if (f && f[F.seq]! > this.applied && f[F.arc] === 0) {
       this.applied = f[F.seq]!;
       // respawns and recalls face the god down the lane; anything else keeps the camera's aim
-      const home = Math.hypot(f[F.x]! - u.home.x, f[F.z]! - u.home.z) < 0.01;
+      const home = hypot(f[F.x]! - u.home.x, f[F.z]! - u.home.z) < 0.01;
       ctrl.spawn(f[F.x]!, f[F.z]!, home ? f[F.yaw]! : ctrl.yaw);
     }
     const lerp = this.sync.selfPlace;

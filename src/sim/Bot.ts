@@ -2,6 +2,7 @@ import { ULTIMATE_SLOT } from '../game/loadout';
 import type { Sim } from './Sim';
 import type { SkillDef } from '../game/types';
 import { WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
+import { hypot } from '../core/math';
 
 /**
  * What a bot uses a skill for. Offense hits enemies; escape gets away (pure
@@ -66,8 +67,8 @@ export class GodBot implements Brain {
       if (hp > 0.95 || c.inBase && hp > 0.9) this.retreating = false;
       else {
         if (u.recall > 0) return;
-        const threat = sim.enemiesOf(u).some((t) => (t.kind === 'god' || t.kind === 'minion') && Math.hypot(t.x - u.x, t.z - u.z) < 15);
-        const hunted = sim.enemiesOf(u).some((t) => t.kind === 'god' && Math.hypot(t.x - u.x, t.z - u.z) < 14);
+        const threat = sim.enemiesOf(u).some((t) => (t.kind === 'god' || t.kind === 'minion') && hypot(t.x - u.x, t.z - u.z) < 15);
+        const hunted = sim.enemiesOf(u).some((t) => t.kind === 'god' && hypot(t.x - u.x, t.z - u.z) < 14);
         if (hunted) this.flee();
         if (this.options.recall && !threat && !c.inBase && sim.startRecall(u)) return;
         this.moveToward(u.home, 1.5);
@@ -84,7 +85,7 @@ export class GodBot implements Brain {
 
     const dx = target.x - u.x;
     const dz = target.z - u.z;
-    const dist = Math.hypot(dx, dz);
+    const dist = hypot(dx, dz);
     u.body.yaw = Math.atan2(-dx, -dz);
     // lead moving targets a little, like a player would
     const lead = Math.min(0.5, dist / 40);
@@ -120,7 +121,7 @@ export class GodBot implements Brain {
     const { u, sim } = this;
     let n = 0;
     for (const t of sim.units) {
-      if (t.kind !== 'god' || !t.alive || t === u || Math.hypot(t.x - u.x, t.z - u.z) > 16) continue;
+      if (t.kind !== 'god' || !t.alive || t === u || hypot(t.x - u.x, t.z - u.z) > 16) continue;
       n += t.team === u.team ? 1 : t.stealth > 0 ? 0 : -1;
     }
     return n;
@@ -139,7 +140,7 @@ export class GodBot implements Brain {
       if (dash) {
         const dx = u.home.x - u.x;
         const dz = u.home.z - u.z;
-        const d = Math.hypot(dx, dz) || 1;
+        const d = hypot(dx, dz) || 1;
         u.aim.x = u.x + (dx / d) * 10;
         u.aim.z = u.z + (dz / d) * 10;
         u.body.yaw = Math.atan2(-dx, -dz);
@@ -155,8 +156,8 @@ export class GodBot implements Brain {
     let bestD = options.aggro;
     for (const t of sim.enemiesOf(u)) {
       if (t.kind === 'dummy' || t.stealth > 0) continue;
-      if (Math.hypot(t.x - options.anchor.x, t.z - options.anchor.z) > options.leash) continue;
-      const d = Math.hypot(t.x - u.x, t.z - u.z);
+      if (hypot(t.x - options.anchor.x, t.z - options.anchor.z) > options.leash) continue;
+      const d = hypot(t.x - u.x, t.z - u.z);
       if (d < bestD) {
         best = t;
         bestD = d;
@@ -188,11 +189,11 @@ export class GodBot implements Brain {
   }
 
   private moveToward(goal: Point, stopAt: number): void {
-    if (Math.hypot(goal.x - this.u.x, goal.z - this.u.z) <= stopAt) return;
+    if (hypot(goal.x - this.u.x, goal.z - this.u.z) <= stopAt) return;
     const p = this.options.route ? this.options.route(goal) : goal;
     const dx = p.x - this.u.x;
     const dz = p.z - this.u.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     if (d < 0.05) return;
     this.u.move = { x: dx / d, z: dz / d };
     this.u.body.yaw = Math.atan2(-dx, -dz);
@@ -234,7 +235,7 @@ export class SummonBrain implements Brain {
     let best: Unit | null = null;
     let bestD = 10;
     for (const t of sim.enemiesOf(u)) {
-      const d = Math.hypot(t.x - u.home.x, t.z - u.home.z);
+      const d = hypot(t.x - u.home.x, t.z - u.home.z);
       if (d < bestD) {
         best = t;
         bestD = d;
@@ -243,7 +244,7 @@ export class SummonBrain implements Brain {
     if (!best) return;
     const dx = best.x - u.x;
     const dz = best.z - u.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     u.body.yaw = Math.atan2(-dx, -dz);
     if (d > u.radius + best.radius + 0.5) u.move = { x: dx / d, z: dz / d };
   }

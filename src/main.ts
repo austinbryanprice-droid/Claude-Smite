@@ -57,12 +57,17 @@ async function main(): Promise<void> {
   // Links with ?map= (and automated captures) skip the title screen.
   const skipMenu = params.has('map') || params.has('capture') || params.has('showcase');
   const rendering = createRenderer(document.body);
+  const graphics = rendering.then((r) => {
+    const gpu = gpuName(r.renderer);
+    return { webgpu: r.isWebGPU, gpu, advice: gpuAdvice(gpu) };
+  });
   const chosen: Promise<StartChoice> = skipMenu
     ? Promise.resolve({ mode: mapFromUrl(), god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
-    : showStartMenu(GODS, rendering.then((r) => ({ webgpu: r.isWebGPU, advice: gpuAdvice(gpuName(r.renderer)) })));
+    : showStartMenu(GODS, graphics);
   if (!skipMenu) music.play('hymn');
 
   const { renderer, isWebGPU } = await rendering;
+  const { gpu, advice: slowGpu } = await graphics;
   // shaders compile in parallel in the background and never freeze a frame
   const pipelines = new AsyncPipelines(renderer);
   shareShaders(renderer);
@@ -74,7 +79,7 @@ async function main(): Promise<void> {
 
   await preloadGodAssets((f) => hud.progress(0.55 + f * 0.05, 'Summoning the gods…'));
 
-  let quality = QUALITY_PRESETS[initialQuality(isWebGPU)];
+  let quality = QUALITY_PRESETS[initialQuality(isWebGPU, slowGpu !== null)];
   /** Lowered by AutoQuality when the frame rate stays low. */
   let renderScale = 1;
   const resize = () => {
@@ -154,9 +159,8 @@ async function main(): Promise<void> {
   };
   saveQuality(quality.name);
   hud.setQuality(quality.name);
-  const gpu = gpuName(renderer);
   hud.setInfo(`${isWebGPU ? 'WebGPU' : 'WebGL 2'}${gpu ? ` · ${gpu}` : ''}`);
-  const advice = params.has('capture') ? null : gpuAdvice(gpu);
+  const advice = params.has('capture') ? null : slowGpu;
   // a quality forced in the URL (tests, shared links) stays put
   if (!params.has('quality')) {
     autoQuality = new AutoQuality((scale) => {

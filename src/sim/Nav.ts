@@ -1,5 +1,6 @@
 import type { SimTerrain } from './Sim';
 import type { Point } from './Unit';
+import { hypot } from '../core/math';
 
 /** Grid cell size, meters. */
 const CELL = 2;
@@ -62,7 +63,7 @@ export class Nav {
   /** Whether a straight walk from a to b stays on open cells. */
   clear(a: Point, b: Point): boolean {
     const grid = this.grid();
-    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    const d = hypot(b.x - a.x, b.z - a.z);
     const steps = Math.max(1, Math.ceil(d / (CELL * 0.5)));
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -94,7 +95,7 @@ export class Nav {
     const x = this.origin + (i + 0.5) * CELL;
     const z = this.origin + (j + 0.5) * CELL;
     const r = this.terrain.resolve(x, z, CLEARANCE, this.terrain.groundAt(x, z));
-    return Math.hypot(r.x - x, r.z - z) < 0.05 ? 1 : 0;
+    return hypot(r.x - x, r.z - z) < 0.05 ? 1 : 0;
   }
 
   private cellOf(p: Point): number {

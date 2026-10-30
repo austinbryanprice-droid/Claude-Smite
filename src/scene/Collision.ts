@@ -1,3 +1,4 @@
+import { hypot } from '../core/math';
 /**
  * Lightweight 2D (XZ) collision world for the arena. Static architecture
  * registers circles and oriented boxes; moving actors are resolved as circles.
@@ -25,6 +26,11 @@ export interface BoxCollider {
 
 export type Collider = CircleCollider | BoxCollider;
 
+/** Side of a lookup cell, in meters. */
+const CELL = 8;
+const cellKey = (cx: number, cz: number) => (cx + 4096) * 8192 + (cz + 4096);
+const ascending = (a: number, b: number) => a - b;
+
 /** Anything that can report a walkable height at a point (or null if not over it). */
 export type GroundSurface = (x: number, z: number) => number | null;
 
@@ -34,15 +40,63 @@ export class CollisionWorld {
   private readonly surfaces: GroundSurface[] = [];
   /** Signed distance to the edge of the walkable area (positive inside), if the map has walls. */
   private walkable: ((x: number, z: number) => number) | null = null;
+  /** Indices of the colliders whose bounds touch each cell, so a query only visits its neighbours. */
+  private readonly cells = new Map<number, number[]>();
+  /** Last query that visited each collider (dedupes colliders spanning several cells). */
+  private readonly seen: number[] = [];
+  private query = 0;
+  private readonly nearIdx: number[] = [];
+  private readonly near: Collider[] = [];
 
   constructor(private readonly baseGround: (x: number, z: number) => number) {}
 
   addCircle(x: number, z: number, r: number, top = Infinity): void {
-    this.colliders.push({ kind: 'circle', x, z, r, top });
+    this.add({ kind: 'circle', x, z, r, top });
   }
 
   addBox(x: number, z: number, hx: number, hz: number, yaw: number, top = Infinity): void {
-    this.colliders.push({ kind: 'box', x, z, hx, hz, yaw, top });
+    this.add({ kind: 'box', x, z, hx, hz, yaw, top });
+  }
+
+  private add(c: Collider): void {
+    const i = this.colliders.push(c) - 1;
+    this.seen.push(0);
+    const r = c.kind === 'circle' ? c.r : hypot(c.hx, c.hz);
+    for (let cx = Math.floor((c.x - r) / CELL); cx <= Math.floor((c.x + r) / CELL); cx++) {
+      for (let cz = Math.floor((c.z - r) / CELL); cz <= Math.floor((c.z + r) / CELL); cz++) {
+        const k = cellKey(cx, cz);
+        const list = this.cells.get(k);
+        if (list) list.push(i);
+        else this.cells.set(k, [i]);
+      }
+    }
+  }
+
+  /**
+   * The colliders whose bounds touch the box [x0, x1] x [z0, z1], in the order
+   * they were added (so results match a scan of every collider). The array is
+   * reused by the next query.
+   */
+  private gather(x0: number, z0: number, x1: number, z1: number): readonly Collider[] {
+    const q = ++this.query;
+    const idx = this.nearIdx;
+    idx.length = 0;
+    for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+      for (let cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++) {
+        const list = this.cells.get(cellKey(cx, cz));
+        if (!list) continue;
+        for (const i of list) {
+          if (this.seen[i] === q) continue;
+          this.seen[i] = q;
+          idx.push(i);
+        }
+      }
+    }
+    idx.sort(ascending);
+    const near = this.near;
+    near.length = idx.length;
+    for (let k = 0; k < idx.length; k++) near[k] = this.colliders[idx[k]!]!;
+    return near;
   }
 
   /**
@@ -80,12 +134,14 @@ export class CollisionWorld {
   resolve(x: number, z: number, radius: number, feetY: number, stepHeight = 0.55): { x: number; z: number } {
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
-      for (const c of this.colliders) {
+      // a meter of slack covers the pushes earlier colliders make this pass
+      const reach = radius + 1;
+      for (const c of this.gather(x - reach, z - reach, x + reach, z + reach)) {
         if (c.top <= feetY + stepHeight) continue;
         if (c.kind === 'circle') {
           const dx = x - c.x;
           const dz = z - c.z;
-          const d = Math.hypot(dx, dz);
+          const d = hypot(dx, dz);
           const min = c.r + radius;
           if (d < min && d > 1e-6) {
             x = c.x + (dx / d) * min;
@@ -101,7 +157,7 @@ export class CollisionWorld {
           const cz = Math.max(-c.hz, Math.min(c.hz, lz));
           let dx = lx - cx;
           let dz = lz - cz;
-          const d = Math.hypot(dx, dz);
+          const d = hypot(dx, dz);
           let nlx = lx;
           let nlz = lz;
           if (d < 1e-6) {
@@ -131,7 +187,7 @@ export class CollisionWorld {
           const e = 0.3;
           const gx = this.walkable(x + e, z) - this.walkable(x - e, z);
           const gz = this.walkable(x, z + e) - this.walkable(x, z - e);
-          const g = Math.hypot(gx, gz);
+          const g = hypot(gx, gz);
           if (g > 1e-6) {
             x += (gx / g) * (radius - f);
             z += (gz / g) * (radius - f);
@@ -154,13 +210,16 @@ export class CollisionWorld {
     // one (the player is in a tower), ignore it rather than pin the camera there.
     const blockers = this.cameraBlockers.filter((c) => !hitsAny([c], ox, oy, oz, 0));
     const steps = Math.ceil(maxDist / 0.25);
+    const ex = ox + dx * maxDist;
+    const ez = oz + dz * maxDist;
+    const near = this.gather(Math.min(ox, ex) - radius, Math.min(oz, ez) - radius, Math.max(ox, ex) + radius, Math.max(oz, ez) + radius);
     for (let i = 1; i <= steps; i++) {
       const t = (i / steps) * maxDist;
       const x = ox + dx * t;
       const y = oy + dy * t;
       const z = oz + dz * t;
       if (y < this.groundAt(x, z) + 0.25) return Math.max(0, t - 0.25);
-      if (hitsAny(this.colliders, x, y, z, radius) || hitsAny(blockers, x, y, z, radius)) return Math.max(0, t - 0.25);
+      if (hitsAny(near, x, y, z, radius) || hitsAny(blockers, x, y, z, radius)) return Math.max(0, t - 0.25);
     }
     return best;
   }
@@ -171,7 +230,7 @@ function hitsAny(colliders: readonly Collider[], x: number, y: number, z: number
   for (const c of colliders) {
     if (y > c.top) continue;
     if (c.kind === 'circle') {
-      if (Math.hypot(x - c.x, z - c.z) < c.r + radius) return true;
+      if (hypot(x - c.x, z - c.z) < c.r + radius) return true;
     } else {
       const cos = Math.cos(c.yaw);
       const sin = Math.sin(c.yaw);

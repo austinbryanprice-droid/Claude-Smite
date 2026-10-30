@@ -2,6 +2,7 @@ import { fbm2, simplex2, smoothstep as sstep } from '../../core/random';
 import { ConquestLayout as L, type Vec2 } from '../../map/ConquestLayout';
 import type { GrassField } from '../Grass';
 import type { TerrainDef } from '../Terrain';
+import { hypot } from '../../core/math';
 
 /** Grass verge on each side of a paved lane that is still walkable. */
 const LANE_VERGE = 5;
@@ -54,7 +55,7 @@ function segDist(px: number, pz: number, a: Vec2, b: Vec2): number {
   const abx = b[0] - a[0];
   const abz = b[1] - a[1];
   const t = Math.max(0, Math.min(1, ((px - a[0]) * abx + (pz - a[1]) * abz) / (abx * abx + abz * abz || 1)));
-  return Math.hypot(px - (a[0] + abx * t), pz - (a[1] + abz * t));
+  return hypot(px - (a[0] + abx * t), pz - (a[1] + abz * t));
 }
 
 function polyDist(px: number, pz: number, pts: readonly Vec2[]): number {
@@ -83,7 +84,7 @@ export function conquestTerrain(): ConquestTerrainDef {
   };
   const plazaD = (x: number, z: number) => {
     let d = Infinity;
-    for (const p of plazas) d = Math.min(d, Math.hypot(x - p.at[0], z - p.at[1]) - p.radius);
+    for (const p of plazas) d = Math.min(d, hypot(x - p.at[0], z - p.at[1]) - p.radius);
     return d;
   };
 
@@ -145,15 +146,15 @@ export function conquestTerrain(): ConquestTerrainDef {
       // structure pads and the base courtyards are paved; camps are dirt clearings
       let pavedPad = Infinity;
       let campD = Infinity;
-      for (const s of [...L.towers, ...L.phoenixes]) pavedPad = Math.min(pavedPad, Math.hypot(x - s.at[0], z - s.at[1]) - L.radii.structurePad);
+      for (const s of [...L.towers, ...L.phoenixes]) pavedPad = Math.min(pavedPad, hypot(x - s.at[0], z - s.at[1]) - L.radii.structurePad);
       for (const b of L.bases) {
-        pavedPad = Math.min(pavedPad, Math.hypot(x - b.plaza.at[0], z - b.plaza.at[1]) - b.plaza.radius);
-        pavedPad = Math.min(pavedPad, Math.hypot(x - b.fountain[0], z - b.fountain[1]) - L.radii.fountain - 2);
+        pavedPad = Math.min(pavedPad, hypot(x - b.plaza.at[0], z - b.plaza.at[1]) - b.plaza.radius);
+        pavedPad = Math.min(pavedPad, hypot(x - b.fountain[0], z - b.fountain[1]) - L.radii.fountain - 2);
       }
       // buff camps and the Wyrm's hoard sit on old paved floors inside their dirt clearing
       let campFloor = Infinity;
       for (const c of L.camps) {
-        const d = Math.hypot(x - c.at[0], z - c.at[1]);
+        const d = hypot(x - c.at[0], z - c.at[1]);
         campD = Math.min(campD, d - (c.team === null ? L.radii.boss : L.radii.camp));
         if (c.kind !== 'small' && c.kind !== 'moltenColossus') campFloor = Math.min(campFloor, d - (c.team === null ? L.radii.boss - 0.8 : L.radii.camp - 0.2));
       }

@@ -2,6 +2,7 @@ import type { Side as Team } from '../game/combatant';
 import { ConquestLayout as L } from '../map/ConquestLayout';
 import { isBoss, type BossKind, type CampState, type Jungle } from './Jungle';
 import type { Unit } from './Unit';
+import { hypot } from '../core/math';
 
 /** What a team needs before it starts a boss on its own: healthy gods, and their summed levels. */
 export const BOSS_CALL: Record<BossKind, { gods: number; levels: number }> = {
@@ -46,7 +47,7 @@ export class Objectives {
   /** How many of a team's gods are at a pit right now. */
   atPit(team: Team, c: CampState): number {
     const [x, z] = c.camp.at;
-    return this.gods.filter((g) => g.team === team && g.alive && Math.hypot(g.x - x, g.z - z) < NEAR_PIT).length;
+    return this.gods.filter((g) => g.team === team && g.alive && hypot(g.x - x, g.z - z) < NEAR_PIT).length;
   }
 
   private judge(team: Team): CampState | null {

@@ -1,6 +1,7 @@
 import { basicAttackRaw } from '../game/combat';
 import type { Sim } from './Sim';
 import { WORLD_SCALE, type SimEvent, type Unit } from './Unit';
+import { hypot } from '../core/math';
 
 /** Charges Zeus's hits leave on a target (the same mark Arc Bolt applies). */
 const CHARGE = 'charge';
@@ -48,7 +49,7 @@ export class Passives {
     } else if (id === 'odin') {
       u.combatant.damageAmp = (t) => {
         const v = unitOf(t);
-        return v && v.kind === 'god' && Math.hypot(v.x - u.x, v.z - u.z) <= RAVEN_RANGE ? 1 + ODIN_BONUS : 1;
+        return v && v.kind === 'god' && hypot(v.x - u.x, v.z - u.z) <= RAVEN_RANGE ? 1 + ODIN_BONUS : 1;
       };
     } else if (id === 'loki') {
       u.combatant.damageAmp = (t) => {
@@ -58,7 +59,7 @@ export class Passives {
         const f = v.forward;
         const dx = u.x - v.x;
         const dz = u.z - v.z;
-        const d = Math.hypot(dx, dz) || 1;
+        const d = hypot(dx, dz) || 1;
         return (f.x * dx + f.z * dz) / d < -0.3 ? 1 + LOKI_BONUS : 1;
       };
     }
@@ -69,7 +70,7 @@ export class Passives {
     for (const o of this.sim.units) {
       if (o.kind !== 'god' || !o.alive || o.combatant.god.id !== 'odin') continue;
       for (const t of this.sim.enemiesOf(o)) {
-        if (t.stealth > 0 && Math.hypot(t.x - o.x, t.z - o.z) <= RAVEN_UNMASK) t.stealth = 0;
+        if (t.stealth > 0 && hypot(t.x - o.x, t.z - o.z) <= RAVEN_UNMASK) t.stealth = 0;
       }
     }
   }
@@ -97,14 +98,14 @@ export class Passives {
   private shockwave(thor: Unit, target: Unit): void {
     const dx = target.x - thor.x;
     const dz = target.z - thor.z;
-    const d = Math.hypot(dx, dz) || 1;
+    const d = hypot(dx, dz) || 1;
     const cx = target.x + (dx / d) * 2.5;
     const cz = target.z + (dz / d) * 2.5;
     const raw = basicAttackRaw(thor.combatant.stats) * THOR_SHOCK;
     this.proc = true;
     for (const t of this.sim.enemiesOf(thor)) {
       if (t === target || !t.alive || !t.targetable) continue;
-      if (Math.hypot(t.x - cx, t.z - cz) <= 2.8 + t.radius) this.sim.strike(thor, t, raw, 'physical');
+      if (hypot(t.x - cx, t.z - cz) <= 2.8 + t.radius) this.sim.strike(thor, t, raw, 'physical');
     }
     this.proc = false;
     this.sim.flashAt(thor, { type: 'circle', x: cx, z: cz, radius: 2.8 });
@@ -116,7 +117,7 @@ export class Passives {
     if (c.health / c.stats.maxHealth >= ANUBIS_THRESHOLD) return;
     if ((this.anubisReady.get(v) ?? 0) > this.sim.time) return;
     const anubis = this.sim.units.find(
-      (a) => a.kind === 'god' && a.alive && a.team === v.team && a.combatant.god.id === 'anubis' && Math.hypot(a.x - v.x, a.z - v.z) <= ANUBIS_RANGE,
+      (a) => a.kind === 'god' && a.alive && a.team === v.team && a.combatant.god.id === 'anubis' && hypot(a.x - v.x, a.z - v.z) <= ANUBIS_RANGE,
     );
     if (!anubis) return;
     c.addShield(c.stats.maxHealth * ANUBIS_SHIELD, 4);

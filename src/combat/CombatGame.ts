@@ -30,6 +30,7 @@ import { NetGuest, NetHost } from '../net/NetGame';
 import type { Roster } from '../net/Replica';
 import { roster, type Slot } from '../net/roster';
 import type { NetSession } from '../net/Session';
+import { hypot } from '../core/math';
 
 const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'] as const;
 
@@ -281,7 +282,7 @@ export class CombatGame implements Updatable {
   }
 
   private isHomeTeleport(x: number, z: number): boolean {
-    return Math.hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
+    return hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
   }
 
   // -------------------------------------------------------------------------
@@ -434,7 +435,7 @@ export class CombatGame implements Updatable {
     const shake = this.deps.shake;
     if (!shake) return;
     const me = this.player;
-    const near = (x: number, z: number, r: number) => Math.max(0, 1 - Math.hypot(x - me.x, z - me.z) / r);
+    const near = (x: number, z: number, r: number) => Math.max(0, 1 - hypot(x - me.x, z - me.z) / r);
     switch (e.type) {
       case 'damage':
         if (e.target === me && e.amount > 0) shake(Math.min(0.45, 0.12 + (e.amount / me.combatant.stats.maxHealth) * 2.5));
@@ -520,7 +521,7 @@ export class CombatGame implements Updatable {
       let key = along;
       if (melee) {
         // swings cover an arc and hit everything in it, so a reachable enemy wins over a nearer-lined one
-        const d = Math.hypot(rx, rz);
+        const d = hypot(rx, rz);
         if (d > t.radius && angleBetween(dir, { x: rx, z: rz }) > MELEE_ARC / 2) continue;
         inRange = d <= range + t.radius;
       } else {

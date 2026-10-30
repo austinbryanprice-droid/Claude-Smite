@@ -9,6 +9,7 @@ import { Fire, Relic } from './Effects';
 import type { MaterialLibrary } from './Materials';
 import type { Terrain } from './Terrain';
 import type { MapContent } from './World';
+import { hypot } from '../core/math';
 
 /**
  * The ruined temple at the center of the arena: a stepped circular platform,
@@ -64,7 +65,7 @@ export class Temple implements MapContent {
     this.add(floor, false);
 
     this.collision.addSurface((x, z) => {
-      const r = Math.hypot(x, z);
+      const r = hypot(x, z);
       if (r > p.baseRadius) return null;
       const step = Math.min(p.stepCount, Math.floor((p.baseRadius - r) / p.stepDepth) + 1);
       return step * p.stepHeight;
@@ -175,7 +176,7 @@ export class Temple implements MapContent {
     ], 64), this.mats.gold));
     ped.position.y = y0 + 0.54;
     this.collision.addSurface((x, z) => {
-      const r = Math.hypot(x, z);
+      const r = hypot(x, z);
       if (r < 2.9) return y0 + 0.5;
       if (r < 3.6) return y0 + 0.22;
       return null;

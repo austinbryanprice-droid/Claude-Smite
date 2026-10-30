@@ -6,6 +6,7 @@ import {
 } from '../render/tsl';
 import { rng } from '../core/random';
 import type { TextureLibrary } from './Materials';
+import { hypot } from '../core/math';
 
 /**
  * Procedural trees, bushes and ferns. Each species is grown on the CPU into a
@@ -472,14 +473,14 @@ export class Foliage {
     // long evening shadows still reach the shadowed area from a little beyond it
     const shadowReach = this.shadowDistance + 30;
     for (const c of this.chunks) {
-      const centre = Math.hypot(c.center.x - p.x, c.center.z - p.z);
+      const centre = hypot(c.center.x - p.x, c.center.z - p.z);
       const d = centre - c.radius;
       if (d >= this.drawDistance) {
         c.hi.visible = c.lo.visible = false;
         continue;
       }
       const mode = d > this.lodDistance ? 'lo' : centre + c.radius < this.lodDistance ? 'hi' : 'mixed';
-      const moved = Math.hypot(p.x - c.splitAt.x, p.z - c.splitAt.y) > 3;
+      const moved = hypot(p.x - c.splitAt.x, p.z - c.splitAt.y) > 3;
       if (mode !== c.mode || (mode === 'mixed' && moved)) {
         this.split(c, mode, p);
         c.mode = mode;

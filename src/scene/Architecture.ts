@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, simplex2 } from '../core/random';
+import { hypot } from '../core/math';
 
 /**
  * Geometry builders for the temple's classical architecture. Everything is
@@ -69,7 +70,7 @@ export function brokenCap(radius: number, seed: number): THREE.BufferGeometry {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    const rr = Math.hypot(x, z) / radius;
+    const rr = hypot(x, z) / radius;
     const jag = n(x * 3.1, z * 3.1) * 0.12 + n(x * 9, z * 9) * 0.04;
     pos.setY(i, x * tilt.x + z * tilt.y + jag * (0.3 + rr));
   }

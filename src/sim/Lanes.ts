@@ -1,6 +1,7 @@
 import { alongPolyline, nearestOnPolyline, type Vec2 } from '../map/ConquestLayout';
 import type { Sim } from './Sim';
 import { isStructure, WORLD_SCALE, type Brain, type Unit } from './Unit';
+import { hypot } from '../core/math';
 
 /** How far a minion notices enemies. */
 export const MINION_AGGRO = 9;
@@ -24,8 +25,8 @@ function godAggressor(sim: Sim, u: Unit, range: number): Unit | null {
     if (sim.time - g.lastGodHit.at > GOD_AGGRO_WINDOW) continue;
     const v = g.lastGodHit.victim;
     if (v.team !== u.team) continue;
-    if (Math.hypot(g.x - u.x, g.z - u.z) > range) continue;
-    if (Math.hypot(v.x - u.x, v.z - u.z) > range) continue;
+    if (hypot(g.x - u.x, g.z - u.z) > range) continue;
+    if (hypot(v.x - u.x, v.z - u.z) > range) continue;
     return g;
   }
   return null;
@@ -61,7 +62,7 @@ export class MinionBrain implements Brain {
     if (t) {
       const dx = t.x - u.x;
       const dz = t.z - u.z;
-      const d = Math.hypot(dx, dz);
+      const d = hypot(dx, dz);
       u.body.yaw = Math.atan2(-dx, -dz);
       u.aim.x = t.x;
       u.aim.z = t.z;
@@ -79,13 +80,13 @@ export class MinionBrain implements Brain {
     const next = alongPolyline(this.path, here.along + 6);
     const tx = next[0] - ahead[0];
     const tz = next[1] - ahead[1];
-    const tl = Math.hypot(tx, tz) || 1;
+    const tl = hypot(tx, tz) || 1;
     // offset to the side of the walking direction
     const gx = ahead[0] + (-tz / tl) * this.lateral;
     const gz = ahead[1] + (tx / tl) * this.lateral;
     const dx = gx - u.x;
     const dz = gz - u.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     if (d < 0.3) return;
     u.move = this.separate(dx / d, dz / d);
     u.body.yaw = Math.atan2(-u.move.x, -u.move.z);
@@ -94,7 +95,7 @@ export class MinionBrain implements Brain {
   private valid(t: Unit): boolean {
     if (!t.targetable || t.stealth > 0) return false;
     if (isStructure(t) && t.shielded()) return false;
-    return Math.hypot(t.x - this.u.x, t.z - this.u.z) <= MINION_AGGRO + t.radius + 2;
+    return hypot(t.x - this.u.x, t.z - this.u.z) <= MINION_AGGRO + t.radius + 2;
   }
 
   private choose(): Unit | null {
@@ -106,7 +107,7 @@ export class MinionBrain implements Brain {
     for (const t of sim.enemiesOf(u)) {
       if (t.kind === 'dummy' || t.kind === 'summon' || t.kind === 'monster' || t.stealth > 0) continue;
       if (isStructure(t) && t.shielded()) continue;
-      const d = Math.hypot(t.x - u.x, t.z - u.z) - t.radius;
+      const d = hypot(t.x - u.x, t.z - u.z) - t.radius;
       if (d > MINION_AGGRO) continue;
       // keep fighting what we fight; otherwise minions, then structures, then gods
       const priority = t === this.target ? -1 : t.kind === 'minion' ? 0 : isStructure(t) ? 1 : 2;
@@ -128,7 +129,7 @@ export class MinionBrain implements Brain {
       if (o === u || o.kind !== 'minion' || !o.alive || o.team !== u.team) continue;
       const dx = u.x - o.x;
       const dz = u.z - o.z;
-      const d = Math.hypot(dx, dz);
+      const d = hypot(dx, dz);
       const min = u.radius + o.radius + 0.4;
       if (d > 0.001 && d < min) {
         sx += (dx / d) * (min - d);
@@ -137,7 +138,7 @@ export class MinionBrain implements Brain {
     }
     const mx = x + sx * 1.5;
     const mz = z + sz * 1.5;
-    const l = Math.hypot(mx, mz) || 1;
+    const l = hypot(mx, mz) || 1;
     return { x: mx / l, z: mz / l };
   }
 }
@@ -214,7 +215,7 @@ export class StructureBrain implements Brain {
   }
 
   private inRange(t: Unit): boolean {
-    return t.targetable && Math.hypot(t.x - this.u.x, t.z - this.u.z) <= this.range + t.radius;
+    return t.targetable && hypot(t.x - this.u.x, t.z - this.u.z) <= this.range + t.radius;
   }
 
   private choose(): Unit | null {
@@ -224,7 +225,7 @@ export class StructureBrain implements Brain {
     let gd = Infinity;
     for (const t of this.sim.enemiesOf(this.u)) {
       if (!this.inRange(t)) continue;
-      const d = Math.hypot(t.x - this.u.x, t.z - this.u.z);
+      const d = hypot(t.x - this.u.x, t.z - this.u.z);
       if (t.kind === 'minion' || t.kind === 'summon') {
         if (d < md) {
           minion = t;

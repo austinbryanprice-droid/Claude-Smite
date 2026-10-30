@@ -109,8 +109,11 @@ export const QUALITY_PRESETS: Record<QualityName, QualitySettings> = {
 
 const STORAGE_KEY = 'smite.quality';
 
-/** URL `?quality=` wins, then the saved choice, then a guess from the hardware. */
-export function initialQuality(isWebGPU: boolean): QualityName {
+/**
+ * URL `?quality=` wins, then the saved choice, then a guess from the hardware.
+ * `slowGpu`: the browser draws on integrated graphics or in software.
+ */
+export function initialQuality(isWebGPU: boolean, slowGpu = false): QualityName {
   const fromUrl = new URLSearchParams(location.search).get('quality');
   if (fromUrl && fromUrl in QUALITY_PRESETS) return fromUrl as QualityName;
   try {
@@ -121,7 +124,7 @@ export function initialQuality(isWebGPU: boolean): QualityName {
   }
   const cores = navigator.hardwareConcurrency ?? 4;
   const mobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-  if (mobile) return 'low';
+  if (mobile || slowGpu) return 'low';
   if (!isWebGPU) return 'medium';
   return cores >= 8 ? 'high' : 'medium';
 }

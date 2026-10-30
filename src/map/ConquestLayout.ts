@@ -1,3 +1,4 @@
+import { hypot } from '../core/math';
 /**
  * The Conquest map as data: where every lane, structure, fountain and camp
  * sits. The simulation reads it for gameplay and the scene builds terrain and
@@ -210,7 +211,7 @@ export function laneFrom(team: Team, lane: LaneId): readonly Vec2[] {
 export function polylineLength(points: readonly Vec2[]): number {
   let len = 0;
   for (let i = 1; i < points.length; i++) {
-    len += Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]);
+    len += hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]);
   }
   return len;
 }
@@ -221,7 +222,7 @@ export function alongPolyline(points: readonly Vec2[], distance: number): Vec2 {
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1]!;
     const b = points[i]!;
-    const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const seg = hypot(b[0] - a[0], b[1] - a[1]);
     if (left <= seg) {
       const t = seg === 0 ? 0 : left / seg;
       return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
@@ -233,18 +234,25 @@ export function alongPolyline(points: readonly Vec2[], distance: number): Vec2 {
 
 /** Distance from (x, z) to a polyline, and how far along it the closest point is. */
 export function nearestOnPolyline(points: readonly Vec2[], x: number, z: number): { distance: number; along: number } {
-  let best = { distance: Infinity, along: 0 };
+  // bots call this every think, so no destructuring or interim objects
+  let distance = Infinity;
+  let along = 0;
   let walked = 0;
   for (let i = 1; i < points.length; i++) {
-    const [ax, az] = points[i - 1]!;
-    const [bx, bz] = points[i]!;
-    const abx = bx - ax;
-    const abz = bz - az;
-    const seg = Math.hypot(abx, abz);
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const ax = a[0];
+    const az = a[1];
+    const abx = b[0] - ax;
+    const abz = b[1] - az;
+    const seg = hypot(abx, abz);
     const t = seg === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * abx + (z - az) * abz) / (seg * seg)));
-    const d = Math.hypot(x - (ax + abx * t), z - (az + abz * t));
-    if (d < best.distance) best = { distance: d, along: walked + seg * t };
+    const d = hypot(x - (ax + abx * t), z - (az + abz * t));
+    if (d < distance) {
+      distance = d;
+      along = walked + seg * t;
+    }
     walked += seg;
   }
-  return best;
+  return { distance, along };
 }

@@ -9,6 +9,7 @@
  */
 
 import { RATE } from './dsp';
+import { hypot } from '../core/math';
 
 export type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 
@@ -280,7 +281,7 @@ export class AudioEngine {
 
   /** Whether a positional sound here would be audible at all. */
   audible(x: number, z: number, range = CULL): boolean {
-    return Math.hypot(x - this.listenerPos.x, z - this.listenerPos.z) < range;
+    return hypot(x - this.listenerPos.x, z - this.listenerPos.z) < range;
   }
 
   /**
@@ -431,7 +432,7 @@ export class AudioEngine {
   }
 
   private distTo(x: number, z: number): number {
-    return Math.hypot(x - this.listenerPos.x, z - this.listenerPos.z);
+    return hypot(x - this.listenerPos.x, z - this.listenerPos.z);
   }
 
   /** How many one-shots are sounding right now (for thinning crowds). */
@@ -467,12 +468,12 @@ export class AudioEngine {
     const l = this.ctx.listener;
     const t = this.ctx.currentTime;
     // stationary loops (fountains, braziers) re-filter as the listener walks around them
-    if (Math.hypot(x - this.airFrom.x, z - this.airFrom.z) > 1) {
+    if (hypot(x - this.airFrom.x, z - this.airFrom.z) > 1) {
       this.airFrom.x = x;
       this.airFrom.z = z;
       for (const a of this.airLoops) this.applyAir(a, t, 0.2);
     }
-    const len = Math.hypot(fx, fz) || 1;
+    const len = hypot(fx, fz) || 1;
     if (l.positionX) {
       l.positionX.setTargetAtTime(x, t, 0.02);
       l.positionY.setTargetAtTime(y, t, 0.02);

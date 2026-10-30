@@ -6,6 +6,7 @@ import { LANES, marchPath, type Match } from './Match';
 import { BOSS_CALL, pitRadius } from './Objectives';
 import type { Sim } from './Sim';
 import { isStructure, WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
+import { hypot } from '../core/math';
 
 export type BotRole = LaneId | 'roam';
 
@@ -102,7 +103,7 @@ export class LaneBot implements Brain {
     let bestScore = Infinity;
     for (const k of this.match.jungle.camps) {
       if (k.camp.team !== u.team || !this.match.jungle.alive(k)) continue;
-      const d = Math.hypot(k.camp.at[0] - u.x, k.camp.at[1] - u.z);
+      const d = hypot(k.camp.at[0] - u.x, k.camp.at[1] - u.z);
       // skip a buff the jungler already holds
       if (isBuff(k.camp.kind) && u.marks.has(buffMark(k.camp.kind))) continue;
       const score = d - (isBuff(k.camp.kind) ? 35 : 0);
@@ -121,7 +122,7 @@ export class LaneBot implements Brain {
       const home = this.u.home;
       const dx = home.x - cx;
       const dz = home.z - cz;
-      const d = Math.hypot(dx, dz) || 1;
+      const d = hypot(dx, dz) || 1;
       const r = pitRadius(c) + 5;
       this.anchor.x = cx + (dx / d) * r;
       this.anchor.z = cz + (dz / d) * r;
@@ -177,14 +178,14 @@ export class LaneBot implements Brain {
   /** Allied minions are inside the structure's range, so it will shoot them first. */
   private covered(s: Unit): boolean {
     const reach = this.rangeOf(s);
-    return this.sim.units.some((m) => m.kind === 'minion' && m.alive && m.team === this.u.team && Math.hypot(m.x - s.x, m.z - s.z) <= reach);
+    return this.sim.units.some((m) => m.kind === 'minion' && m.alive && m.team === this.u.team && hypot(m.x - s.x, m.z - s.z) <= reach);
   }
 
   /** Inside a standing enemy structure's range with nothing of ours there to draw its fire. */
   private underTower(x: number, z: number): boolean {
     for (const s of this.match.structures.values()) {
       if (s.team === this.u.team || !s.alive) continue;
-      if (Math.hypot(x - s.x, z - s.z) > this.rangeOf(s) + 1) continue;
+      if (hypot(x - s.x, z - s.z) > this.rangeOf(s) + 1) continue;
       if (!this.covered(s)) return true;
     }
     return false;
@@ -202,7 +203,7 @@ export class LaneBot implements Brain {
     let gd = AGGRO * 0.8;
     for (const t of sim.enemiesOf(u)) {
       if (t.kind !== 'god' || t.stealth > 0) continue;
-      const d = Math.hypot(t.x - u.x, t.z - u.z);
+      const d = hypot(t.x - u.x, t.z - u.z);
       if (d < gd) {
         god = t;
         gd = d;
@@ -210,13 +211,13 @@ export class LaneBot implements Brain {
     }
     if (god) return god;
     const [cx, cz] = camp.camp.at;
-    if (Math.hypot(u.x - cx, u.z - cz) > pitRadius(camp) + 6 || !this.bossOn(camp)) return null;
+    if (hypot(u.x - cx, u.z - cz) > pitRadius(camp) + 6 || !this.bossOn(camp)) return null;
     let best: Unit | null = null;
     let bd = Infinity;
     for (const m of camp.members) {
       if (!m.targetable) continue;
       // finish the one already fighting us, then the nearest
-      const d = Math.hypot(m.x - u.x, m.z - u.z) - (m.brain instanceof MonsterBrain && m.brain.target === u ? 2 : 0);
+      const d = hypot(m.x - u.x, m.z - u.z) - (m.brain instanceof MonsterBrain && m.brain.target === u ? 2 : 0);
       if (d < bd) {
         best = m;
         bd = d;
@@ -229,11 +230,11 @@ export class LaneBot implements Brain {
   private jungleRoute(goal: Point): Point {
     const { u, sim } = this;
     const t = this.trail;
-    const stale = !t || Math.hypot(t.goal.x - goal.x, t.goal.z - goal.z) > 3 || sim.time - t.at > REPLAN;
+    const stale = !t || hypot(t.goal.x - goal.x, t.goal.z - goal.z) > 3 || sim.time - t.at > REPLAN;
     if (stale) this.trail = { goal: { ...goal }, points: this.match.nav.path({ x: u.x, z: u.z }, goal), at: sim.time };
     const pts = this.trail!.points;
     // drop the waypoints we've reached
-    while (pts.length > 1 && Math.hypot(pts[0]!.x - u.x, pts[0]!.z - u.z) < 1.5) pts.shift();
+    while (pts.length > 1 && hypot(pts[0]!.x - u.x, pts[0]!.z - u.z) < 1.5) pts.shift();
     return pts[0] ?? goal;
   }
 
@@ -247,9 +248,9 @@ export class LaneBot implements Brain {
       if (t.kind === 'dummy' || t.stealth > 0) continue;
       // leave the jungle alone unless a monster is already fighting us
       if (t.kind === 'monster' && !(t.brain instanceof MonsterBrain && t.brain.target === u)) continue;
-      const d = Math.hypot(t.x - u.x, t.z - u.z) - t.radius;
+      const d = hypot(t.x - u.x, t.z - u.z) - t.radius;
       if (d > AGGRO) continue;
-      if (Math.hypot(t.x - this.anchor.x, t.z - this.anchor.z) > LEASH) continue;
+      if (hypot(t.x - this.anchor.x, t.z - this.anchor.z) > LEASH) continue;
       const tc = t.combatant;
       const thp = tc.health / tc.stats.maxHealth;
       // don't follow anything under a tower unless it is about to die and we are healthy
@@ -281,7 +282,7 @@ export class LaneBot implements Brain {
     const there = nearestOnPolyline(this.path, goal.x, goal.z);
     if (me.distance > OFF_LANE) {
       // get onto the lane at its closest point, unless the goal is nearer
-      if (Math.hypot(goal.x - u.x, goal.z - u.z) < me.distance) return goal;
+      if (hypot(goal.x - u.x, goal.z - u.z) < me.distance) return goal;
       const p = alongPolyline(this.path, me.along);
       return { x: p[0], z: p[1] };
     }

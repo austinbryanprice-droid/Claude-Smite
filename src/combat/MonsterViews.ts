@@ -5,6 +5,7 @@ import { skinRigid } from '../scene/merge';
 import { BUFF_COLOR } from '../scene/conquest/Props';
 import { MonsterBrain } from '../sim/Jungle';
 import type { Unit } from '../sim/Unit';
+import { hypot } from '../core/math';
 
 /**
  * Jungle monsters. Two original designs:
@@ -202,7 +203,7 @@ function thornback(alpha: boolean): MonsterView {
     root,
     height: 1.25 * s,
     animate(u, dt, deathTime, wobble) {
-      const speed = Math.hypot(u.vx, u.vz);
+      const speed = hypot(u.vx, u.vz);
       phase += dt * (3 + speed * 2.2);
       breath += dt * 2.2;
       const gait = Math.min(1, speed / 2);
@@ -327,7 +328,7 @@ function giant(o: GiantOptions): MonsterView {
       t += dt;
       // a boss's area attack: crouch and raise both fists high, then smash
       const special = u.brain instanceof MonsterBrain ? u.brain.specialProgress : 0;
-      const speed = Math.hypot(u.vx, u.vz);
+      const speed = hypot(u.vx, u.vz);
       const gait = Math.min(1, speed / 1.5);
       phase += dt * (1.5 + speed * 1.4);
       // heavy stomping walk with a side-to-side sway
