@@ -240,7 +240,7 @@ export class ConquestMap implements MapContent {
 
   update(dt: number, t: number, camera: THREE.Camera): void {
     for (const f of this.fires) f.update(t);
-    for (const s of this.structures.values()) s.update(dt, t);
+    for (const s of this.structures.values()) s.update(dt, t, camera);
     for (const { model, collider, ground } of this.cameraBlockers) collider.top = ground + model.solidTop;
     this.foliage.update(camera);
   }

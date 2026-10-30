@@ -28,7 +28,8 @@ export interface StructureModel {
   attack?(): void;
   /** Where shots leave from. */
   readonly muzzle?: THREE.Object3D;
-  update(dt: number, time: number): void;
+  /** `camera` lets a model spend less on animation far from the view. */
+  update(dt: number, time: number, camera?: THREE.Camera): void;
 }
 
 const TEAM: Record<Team, { trim: number; glow: number; cloth: number }> = {

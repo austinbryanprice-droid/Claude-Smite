@@ -81,6 +81,30 @@ const OBJECTIVE_RANGE = 38;
 /** Drain a lagging damage strip toward the real value, quickly at first. */
 const drain = (lag: number, pct: number, dt: number): number => (pct >= lag ? pct : Math.max(pct, lag - Math.max(0.04, (lag - pct) * 2.5) * dt));
 
+/**
+ * The HUD updates every frame, and every style or text write makes the browser
+ * recalculate style before it can paint. These write only what changed, so
+ * values that sit still (full health bars, idle cooldowns) cost nothing.
+ */
+const written = new WeakMap<Element, Map<string, string>>();
+function changed(e: Element, key: string, value: string): boolean {
+  let m = written.get(e);
+  if (!m) written.set(e, (m = new Map()));
+  if (m.get(key) === value) return false;
+  m.set(key, value);
+  return true;
+}
+function setStyle(e: HTMLElement | SVGElement, prop: string, value: string): void {
+  if (changed(e, prop, value)) e.style.setProperty(prop, value);
+}
+function setText(e: Element, text: string): void {
+  if (changed(e, '#text', text)) e.textContent = text;
+}
+function setHtml(e: Element, html: string): void {
+  if (changed(e, '#html', html)) e.innerHTML = html;
+}
+const percent = (f: number): string => `${(f * 100).toFixed(1)}%`;
+
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, html = ''): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
   e.className = cls;
@@ -332,19 +356,19 @@ export class CombatHud {
     this.hurt = Math.max(0, this.hurt - dt * 2.2);
     const low = p.alive ? Math.max(0, (35 - hpPct) / 35) : 0;
     const beat = low > 0 ? 0.75 + 0.25 * Math.sin(performance.now() / 180) : 0;
-    this.vignette.style.opacity = `${Math.min(1, this.hurt * 0.9 + low * beat)}`;
+    setStyle(this.vignette, 'opacity', Math.min(1, this.hurt * 0.9 + low * beat).toFixed(2));
     this.updateHitDirs(dt);
     const shield = c.shieldTotal;
-    this.hpFill.style.width = `${hpPct}%`;
-    this.hpShield.style.left = `${hpPct}%`;
-    this.hpShield.style.width = `${Math.min(100 - hpPct, (shield / s.maxHealth) * 100)}%`;
-    this.hpText.textContent = `${Math.ceil(c.health)} / ${Math.round(s.maxHealth)}${shield > 0 ? ` (+${Math.round(shield)})` : ''}`;
-    this.manaFill.style.width = `${(c.mana / s.maxMana) * 100}%`;
-    this.manaText.textContent = `${Math.floor(c.mana)} / ${Math.round(s.maxMana)}`;
-    this.levelText.textContent = String(c.level);
+    setStyle(this.hpFill, 'width', percent(hpPct / 100));
+    setStyle(this.hpShield, 'left', percent(hpPct / 100));
+    setStyle(this.hpShield, 'width', percent(Math.min(1 - hpPct / 100, shield / s.maxHealth)));
+    setText(this.hpText, `${Math.ceil(c.health)} / ${Math.round(s.maxHealth)}${shield > 0 ? ` (+${Math.round(shield)})` : ''}`);
+    setStyle(this.manaFill, 'width', percent(c.mana / s.maxMana));
+    setText(this.manaText, `${Math.floor(c.mana)} / ${Math.round(s.maxMana)}`);
+    setText(this.levelText, String(c.level));
     const prog = c.levelProgress;
     const frac = c.level >= MAX_LEVEL ? 1 : prog.into / prog.needed;
-    this.xpRing.style.strokeDashoffset = String(119.4 * (1 - frac));
+    setStyle(this.xpRing, 'stroke-dashoffset', (119.4 * (1 - frac)).toFixed(1));
 
     this.updateBuffs();
 
@@ -379,24 +403,24 @@ export class CombatHud {
       }
       slot.wasCooling = cd > 0;
       slot.tile.classList.toggle('nomana', !locked && cd <= 0 && c.mana < cost);
-      slot.cd.style.background = cd > 0 ? `conic-gradient(rgba(5,5,10,0.78) ${(cd / total) * 360}deg, transparent 0)` : 'none';
-      slot.cdText.textContent = cd > 0 ? (cd >= 1 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '';
-      slot.cost.textContent = locked ? '' : String(Math.round(cost));
-      slot.lock.textContent = locked ? `Lv ${i === ULTIMATE_SLOT ? 5 : 1}` : '';
+      setStyle(slot.cd, 'background', cd > 0 ? `conic-gradient(rgba(5,5,10,0.78) ${((cd / total) * 360).toFixed(1)}deg, transparent 0)` : 'none');
+      setText(slot.cdText, cd > 0 ? (cd >= 1 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '');
+      setText(slot.cost, locked ? '' : String(Math.round(cost)));
+      setText(slot.lock, locked ? `Lv ${i === ULTIMATE_SLOT ? 5 : 1}` : '');
     });
     const unspent = c.unspentPoints;
-    this.points.innerHTML = unspent > 0 ? `<b>${unspent}</b> skill point${unspent > 1 ? 's' : ''} &middot; press <kbd>K</kbd>` : '';
+    setHtml(this.points, unspent > 0 ? `<b>${unspent}</b> skill point${unspent > 1 ? 's' : ''} &middot; press <kbd>K</kbd>` : '');
     this.points.classList.toggle('show', unspent > 0);
 
     // crowd control on the player
     const cc = c.cc.active.filter((a) => CC_LABEL[a.kind]);
-    this.status.innerHTML = cc.map((a) => `<span class="ch-cc ch-cc-${a.kind}">${CC_LABEL[a.kind]} ${a.remaining.toFixed(1)}</span>`).join('');
+    setHtml(this.status, cc.map((a) => `<span class="ch-cc ch-cc-${a.kind}">${CC_LABEL[a.kind]} ${a.remaining.toFixed(1)}</span>`).join(''));
 
     this.recall.classList.toggle('show', p.recall > 0);
-    this.recallFill.style.width = `${(1 - p.recall / RECALL_TIME) * 100}%`;
+    setStyle(this.recallFill, 'width', percent(1 - p.recall / RECALL_TIME));
 
     this.death.classList.toggle('show', !c.alive);
-    if (!c.alive) this.deathTimer.textContent = `${Math.ceil(c.respawnTimer)}s`;
+    if (!c.alive) setText(this.deathTimer, `${Math.ceil(c.respawnTimer)}s`);
 
     this.overheadBars(units, dt);
     this.objectiveBar(units, dt);
@@ -419,8 +443,8 @@ export class CombatHud {
     for (const chip of this.buffs.children as HTMLCollectionOf<HTMLElement>) {
       const m = this.player.marks.get(buffMark(chip.dataset.buff as BuffKind));
       if (!m) continue;
-      chip.style.setProperty('--p', String(m.remaining / (chip.dataset.buff === 'fury' ? FURY_DURATION : BUFF_DURATION)));
-      chip.querySelector('i')!.textContent = String(Math.ceil(m.remaining));
+      setStyle(chip, '--p', (m.remaining / (chip.dataset.buff === 'fury' ? FURY_DURATION : BUFF_DURATION)).toFixed(3));
+      setText(chip.querySelector('i')!, String(Math.ceil(m.remaining)));
     }
   }
 
@@ -466,14 +490,14 @@ export class CombatHud {
       o.cast.querySelector('span')!.textContent = SPECIAL_NAME[kind] ?? '';
     }
     const c = best.combatant;
-    const pct = c.health / c.stats.maxHealth;
-    this.objectiveLag = drain(this.objectiveLag, pct, dt);
-    o.hp.style.width = `${pct * 100}%`;
-    o.lag.style.width = `${this.objectiveLag * 100}%`;
-    o.pct.textContent = `${Math.ceil(c.health).toLocaleString()} / ${Math.round(c.stats.maxHealth).toLocaleString()}`;
+    const frac = c.health / c.stats.maxHealth;
+    this.objectiveLag = drain(this.objectiveLag, frac, dt);
+    setStyle(o.hp, 'width', percent(frac));
+    setStyle(o.lag, 'width', percent(this.objectiveLag));
+    setText(o.pct, `${Math.ceil(c.health).toLocaleString()} / ${Math.round(c.stats.maxHealth).toLocaleString()}`);
     const cast = brain.specialProgress;
     o.cast.classList.toggle('show', cast > 0);
-    o.castFill.style.width = `${cast * 100}%`;
+    setStyle(o.castFill, 'width', percent(cast));
     o.root.classList.toggle('engaged', brain.target !== null);
     // its overhead bar is hidden while this bar shows it, so its crowd control shows here
     const tag = ccTag(best);
@@ -496,7 +520,7 @@ export class CombatHud {
       const enemyHidden = u.team !== this.player.team && u.stealth > 0;
       // the objective bar already shows it
       if (!at || enemyHidden || u === this.objectiveUnit) {
-        b.el.style.display = 'none';
+        setStyle(b.el, 'display', 'none');
         continue;
       }
       const c = u.combatant;
@@ -504,25 +528,27 @@ export class CombatHud {
       // keep the screen readable in a big fight: minion bars only up close
       const maxDist = u.kind === 'minion' || u.kind === 'monster' ? 45 : isStructure(u) ? 45 : 80;
       if (dist > maxDist) {
-        b.el.style.display = 'none';
+        setStyle(b.el, 'display', 'none');
         continue;
       }
-      b.el.style.display = '';
-      b.el.style.transform = `translate(${at.x}px, ${at.y}px) translate(-50%, -100%) scale(${Math.max(0.6, Math.min(1, 22 / dist))})`;
+      setStyle(b.el, 'display', '');
+      setStyle(b.el, 'transform', `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, -100%) scale(${Math.max(0.6, Math.min(1, 22 / dist)).toFixed(2)})`);
       const max = c.stats.maxHealth;
       const shield = c.shieldTotal;
       const total = Math.max(max, c.health + shield);
-      const pct = c.health / total;
-      b.lagPct = drain(b.lagPct, pct, dt);
-      b.hp.style.width = `${pct * 100}%`;
-      b.lag.style.width = `${b.lagPct * 100}%`;
+      const frac = c.health / total;
+      b.lagPct = drain(b.lagPct, frac, dt);
+      setStyle(b.hp, 'width', percent(frac));
+      setStyle(b.lag, 'width', percent(b.lagPct));
       // a notch every 250 health on gods, every thousand on structures
       const step = u.kind === 'god' ? 250 : isStructure(u) ? 1000 : 0;
-      if (step) b.el.style.setProperty('--tick', `${(100 * step) / total}%`);
-      b.shield.style.left = `${(c.health / total) * 100}%`;
-      b.shield.style.width = `${(shield / total) * 100}%`;
-      b.level.textContent = u.kind === 'god' ? String(c.level) : '';
-      b.marks.textContent = [...u.marks].filter(([k]) => !k.startsWith('buff:')).map(([, m]) => '◆'.repeat(m.stacks)).join('');
+      if (step) setStyle(b.el, '--tick', percent(step / total));
+      setStyle(b.shield, 'left', percent(frac));
+      setStyle(b.shield, 'width', percent(shield / total));
+      setText(b.level, u.kind === 'god' ? String(c.level) : '');
+      let marks = '';
+      for (const [k, m] of u.marks) if (!k.startsWith('buff:')) marks += '◆'.repeat(m.stacks);
+      setText(b.marks, marks);
       this.updateBarCC(b, u);
     }
     for (const [u, b] of this.bars) {

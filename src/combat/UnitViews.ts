@@ -164,7 +164,7 @@ export class UnitViews {
       this.animate(u, v, dt, alpha);
       if (!v.structure && this.camera) this.setShadows(v, this.camera.position.distanceToSquared(v.root.position) < SHADOW_RANGE ** 2);
       if (u.kind === 'minion') minions.push(u);
-      if (v.structure && !v.external) v.structure.update(dt, time);
+      if (v.structure && !v.external) v.structure.update(dt, time, this.camera ?? undefined);
     }
     this.minions.frame(
       minions,

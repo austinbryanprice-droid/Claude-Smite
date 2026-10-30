@@ -23,7 +23,8 @@ export interface StructureModel {
   setDestroyed(t: number): void;
   /** Height above the root that still blocks the follow camera: everything while standing, the rubble once fallen. */
   readonly solidTop: number;
-  update(dt: number, time: number): void;
+  /** `camera` lets a model spend less on animation far from the view. */
+  update(dt: number, time: number, camera?: THREE.Camera): void;
 }
 
 /** A square-tapered tower body (flat-shaded frustum), from y0 to y1. */
