@@ -40,7 +40,7 @@ describe('PerfStats', () => {
     expect(text).toContain('max 180');
     expect(text).toContain('Stalls since load: 1 over 50 ms · 1 over 100 ms · 0 over 250 ms');
     // the stall follows the frame that started 3 new shaders
-    expect(text).toMatch(/180 ms at [\d.]+ s: the frame before ran [\d.]+ ms of game code and started 3 shaders/);
+    expect(text).toMatch(/180 ms at [\d.]+ s: the frame before ran [\d.]+ ms of game code and built 3 shaders/);
     expect(text).toContain('Display: 2560×1600 at 1.5x');
   });
 });

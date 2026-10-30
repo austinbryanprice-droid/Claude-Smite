@@ -23,10 +23,23 @@ export class AsyncPipelines {
   pending = 0;
   /** Pipelines finished since start. */
   done = 0;
+  /**
+   * Shaders generated since start: the node graph built into WGSL/GLSL on the
+   * main thread, the part of a new material that can't run in the background.
+   */
+  built = 0;
   private idle: (() => void)[] = [];
   private slots: (() => void)[] = [];
 
   constructor(renderer: THREE.WebGPURenderer) {
+    const backend = renderer.backend as unknown as { createNodeBuilder?: (...args: unknown[]) => unknown };
+    if (typeof backend.createNodeBuilder === 'function') {
+      const make = backend.createNodeBuilder.bind(backend);
+      backend.createNodeBuilder = (...args) => {
+        this.built++;
+        return make(...args);
+      };
+    }
     const cache = (renderer as unknown as { _pipelines?: PipelineCache })._pipelines;
     if (!cache || typeof cache.getForRender !== 'function') return; // three changed: keep its default behaviour
     const original = cache.getForRender.bind(cache);

@@ -194,7 +194,7 @@ async function main(): Promise<void> {
   clearTimeout(slow);
   hud.ready();
   if (advice) hud.notice(advice.text, 15);
-  const shadersAtStart = pipelines.done + pipelines.pending;
+  const shadersAtStart = pipelines.built;
   perf.watchGpu(renderer);
   hud.report = () => perf.report({
     gpu,
@@ -204,7 +204,7 @@ async function main(): Promise<void> {
     autoDrops,
     canvas: renderer.domElement,
     mode: `${choice.mode}${choice.net ? ' online' : ''}`,
-    shaders: pipelines.done + pipelines.pending - shadersAtStart,
+    shaders: pipelines.built - shadersAtStart,
   });
   combat.netReady();
 
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
     input.endFrame();
     hud.frame(dt);
     // (not inside the call below: `?.` would skip it when auto quality is off)
-    const cpu = perf.end(pipelines.done + pipelines.pending);
+    const cpu = perf.end(pipelines.built);
     // the real interval: the loop's dt is clamped to 100 ms, which would make a
     // very slow GPU look CPU bound and hide stalls from auto quality
     autoQuality?.frame(perf.gap / 1000, cpu);
