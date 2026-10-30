@@ -245,4 +245,8 @@ export class ConquestMap implements MapContent {
     for (const { model, collider, ground } of this.cameraBlockers) collider.top = ground + model.solidTop;
     this.foliage.update(camera);
   }
+
+  prime(): void {
+    this.foliage.prime();
+  }
 }

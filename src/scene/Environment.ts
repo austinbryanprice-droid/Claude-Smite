@@ -173,7 +173,7 @@ export class Environment {
    * shadows of things moving out there update at half rate.
    */
   private staggerCascades(): void {
-    const lights = (this.csm as unknown as { lights?: { shadow: THREE.LightShadow }[] } | null)?.lights;
+    const lights = this.cascades();
     if (!lights) return;
     this.frame++;
     for (let i = 1; i < lights.length; i++) {
@@ -181,5 +181,14 @@ export class Environment {
       shadow.autoUpdate = false;
       if ((this.frame + i) % 2 === 0) shadow.needsUpdate = true;
     }
+  }
+
+  /** Draws every shadow cascade on the next frame, staggered or not. */
+  redrawShadows(): void {
+    for (const l of this.cascades() ?? []) l.shadow.needsUpdate = true;
+  }
+
+  private cascades(): { shadow: THREE.LightShadow }[] | undefined {
+    return (this.csm as unknown as { lights?: { shadow: THREE.LightShadow }[] } | null)?.lights;
   }
 }

@@ -148,7 +148,7 @@ export class CombatGame implements Updatable {
       teleport: (x, z, yaw) => player.spawn(x, z, yaw !== undefined && this.isHomeTeleport(x, z) ? yaw : player.yaw),
     };
 
-    this.vfx = new CombatVfx(this.groundAt);
+    this.vfx = new CombatVfx(this.groundAt, world.spellLights);
     this.vfx.targets = () => (this.match ? [...this.match.brains].map(([s, b]) => [s, b.current] as const) : []);
     world.vfx.add(this.vfx.group, this.auras.group, this.status.group);
     this.shapeDecal = new GroundDecal(this.groundAt);
@@ -283,6 +283,11 @@ export class CombatGame implements Updatable {
 
   private isHomeTeleport(x: number, z: number): boolean {
     return hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
+  }
+
+  /** Shows every pooled spell effect until the returned function is called (see `CombatVfx.prime`). */
+  prime(): () => void {
+    return this.vfx.prime();
   }
 
   // -------------------------------------------------------------------------

@@ -39,7 +39,7 @@ export class Loop {
   tick(nowMs: number): number {
     if (this.last < 0) this.last = nowMs;
     // Clamp long stalls (tab switches) so the simulation doesn't spiral.
-    const dt = Math.min((nowMs - this.last) / 1000, 0.1);
+    const dt = Math.min(Math.max(nowMs - this.last, 0) / 1000, 0.1);
     this.last = nowMs;
     this.accumulator += dt;
     while (this.accumulator >= Loop.FIXED_DT) {

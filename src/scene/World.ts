@@ -21,6 +21,9 @@ export function mapFromUrl(): MapName {
   return new URLSearchParams(location.search).get('map') === 'conquest' ? 'conquest' : 'arena';
 }
 
+/** Number of point lights reserved for spells. Fixed so the light count never changes (which would recompile shaders). */
+export const SPELL_LIGHTS = 4;
+
 /** The static content of one map: architecture, props and foliage. */
 export interface MapContent {
   readonly group: THREE.Group;
@@ -35,6 +38,8 @@ export interface MapContent {
   readonly dynamic?: THREE.Group;
   applyQuality?(q: QualitySettings): void;
   update(dt: number, t: number, camera: THREE.Camera): void;
+  /** Until the next `update`, shows the meshes that stay empty until the camera comes near. */
+  prime?(): void;
 }
 
 /**
@@ -56,6 +61,13 @@ export class World {
   readonly materials: MaterialLibrary;
   readonly collision: CollisionWorld;
   readonly dust: DustMotes;
+  /**
+   * Point lights the combat effects move onto the brightest spells each frame.
+   * They belong to the map, not the match, so the shaders prepared while
+   * loading (even behind the title screen, before the match exists) are built
+   * for these very lights: three keys a lit shader on the exact light objects.
+   */
+  readonly spellLights: THREE.PointLight[] = [];
   private readonly updaters: ((dt: number, t: number) => void)[] = [];
 
   constructor(textures: TextureLibrary, readonly camera: THREE.PerspectiveCamera, readonly map: MapName = 'arena') {
@@ -89,6 +101,12 @@ export class World {
     if (this.content.dynamic) this.scene.add(this.content.dynamic);
     this.dust = new DustMotes(600, this.environment.sunDirection);
     this.vfx.add(this.dust.sprite);
+    for (let i = 0; i < SPELL_LIGHTS; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 14, 2);
+      l.castShadow = false;
+      this.spellLights.push(l);
+      this.vfx.add(l);
+    }
 
     // Static geometry never moves: skip per-frame matrix updates.
     this.static.traverse((o) => {
@@ -131,6 +149,33 @@ export class World {
       this.pool.push(l);
       this.scene.add(l);
     }
+  }
+
+  /**
+   * Makes frames draw everything on the map, in view or not, so that drawing
+   * them prepares every shader (with `environment.redrawShadows` each frame for
+   * the shadow cascades); the returned function restores normal culling. three
+   * generates an object's shader the first time it is drawn in each pass, and
+   * doing that mid-match froze the frame.
+   */
+  showEverything(): () => void {
+    this.content.prime?.();
+    const culled: THREE.Object3D[] = [];
+    // hidden parts marked `userData.shownLater` (structure shields) are shown too
+    const hidden: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (o.userData.shownLater && !o.visible) {
+        o.visible = true;
+        hidden.push(o);
+      }
+      if (!o.frustumCulled) return;
+      o.frustumCulled = false;
+      culled.push(o);
+    });
+    return () => {
+      for (const o of culled) o.frustumCulled = true;
+      for (const o of hidden) o.visible = false;
+    };
   }
 
   bakeLighting(renderer: THREE.WebGPURenderer): void {

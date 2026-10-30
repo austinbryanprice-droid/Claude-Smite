@@ -96,6 +96,8 @@ export function shieldMesh(radius: number, height: number, glow: number): THREE.
   const m = new THREE.Mesh(geo, mat);
   m.renderOrder = 20;
   m.visible = false;
+  // drawn while loading anyway, so raising it mid-match generates no shader
+  m.userData.shownLater = true;
   m.name = 'shield';
   return m;
 }
