@@ -1,8 +1,9 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, attribute, float, fract, hash, mix, positionLocal, sin, smoothstep, step, time, uv, vec3,
+  abs, attribute, float, fract, hash, mix, sin, smoothstep, step, time, uv, vec3,
 } from '../render/tsl';
 import { rng } from '../core/random';
+import { placedGeometry, placeInstances } from '../render/shared';
 
 /** One flower clump to place. */
 export interface FlowerInstance {
@@ -35,7 +36,7 @@ export class Flowers {
     const seed = attribute('seed', 'float');
     const phase = hash(seed).mul(6.283);
     const bend = sin(time.mul(1.6).add(phase)).mul(0.06).mul(sway);
-    mat.positionNode = positionLocal.add(vec3(bend, 0, bend.mul(0.7)));
+    mat.positionNode = placeInstances(mat).add(vec3(bend, 0, bend.mul(0.7)));
 
     // the top 45% of each card is the flower spike, the rest a thin stem
     const head = smoothstep(0.5, 0.6, v);
@@ -70,31 +71,33 @@ export class Flowers {
       c.push(it);
     }
     const clump = Flowers.clump();
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const s = new THREE.Vector3();
+    clump.computeBoundingSphere();
+    const reach = clump.boundingSphere!.center.length() + clump.boundingSphere!.radius;
+    const box = new THREE.Box3();
     const p = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
     let n = 0;
     for (const items of chunks.values()) {
-      // each chunk needs its own geometry for its own seed attribute
-      const geo = clump.clone();
+      // each chunk is its own mesh, so off-screen ones are culled; all share one shader
+      const { geometry, spot, turn } = placedGeometry(clump, items.length);
       const seeds = new Float32Array(items.length);
-      const mesh = new THREE.InstancedMesh(geo, mat, items.length);
+      box.makeEmpty();
+      let maxScale = 0;
       items.forEach((it, i) => {
-        m.compose(p.set(it.x, it.y, it.z), q.setFromAxisAngle(up, it.yaw), s.setScalar(it.scale));
-        mesh.setMatrixAt(i, m);
+        spot.setXYZW(i, it.x, it.y, it.z, it.scale);
+        turn.setXY(i, Math.cos(it.yaw), Math.sin(it.yaw));
         seeds[i] = n++;
+        box.expandByPoint(p.set(it.x, it.y, it.z));
+        maxScale = Math.max(maxScale, it.scale);
       });
-      geo.setAttribute('seed', new THREE.InstancedBufferAttribute(seeds, 1));
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
+      geometry.setAttribute('seed', new THREE.InstancedBufferAttribute(seeds, 1));
+      geometry.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+      geometry.boundingSphere.radius += reach * maxScale;
+      const mesh = new THREE.Mesh(geometry, mat);
       mesh.castShadow = false;
       mesh.receiveShadow = true;
       mesh.name = 'flowers';
       this.root.add(mesh);
     }
-    clump.dispose();
   }
 
   /** A clump of spikes, each two crossed cards, leaning slightly outward. */

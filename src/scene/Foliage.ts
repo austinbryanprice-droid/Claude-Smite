@@ -1,12 +1,13 @@
 import * as THREE from 'three/webgpu';
 import {
   attribute, bool, cameraPosition, dFdx, dFdy, dot, float, floor, hash, length, log2, max, mix,
-  normalViewGeometry, normalize, positionLocal, positionWorld, pow, screenCoordinate, sin, smoothstep, step, texture,
+  normalViewGeometry, normalize, positionWorld, pow, screenCoordinate, sin, smoothstep, step, texture,
   time, uniform, uv, vec3,
 } from '../render/tsl';
 import { rng } from '../core/random';
 import type { TextureLibrary } from './Materials';
 import { hypot } from '../core/math';
+import { placedGeometry, placeInstances } from '../render/shared';
 
 /**
  * Procedural trees, bushes and ferns. Each species is grown on the CPU into a
@@ -348,11 +349,18 @@ function keepUnoccluded(): any {
 
 /** One instanced mesh of a batch, holding the instances currently in its range. */
 interface Part {
-  mesh: THREE.InstancedMesh;
+  mesh: THREE.Mesh;
+  geometry: THREE.InstancedBufferGeometry;
+  /** Per instance: position and scale, yaw, and stable seed (see `placeInstances`). */
+  spot: THREE.InstancedBufferAttribute;
+  turn: THREE.InstancedBufferAttribute;
   seed: THREE.InstancedBufferAttribute;
   /** Bounding-sphere radius of the geometry around the instance origin, at scale 1. */
   reach: number;
 }
+
+/** Floats per instance in `Batch.placements`: x, y, z, scale, cos(yaw), sin(yaw). */
+const PLACEMENT = 6;
 
 /** Every instance of one species variant's trunk or leaves, map-wide. */
 interface Batch {
@@ -361,8 +369,8 @@ interface Batch {
    * casting shadows; and, for species that cast, those beyond the shadow range.
    */
   parts: Part[];
-  /** Every instance's matrix and stable seed, in placement order. */
-  matrices: Float32Array;
+  /** Every instance's placement (see `PLACEMENT`) and stable seed, in placement order. */
+  placements: Float32Array;
   seeds: Float32Array;
   /** Encloses every instance, for `prime`. */
   bounds: THREE.Sphere;
@@ -374,6 +382,16 @@ const _point = new THREE.Vector3();
 const _boxes = [new THREE.Box3(), new THREE.Box3(), new THREE.Box3()];
 const _counts = [0, 0, 0];
 const _scales = [0, 0, 0];
+
+/** Copies instance `i` of `b` into slot `at` of `part`. */
+function place(part: Part, at: number, b: Batch, i: number): void {
+  const src = b.placements;
+  const o = i * PLACEMENT;
+  // by hand: a subarray per instance is garbage on every re-split
+  part.spot.setXYZW(at, src[o]!, src[o + 1]!, src[o + 2]!, src[o + 3]!);
+  part.turn.setXY(at, src[o + 4]!, src[o + 5]!);
+  part.seed.setX(at, b.seeds[i]!);
+}
 
 /** Instanced foliage for one map: per species variant, a near, a far and a beyond-the-shadows mesh. */
 export class Foliage {
@@ -415,18 +433,18 @@ export class Foliage {
     return Math.max(...this.variants.get(species)!.map((v) => v.radius));
   }
 
-  /** Wind sway shared by trunks and leaves: bends with height, phase per instance. */
-  private swayNode(extraFlutter: boolean): any {
+  /** Wind sway shared by trunks and leaves, from the instance-placed position: bends with height, phase per instance. */
+  private swayNode(placed: any, extraFlutter: boolean): any {
     const s = attribute('sway', 'float');
     const phase = hash(attribute('seed', 'float')).mul(6.283);
     const t = time.mul(1.1).add(phase);
     const k = this.wind.strength.mul(s);
     let offset = vec3(sin(t).mul(0.22), 0, sin(t.mul(0.83).add(1.7)).mul(0.16)).mul(k);
     if (extraFlutter) {
-      const f = sin(time.mul(5.3).add(positionLocal.x.mul(2.1)).add(positionLocal.z.mul(1.7)).add(phase)).mul(0.035);
+      const f = sin(time.mul(5.3).add(placed.x.mul(2.1)).add(placed.z.mul(1.7)).add(phase)).mul(0.035);
       offset = offset.add(vec3(f, f.mul(0.6), f.negate())).mul(1);
     }
-    return positionLocal.add(offset);
+    return placed.add(offset);
   }
 
   private buildBark(textures: TextureLibrary): THREE.MeshStandardNodeMaterial {
@@ -434,7 +452,7 @@ export class Foliage {
     const mat = new THREE.MeshStandardNodeMaterial();
     const c = texture(set.albedo, uv());
     const nr = texture(set.nr, uv());
-    mat.positionNode = this.swayNode(false);
+    mat.positionNode = this.swayNode(placeInstances(mat), false);
     mat.colorNode = c.rgb.mul(mix(vec3(0.9, 0.86, 0.8), vec3(1.08, 1.0, 0.92), hash(attribute('seed', 'float').add(7))));
     mat.roughnessNode = nr.z;
     mat.metalnessNode = float(0);
@@ -458,7 +476,7 @@ export class Foliage {
     // which made every shadow draw rebuild its material key, every frame.
     // (Shadows never used it: leaf cards cast with alpha 1 either way.)
     mat.alphaTestNode = float(0.5);
-    mat.positionNode = this.swayNode(true);
+    mat.positionNode = this.swayNode(placeInstances(mat), true);
 
     // Per-instance hue shift between yellow-green and blue-green.
     // (a stable seed, not instanceIndex: instances move between the near and far meshes)
@@ -503,13 +521,12 @@ export class Foliage {
   prime(): void {
     for (const b of this.batches) {
       for (const part of b.parts) {
-        if (part.mesh.count > 0) continue;
-        part.mesh.instanceMatrix.array.set(b.matrices.subarray(0, 16));
-        part.seed.array[0] = b.seeds[0]!;
-        part.mesh.instanceMatrix.needsUpdate = part.seed.needsUpdate = true;
-        part.mesh.count = 1;
+        if (part.geometry.instanceCount > 0) continue;
+        place(part, 0, b, 0);
+        for (const a of [part.spot, part.turn, part.seed]) a.needsUpdate = true;
+        part.geometry.instanceCount = 1;
+        part.geometry.boundingSphere!.copy(b.bounds);
         part.mesh.visible = true;
-        part.mesh.boundingSphere = b.bounds.clone();
       }
     }
     this.splitAt.set(NaN, NaN);
@@ -527,38 +544,31 @@ export class Foliage {
     const scales = _scales.fill(0);
     const boxes = _boxes;
     for (const box of boxes) box.makeEmpty();
-    const src = b.matrices;
+    const src = b.placements;
     for (let i = 0; i < b.seeds.length; i++) {
-      const o = i * 16;
-      const x = src[o + 12]! - cam.x;
-      const z = src[o + 14]! - cam.z;
+      const o = i * PLACEMENT;
+      const x = src[o]! - cam.x;
+      const z = src[o + 2]! - cam.z;
       const d2 = x * x + z * z;
       if (d2 >= draw2) continue;
       const k = d2 < lod2 ? 0 : !beyond || d2 < shadow2 ? 1 : 2;
-      const part = parts[k]!;
-      // copied by hand: a subarray per instance is garbage on every re-split
-      const dst = part.mesh.instanceMatrix.array as Float32Array;
-      const at = counts[k]! * 16;
-      for (let j = 0; j < 16; j++) dst[at + j] = src[o + j]!;
-      (part.seed.array as Float32Array)[counts[k]!++] = b.seeds[i]!;
-      boxes[k]!.expandByPoint(_point.set(src[o + 12]!, src[o + 13]!, src[o + 14]!));
-      scales[k] = Math.max(scales[k]!, Math.sqrt(src[o]! ** 2 + src[o + 1]! ** 2 + src[o + 2]! ** 2));
+      place(parts[k]!, counts[k]!++, b, i);
+      boxes[k]!.expandByPoint(_point.set(src[o]!, src[o + 1]!, src[o + 2]!));
+      scales[k] = Math.max(scales[k]!, src[o + 3]!);
     }
     for (let k = 0; k < parts.length; k++) {
       const part = parts[k]!;
       const n = counts[k]!;
-      const mesh = part.mesh;
-      mesh.count = n;
-      mesh.visible = n > 0;
+      part.geometry.instanceCount = n;
+      part.mesh.visible = n > 0;
       if (n === 0) continue;
       // only the instances in use go to the GPU
-      mesh.instanceMatrix.clearUpdateRanges();
-      mesh.instanceMatrix.addUpdateRange(0, n * 16);
-      mesh.instanceMatrix.needsUpdate = true;
-      part.seed.clearUpdateRanges();
-      part.seed.addUpdateRange(0, n);
-      part.seed.needsUpdate = true;
-      const sphere = (mesh.boundingSphere ??= new THREE.Sphere());
+      for (const a of [part.spot, part.turn, part.seed]) {
+        a.clearUpdateRanges();
+        a.addUpdateRange(0, n * a.itemSize);
+        a.needsUpdate = true;
+      }
+      const sphere = part.geometry.boundingSphere!;
       boxes[k]!.getBoundingSphere(sphere);
       sphere.radius += part.reach * scales[k]!;
     }
@@ -578,55 +588,44 @@ export class Foliage {
       if (!b) buckets.set(key, (b = { variant: vs[vi]!, items: [] }));
       b.items.push(it);
     }
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const s = new THREE.Vector3();
-    const p = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
     let seed = 0;
     for (const [key, { variant, items }] of buckets) {
       const species = key.split(':')[0] as SpeciesName;
       // ferns are too low and small to read in the shadow maps
       const castShadow = species !== 'fern';
-      const matrices = new Float32Array(items.length * 16);
+      const placements = new Float32Array(items.length * PLACEMENT);
       const seeds = new Float32Array(items.length);
       _box.makeEmpty();
       let maxScale = 0;
       items.forEach((it, i) => {
-        q.setFromAxisAngle(up, it.yaw);
-        m.compose(p.set(it.x, it.y, it.z), q, s.setScalar(it.scale));
-        m.toArray(matrices, i * 16);
+        placements.set([it.x, it.y, it.z, it.scale, Math.cos(it.yaw), Math.sin(it.yaw)], i * PLACEMENT);
         seeds[i] = seed++;
-        _box.expandByPoint(p);
+        _box.expandByPoint(_point.set(it.x, it.y, it.z));
         maxScale = Math.max(maxScale, it.scale);
       });
       const make = (geo: THREE.BufferGeometry, lo: THREE.BufferGeometry, mat: THREE.Material) => {
         const part = (source: THREE.BufferGeometry, name: string, cast: boolean): Part => {
-          // shares the vertex buffers; only the seed attribute is per mesh
-          const g = new THREE.BufferGeometry();
-          g.setIndex(source.index);
-          for (const [attr, value] of Object.entries(source.attributes)) g.setAttribute(attr, value);
-          g.boundingSphere = source.boundingSphere;
-          g.boundingBox = source.boundingBox;
+          // shares the vertex buffers; only the per-instance attributes are per mesh
+          const { geometry, spot, turn } = placedGeometry(source, items.length);
           const seedAttr = new THREE.InstancedBufferAttribute(new Float32Array(items.length), 1);
           seedAttr.setUsage(THREE.DynamicDrawUsage);
-          g.setAttribute('seed', seedAttr);
-          const mesh = new THREE.InstancedMesh(g, mat, items.length);
-          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-          mesh.count = 0;
+          geometry.setAttribute('seed', seedAttr);
+          geometry.instanceCount = 0;
+          geometry.boundingSphere = new THREE.Sphere();
+          const mesh = new THREE.Mesh(geometry, mat);
           mesh.visible = false;
           mesh.castShadow = cast;
           mesh.receiveShadow = true;
           mesh.name = `${key}:${name}`;
           this.group.add(mesh);
           const sphere = source.boundingSphere!;
-          return { mesh, seed: seedAttr, reach: sphere.center.length() + sphere.radius };
+          return { mesh, geometry, spot, turn, seed: seedAttr, reach: sphere.center.length() + sphere.radius };
         };
         const bounds = _box.getBoundingSphere(new THREE.Sphere());
         const parts = [part(geo, 'hi', castShadow), part(lo, 'lo', castShadow)];
         if (castShadow) parts.push(part(lo, 'far', false));
         bounds.radius += parts[0]!.reach * maxScale;
-        this.batches.push({ parts, matrices, seeds, bounds });
+        this.batches.push({ parts, placements, seeds, bounds });
       };
       if (variant.trunk) make(variant.trunk, variant.trunkLo!, this.bark);
       make(variant.leaves, variant.leavesLo, this.leaves);
