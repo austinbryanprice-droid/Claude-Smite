@@ -105,7 +105,15 @@ async function main(): Promise<void> {
   const guessMode = skipMenu ? null : savedMode();
   const guess = guessMode ? prepare(guessMode) : null;
   const choice = await chosen;
-  const { world, post } = guess && guessMode === choice.mode ? await guess : await prepare(choice.mode);
+  const reuse = guess && guessMode === choice.mode;
+  // free the map built for the other mode; three re-uploads anything still shared
+  if (guess && !reuse) {
+    void guess.then(({ world: unused }) => {
+      unused.scene.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      unused.scene.environment?.dispose();
+    });
+  }
+  const { world, post } = reuse ? await guess : await prepare(choice.mode);
 
   const input = new Input(renderer.domElement);
   const god = new GodModel();
