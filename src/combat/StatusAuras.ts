@@ -24,7 +24,7 @@ function starMaterial(hex: number): THREE.SpriteNodeMaterial {
 }
 
 function ringMaterial(hex: number, fade: ReturnType<typeof uniform>): THREE.MeshBasicNodeMaterial {
-  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
   const c = new THREE.Color(hex);
   // drawn on a flat quad: a soft band near the edge, clear inside
   const r = uv().sub(0.5).length().mul(2);

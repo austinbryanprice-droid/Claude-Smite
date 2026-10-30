@@ -198,6 +198,7 @@ async function main(): Promise<void> {
   document.addEventListener('pointerlockchange', () => hud.setLocked(input.locked));
 
   const frame = (now: number) => {
+    const start = performance.now();
     player.look();
     const wheel = input.consumeWheel();
     if (wheel) follow.zoom(wheel);
@@ -211,7 +212,7 @@ async function main(): Promise<void> {
     post.render();
     input.endFrame();
     hud.frame(dt);
-    autoQuality?.frame(dt);
+    autoQuality?.frame(dt, performance.now() - start);
   };
   // `?capture` leaves the loop stopped so automated screenshots can step frames
   // themselves (software GPUs in CI can't keep up with a live loop).

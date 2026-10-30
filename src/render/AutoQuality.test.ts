@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AutoQuality } from './AutoQuality';
 
-function run(auto: AutoQuality, fps: number, seconds: number): void {
-  for (let t = 0; t < seconds; t += 1 / fps) auto.frame(1 / fps);
+function run(auto: AutoQuality, fps: number, seconds: number, cpuMs = 0): void {
+  for (let t = 0; t < seconds; t += 1 / fps) auto.frame(1 / fps, cpuMs);
 }
 
 describe('AutoQuality', () => {
@@ -27,6 +27,17 @@ describe('AutoQuality', () => {
     auto.stop();
     run(auto, 20, 30);
     expect(scale).toBe(1);
+  });
+
+  it('keeps the resolution when the CPU is what holds the frame rate back', () => {
+    let scale = 1;
+    const auto = new AutoQuality((s) => (scale = s));
+    // 30 fps with 30 ms of the 33 ms frame spent in game code
+    run(auto, 30, 30, 30);
+    expect(scale).toBe(1);
+    // the same frame rate with the CPU mostly idle: the GPU is the limit
+    run(auto, 30, 11, 5);
+    expect(scale).toBe(0.85);
   });
 
   it('ignores stalls such as a hidden tab', () => {

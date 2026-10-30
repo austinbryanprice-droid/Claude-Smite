@@ -89,7 +89,7 @@ export class Fountain {
     const crystal = add(crystalGeo, tm.crystal, 0, 5.8);
     crystal.castShadow = false;
     // Water sheets spilling from the bowls, as glowing translucent skirts.
-    const spill = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const spill = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
     const sv = uv();
     const streak = mx_noise_float(vec3(sv.x.mul(40), sv.y.mul(3).add(time.mul(2.5)), 0)).mul(0.5).add(0.5);
     spill.colorNode = color(style.glow).mul(streak.mul(0.8).add(0.2)).mul(sv.y.mul(0.8).add(0.2)).mul(0.8);
@@ -133,7 +133,7 @@ export class Fountain {
     }
 
     // Healing light column.
-    const beamMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const beamMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
     const by = uv().y;
     const pulse = sin(time.mul(1.5).sub(by.mul(8))).mul(0.25).add(0.75);
     beamMat.colorNode = color(style.glow).mul(float(1).sub(by)).mul(pulse).mul(0.35);
