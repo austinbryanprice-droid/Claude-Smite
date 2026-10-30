@@ -148,6 +148,8 @@ export class ConquestMap implements MapContent {
     c.group.rotation.y = yaw;
     for (const col of c.columns) {
       const [x, z] = toWorld(col.x, col.z);
+      // solid to walk into as well as to the camera
+      this.collision.addCircle(x, z, col.r);
       this.collision.addCameraBlocker({ kind: 'circle', x, z, r: col.r, top: Infinity });
     }
     return c.group;
