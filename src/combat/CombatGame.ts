@@ -444,6 +444,17 @@ export class CombatGame implements Updatable {
     switch (e.type) {
       case 'damage':
         if (e.target === me && e.amount > 0) shake(Math.min(0.45, 0.12 + (e.amount / me.combatant.stats.maxHealth) * 2.5));
+        else if (e.source === me && e.amount > 0 && e.target.team !== me.team) {
+          // your blows catch for a few frames, longer for crits and big chunks, and the camera kicks on the heavy ones
+          const chunk = e.amount / Math.max(1, e.target.combatant.stats.maxHealth);
+          const heavy = e.crit || chunk >= 0.08;
+          const stop = !e.target.alive ? 0.12 : heavy ? 0.075 : e.ability ? 0 : 0.04;
+          if (stop > 0 && (e.target.kind === 'god' || e.target.kind === 'monster' || !e.ability)) {
+            this.views.hitStop(me, stop);
+            this.views.hitStop(e.target, stop);
+          }
+          if (heavy && e.target.alive) shake(Math.min(0.2, 0.08 + chunk * 0.6));
+        }
         break;
       case 'impact':
         if (e.big) shake(0.3 * near(e.x, e.z, 16));

@@ -164,7 +164,7 @@ export function thunder(r: Rand, len: number, opts: { crack?: number; rumble?: n
       lp1.set(f);
       lp2.set(f * 1.4);
     }
-    out[i] = lp2.run(lp1.run(out[i]!)) + ripHp.run(rip[i]!) * 1.4;
+    out[i] = lp2.run(lp1.run(out[i]!)) + ripHp.run(rip[i]!) * 2.2;
     peak = Math.max(peak, Math.abs(out[i]!));
   }
   // a low rolling bed under the shocks, swelling where they bunch up, and the hills echoing it back
@@ -214,14 +214,14 @@ export function impact(r: Rand, weight = 1, opts: { tone?: number; snap?: number
     const t = i / RATE;
     const n = nz();
     const s = hp.run(n) * perc(t, 0.0002, 0.01) * snap * 1.4 + (i === 0 ? snap : 0);
-    const punch = drive(o.sine(glide(tone * 2.4, tone * 0.6, t, 0.05 + 0.03 * weight)) * 3, 5) * perc(t, 0.001, 0.18 + 0.14 * weight);
-    const w = thwack.run(n) * perc(t, 0.0008, 0.08 + 0.05 * weight) * 4.5 + crackBody.run(n) * perc(t, 0.0005, 0.03 + 0.02 * weight) * 2.5;
+    const punch = drive(o.sine(glide(tone * 2.4, tone * 0.6, t, 0.05 + 0.03 * weight)) * 3, 5) * perc(t, 0.001, 0.24 + 0.18 * weight);
+    const w = thwack.run(n) * perc(t, 0.0008, 0.11 + 0.06 * weight) * 5 + crackBody.run(n) * perc(t, 0.0005, 0.03 + 0.02 * weight) * 2.5;
     if ((i & 63) === 0) grain = r() < 0.6 ? r() : 0;
     const c = cr.run(n) * grain * perc(t, 0.002, 0.07 + 0.03 * weight) * crunch * 2.2;
     const low = so.sine(glide(75, 38, t, 0.12 * weight)) * perc(t, 0.004, 0.22 * weight) * sub;
-    out[i] = drive(s + punch * 0.8 + w + c + low * 0.55, 1.5);
+    out[i] = drive(s + punch * 0.9 + w + c + low * 0.6, 2);
   }
-  const wet = tail(out, 0.5, opts.room ?? 0.25, 3000);
+  const wet = tail(out, 0.55, opts.room ?? 0.3, 3000);
   const g = opts.gain ?? 1;
   for (let i = 0; i < out.length; i++) out[i] = wet[i]! * g;
   return out;

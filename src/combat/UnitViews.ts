@@ -195,6 +195,11 @@ export class UnitViews {
     for (const m of v.casters) m.castShadow = on;
   }
 
+  /** Hit-stop on a god's pose (the player's included); other units just wobble. */
+  hitStop(u: Unit, seconds: number): void {
+    (u === this.player ? this.playerModel : this.views.get(u)?.model)?.hitStop(seconds);
+  }
+
   onEvent(e: SimEvent): void {
     if (e.type === 'damage') {
       const v = this.views.get(e.target);

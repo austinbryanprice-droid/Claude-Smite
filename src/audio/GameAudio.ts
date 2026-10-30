@@ -111,7 +111,7 @@ export class GameAudio {
         // your skill landing on an enemy god or boss: a thwack that cuts through the fight, harder for bigger chunks
         else if (e.ability && e.source === me && e.target.team !== me.team && (e.target.kind === 'god' || e.target.kind === 'monster')) {
           const chunk = Math.min(1, e.amount / Math.max(1, e.target.combatant.stats.maxHealth) / 0.15);
-          if (e.target.kind === 'god' || chunk > 0.3) this.engine.play('hit.confirm', { gain: 0.35 + 0.35 * chunk, vary: 0.06 }, 4, 0.07);
+          if (e.target.kind === 'god' || chunk > 0.3) this.engine.play('hit.confirm', { gain: 0.5 + 0.4 * chunk, vary: 0.06 }, 4, 0.07);
         }
         if (e.target.kind === 'titan' && e.target.team === me.team && this.time - this.titanWarnAt > 40) {
           this.titanWarnAt = this.time;
@@ -213,7 +213,7 @@ export class GameAudio {
 
   private onBasicHit(src: Unit, target: Unit, crit: boolean): void {
     let name: string;
-    let gain = src === this.me || target === this.me ? 0.75 : 0.55;
+    let gain = src === this.me ? 1 : target === this.me ? 0.85 : 0.55;
     let gap = 0;
     if (isStructure(target)) name = 'hit.structure';
     else if (src.kind === 'tower' || src.kind === 'phoenix') name = 'tower.hit';
@@ -234,7 +234,7 @@ export class GameAudio {
     // the sim emits impacts while the projectile or zone still exists, so find which one this is
     for (const p of this.game.sim.projectiles) {
       if (p.owner !== owner || Math.abs(p.x - x) > 0.01 || Math.abs(p.z - z) > 0.01) continue;
-      if (p.cast) this.engine.play(skillPart(p.cast.skill.id, 'impact'), { at: { x, z }, gain: 0.9, vary: 0.05, ref: 8 }, owner === this.me ? 5 : 3, 0.03);
+      if (p.cast) this.engine.play(skillPart(p.cast.skill.id, 'impact'), { at: { x, z }, gain: owner === this.me ? 1.1 : 0.9, vary: 0.05, ref: 8 }, owner === this.me ? 5 : 3, 0.03);
       else if (p.shot && this.game.sim.units.some((u) => isStructure(u) && u.shielded() && hypot(u.x - x, u.z - z) < u.radius + 1)) {
         this.engine.play('hit.structure', { at: { x, z }, gain: 0.4, vary: 0.1 }, 1, 0.08);
       }
