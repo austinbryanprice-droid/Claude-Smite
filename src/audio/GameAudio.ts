@@ -259,8 +259,16 @@ export class GameAudio {
       case 'god':
         this.at('god.death', u, { gain: u === me ? 1 : 0.8, ref: 10 }, 5);
         this.voice(u, 'death', 0.85, 5);
-        if (killer === me) this.engine.play('kill.confirm', { gain: 0.7 }, 5);
         const streak = this.endStreak(u, killer);
+        if (killer === me && u !== me) {
+          this.streak++;
+          this.multi.count = this.time < this.multi.until ? this.multi.count + 1 : 1;
+          this.multi.until = this.time + 10;
+          // each kill in a run rings a step higher; multi-kills and shutdowns add a thunderclap and a chorus
+          const step = Math.min(4, this.multi.count - 1 + Math.max(0, this.streak - 2) * 0.5);
+          this.engine.play('kill.confirm', { gain: 0.8, rate: 2 ** ((step * 2) / 12) }, 5);
+          if (this.multi.count >= 2 || streak >= 3 || this.streak >= 3) this.engine.play('kill.big', { gain: 0.6 + 0.1 * Math.min(3, this.multi.count) }, 5);
+        }
         if (this.conquest) this.announceDeath(u, killer, streak);
         if (u === me) {
           this.streak = 0;
@@ -314,12 +322,6 @@ export class GameAudio {
     const killer = by?.kind === 'god' ? by : null;
     const first = !!killer && !this.firstBlood;
     if (killer) this.firstBlood = true;
-    if (killer === me && victim !== me) {
-      this.streak++;
-      const now = this.time;
-      this.multi.count = now < this.multi.until ? this.multi.count + 1 : 1;
-      this.multi.until = now + 10;
-    }
     if (first && killer) {
       this.herald.say(killer === me ? 'You drew first blood!' : 'First blood is spilled!', killer.team === me.team ? 'good' : 'bad', 4);
       return;
