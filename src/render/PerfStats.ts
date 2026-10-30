@@ -23,8 +23,10 @@ export interface ReportInfo {
   autoDrops: number;
   canvas: { width: number; height: number };
   mode: string;
-  /** Pipelines started since play began (each one a possible hitch). */
+  /** Shaders generated since play began (each one a possible hitch). */
   shaders: number;
+  /** Draws put off to a later frame because that frame had spent its shader budget. */
+  deferred?: number;
 }
 
 interface Hitch {
@@ -155,7 +157,7 @@ export class PerfStats {
   }
 
   /**
-   * Call last thing in a frame with the running count of shaders started;
+   * Call last thing in a frame with the running count of shaders generated;
    * returns the milliseconds the frame's code took.
    */
   end(shaders: number): number {
@@ -254,8 +256,8 @@ export class PerfStats {
       }).join(' · ')}`,
       gpu.length ? `GPU ms/frame: ${dist(gpu)}` : 'GPU ms/frame: not measurable in this browser',
       `Stalls since load: ${this.counts.over50} over 50 ms · ${this.counts.over100} over 100 ms · ${this.counts.over250} over 250 ms · ${this.counts.over1000} over 1 s`,
-      ...this.hitches.map((h) => `  ${ms(h.ms)} ms at ${h.t.toFixed(1)} s: the frame before ran ${ms(h.cpu)} ms of game code${h.shaders ? ` and started ${h.shaders} shaders` : ''}`),
-      `Shaders built during play: ${info.shaders}`,
+      ...this.hitches.map((h) => `  ${ms(h.ms)} ms at ${h.t.toFixed(1)} s: the frame before ran ${ms(h.cpu)} ms of game code${h.shaders ? ` and built ${h.shaders} shaders` : ''}`),
+      `Shaders built during play: ${info.shaders}${info.deferred ? ` (${info.deferred} draws waited for one)` : ''}`,
       `Long frames flagged by the browser: ${this.longFrameCount}`,
       ...this.longFrames.map((f) => `  ${Math.round(f.ms)} ms at ${f.t.toFixed(1)} s (blocking ${Math.round(f.blocking)} ms): ${f.script}`),
       `UA: ${ua}`,

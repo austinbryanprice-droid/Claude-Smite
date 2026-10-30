@@ -50,6 +50,26 @@ class Pool<T extends { group: THREE.Object3D }> {
     this.parent.remove(t.group);
     this.free.push(t);
   }
+
+  /** Shows every idle object, all of its parts, until the returned function puts them away again. */
+  prime(): () => void {
+    const flipped: THREE.Object3D[] = [];
+    const shown = [...this.free];
+    for (const t of shown) {
+      this.parent.add(t.group);
+      t.group.traverse((o) => {
+        // except meshes with no vertices yet (a ground decal before its first shape)
+        const show = !(o as THREE.Mesh).isMesh || !!(o as THREE.Mesh).geometry.getAttribute('position');
+        if (o.visible === show) return;
+        o.visible = show;
+        flipped.push(o);
+      });
+    }
+    return () => {
+      for (const o of flipped) o.visible = !o.visible;
+      for (const t of shown) this.parent.remove(t.group);
+    };
+  }
 }
 
 const TRAIL = 9;
@@ -477,9 +497,6 @@ function flashDecal(s: FlashShape): { shape: DecalShape; x: number; z: number; y
   }
 }
 
-/** Number of point lights reserved for spells. Fixed so the light count never changes (which would recompile shaders). */
-export const SPELL_LIGHTS = 4;
-
 /**
  * Draws everything the simulation spawns: projectiles, lingering areas,
  * instant shapes and impact bursts. Reads `sim` state every frame and turns
@@ -505,22 +522,31 @@ export class CombatVfx {
   targets: () => Iterable<readonly [Unit, Unit | null]> = () => [];
   /** The local player, whose tethers are drawn brighter. */
   player: Unit | null = null;
-  private readonly lights: THREE.PointLight[] = [];
   private readonly tmp = new THREE.Vector3();
 
-  constructor(private readonly ground: Ground) {
+  /** `lights` are the map's spell lights (`World.spellLights`), placed on the brightest effects each frame. */
+  constructor(
+    private readonly ground: Ground,
+    private readonly lights: readonly THREE.PointLight[],
+  ) {
     this.group.name = 'combat-vfx';
     this.projectilePool = new Pool(this.group, () => new ProjectileView(), 8);
     this.zonePool = new Pool(this.group, () => new ZoneView(ground), 4);
     this.flashPool = new Pool(this.group, () => new FlashView(ground), 6);
     this.burstPool = new Pool(this.group, () => new Burst(), 16);
     this.pillarPool = new Pool(this.group, () => new Pillar(), 2);
-    for (let i = 0; i < SPELL_LIGHTS; i++) {
-      const l = new THREE.PointLight(0xffffff, 0, 14, 2);
-      l.castShadow = false;
-      this.lights.push(l);
-      this.group.add(l);
-    }
+  }
+
+  /**
+   * Shows every pooled effect until the returned function is called, so that
+   * a loading frame draws them and prepares their shaders: each effect object
+   * has its own, and generating them on its first cast stalled the fight.
+   */
+  prime(): () => void {
+    const restore = [this.projectilePool, this.zonePool, this.flashPool, this.burstPool, this.pillarPool].map((p) => p.prime());
+    return () => {
+      for (const r of restore) r();
+    };
   }
 
   frame(sim: Sim, dt: number, t: number): void {

@@ -20,7 +20,6 @@ import { mapFromUrl, World } from './scene/World';
 import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
 import { monsterWarmup } from './combat/MonsterViews';
-import { SPELL_LIGHTS } from './combat/Vfx';
 import { GODS, godById } from './game/gods';
 import { savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
 import { installErrorHandlers, showFatal } from './ui/Fatal';
@@ -95,7 +94,35 @@ async function main(): Promise<void> {
   window.addEventListener('resize', resize);
 
   /**
-   * Builds the map, lights it and compiles its shaders, plus every god's (and the
+   * Draws hidden frames of everything (the whole map unculled, every shadow
+   * cascade) until no draw is left waiting for its shader, so shaders are
+   * generated now rather than mid-match. These are the real passes and render
+   * targets: `compileAsync` only reaches a stand-in of the scene pass (measured:
+   * 470 of its shaders were never used). A quarter second's worth per frame
+   * keeps the loading screen moving, and the frames send no draws to the GPU.
+   */
+  const prepareShaders = async (world: World, post: PostFX, from: number, to: number): Promise<void> => {
+    pipelines.limitShaderBuilds(250);
+    pipelines.preparing = true;
+    const cull = world.showEverything();
+    const start = pipelines.built;
+    for (;;) {
+      // a new frame number each time: passes render once per frame
+      await new Promise((r) => requestAnimationFrame(r));
+      world.environment.redrawShadows();
+      const waiting = pipelines.deferred;
+      post.render();
+      const left = pipelines.deferred - waiting;
+      const done = pipelines.built - start;
+      hud.progress(from + ((to - from) * done) / (done + left || 1), `Preparing materials ${done}…`);
+      if (left === 0) break;
+    }
+    cull();
+    pipelines.preparing = false;
+  };
+
+  /**
+   * Builds the map, lights it and prepares its shaders, plus every god's (and the
    * jungle's in Conquest), so pressing Play only has the little that is left to do.
    */
   const prepare = async (mode: GameMode) => {
@@ -109,17 +136,16 @@ async function main(): Promise<void> {
     post.build(quality);
     world.bakeLighting(renderer);
     hud.progress(0.85, 'Preparing shaders…');
-    // Shaders are built per light count, so compile with the lights a match starts
-    // with: the fires nearest the spawn, plus the combat effects' spell lights.
+    // the lights a match starts with: the pool at the fires nearest the spawn
+    // (the map's spell lights are already in place)
     world.update(0, 0, new THREE.Vector3(world.spawn.x, 0, world.spawn.z));
-    const warm = new THREE.Group();
-    for (let i = 0; i < SPELL_LIGHTS; i++) warm.add(new THREE.PointLight(0xffffff, 0, 14, 2));
-    for (const g of GODS) warm.add(new GodModel(g.id).root);
-    if (mode === 'conquest') for (const root of monsterWarmup()) warm.add(root);
-    world.actors.add(warm);
-    await renderer.compileAsync(world.scene, camera);
-    warm.removeFromParent();
-    return { world, post };
+    // every god and monster, kept until the match's own last preparation
+    const models = new THREE.Group();
+    for (const g of GODS) models.add(new GodModel(g.id).root);
+    if (mode === 'conquest') for (const root of monsterWarmup()) models.add(root);
+    world.actors.add(models);
+    await prepareShaders(world, post, 0.85, 0.86);
+    return { world, post, models };
   };
   // Start on the mode the title screen opens with (the last one played) while
   // the player picks a god; a different pick builds its own map after Play.
@@ -130,7 +156,7 @@ async function main(): Promise<void> {
   // it shares cached geometry with the new map, and disposing destroys GPU
   // buffers that the new map still draws ("buffer used in submit while destroyed").
   const reuse = guess && guessMode === choice.mode;
-  const { world, post } = reuse ? await guess : await prepare(choice.mode);
+  const { world, post, models } = reuse ? await guess : await prepare(choice.mode);
 
   const input = new Input(renderer.domElement);
   const god = new GodModel();
@@ -181,21 +207,26 @@ async function main(): Promise<void> {
   loop.addFixed(combat);
   void baked;
   const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest', () => !player.grounded);
-  // Draw one hidden frame so the shadow and post passes queue their shaders too,
-  // then wait (bounded) for the driver to finish them before revealing the scene.
+  // Prepare what the match added (the player, spell effects, structures), every
+  // god and monster still included, then wait (bounded) for the driver to
+  // finish compiling the pipelines before revealing the scene.
   player.render(0, 1);
   follow.update(1 / 60);
   world.update(0, 0, player.model.root.position);
   const slow = setTimeout(() => hud.slowLoad(isWebGPU), 15000);
-  await renderer.compileAsync(world.scene, camera, null, (e: ProgressEvent) =>
-    hud.progress(0.86 + (0.04 * e.loaded) / e.total, `Preparing materials ${e.loaded} / ${e.total}…`));
-  post.render();
+  const effects = combat.prime();
+  await prepareShaders(world, post, 0.86, 0.9);
+  effects();
+  models.removeFromParent();
   await pipelines.settle(60000, (done, total) => hud.progress(0.9 + (total ? (0.1 * done) / total : 0.1), `Preparing shaders ${done} / ${total}…`));
   clearTimeout(slow);
   hud.ready();
   if (advice) hud.notice(advice.text, 15);
-  const shadersAtStart = pipelines.done + pipelines.pending;
+  const shadersAtStart = pipelines.built;
+  const deferredAtStart = pipelines.deferred;
   perf.watchGpu(renderer);
+  // (automated captures want every object in the frame they ask for)
+  pipelines.limitShaderBuilds(params.has('capture') ? Infinity : 4);
   hud.report = () => perf.report({
     gpu,
     backend: isWebGPU ? 'WebGPU' : 'WebGL 2',
@@ -204,7 +235,8 @@ async function main(): Promise<void> {
     autoDrops,
     canvas: renderer.domElement,
     mode: `${choice.mode}${choice.net ? ' online' : ''}`,
-    shaders: pipelines.done + pipelines.pending - shadersAtStart,
+    shaders: pipelines.built - shadersAtStart,
+    deferred: pipelines.deferred - deferredAtStart,
   });
   combat.netReady();
 
@@ -233,7 +265,7 @@ async function main(): Promise<void> {
     input.endFrame();
     hud.frame(dt);
     // (not inside the call below: `?.` would skip it when auto quality is off)
-    const cpu = perf.end(pipelines.done + pipelines.pending);
+    const cpu = perf.end(pipelines.built);
     // the real interval: the loop's dt is clamped to 100 ms, which would make a
     // very slow GPU look CPU bound and hide stalls from auto quality
     autoQuality?.frame(perf.gap / 1000, cpu);

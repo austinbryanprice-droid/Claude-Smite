@@ -346,45 +346,61 @@ function keepUnoccluded(): any {
   return occlusionFade().mul(0.85).lessThan(noise);
 }
 
-interface Chunk {
-  /** Near instances, drawn with the detailed geometry. */
-  hi: THREE.InstancedMesh;
-  /** Far instances, drawn with the low-detail geometry. */
-  lo: THREE.InstancedMesh;
-  hiSeed: THREE.InstancedBufferAttribute;
-  loSeed: THREE.InstancedBufferAttribute;
+/** One instanced mesh of a batch, holding the instances currently in its range. */
+interface Part {
+  mesh: THREE.InstancedMesh;
+  seed: THREE.InstancedBufferAttribute;
+  /** Bounding-sphere radius of the geometry around the instance origin, at scale 1. */
+  reach: number;
+}
+
+/** Every instance of one species variant's trunk or leaves, map-wide. */
+interface Batch {
+  /**
+   * Near instances with the detailed geometry; farther ones, low detail, still
+   * casting shadows; and, for species that cast, those beyond the shadow range.
+   */
+  parts: Part[];
   /** Every instance's matrix and stable seed, in placement order. */
   matrices: Float32Array;
   seeds: Float32Array;
-  center: THREE.Vector3;
-  radius: number;
-  castShadow: boolean;
-  mode: 'hi' | 'lo' | 'mixed' | null;
-  /** Camera position (x, z) at the last split. */
-  splitAt: THREE.Vector2;
+  /** Encloses every instance, for `prime`. */
+  bounds: THREE.Sphere;
 }
 
-/** Instanced, chunked foliage for one map. */
+const _box = new THREE.Box3();
+const _point = new THREE.Vector3();
+// per-part scratch for `split`
+const _boxes = [new THREE.Box3(), new THREE.Box3(), new THREE.Box3()];
+const _counts = [0, 0, 0];
+const _scales = [0, 0, 0];
+
+/** Instanced foliage for one map: per species variant, a near, a far and a beyond-the-shadows mesh. */
 export class Foliage {
   readonly group = new THREE.Group();
   private readonly variants = new Map<SpeciesName, Variant[]>();
   private readonly bark: THREE.MeshStandardNodeMaterial;
   private readonly leaves: THREE.MeshStandardNodeMaterial;
   readonly wind = { strength: uniform(1) };
-  private chunks: Chunk[] = [];
+  private batches: Batch[] = [];
+  /** Camera position (x, z) at the last split. */
+  private readonly splitAt = new THREE.Vector2(NaN, NaN);
   /** Instances farther than this use the low-detail meshes. */
   lodDistance = 40;
-  /** Chunks farther than this from the camera are hidden (the fog covers the cut). */
+  /** Instances farther than this from the camera are hidden (the fog covers the cut). */
   drawDistance = 200;
-  /** Shadow range of the current quality; chunks well beyond it stop casting. */
+  /** Shadow range of the current quality; instances well beyond it stop casting. */
   shadowDistance = Infinity;
 
   /**
-   * `chunk` is the cell size in meters. Every species variant in a cell is its
-   * own draw call in each pass (shadow cascades included), so cells are big:
-   * near the camera instances still switch detail one by one.
+   * Instances are sorted into their meshes by distance as the camera moves,
+   * rather than drawn as fixed map cells: three generates a shader per
+   * instanced mesh per pass, so 356 cell meshes meant hundreds of shaders
+   * generated mid-match as cells came into view or into the shadow cascades
+   * (a freeze of up to seconds each time). One batch per variant is 54 meshes,
+   * all of them drawn, and so prepared, during loading.
    */
-  constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3, private readonly chunk = 160) {
+  constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3) {
     this.group.name = 'foliage';
     let seed = 900;
     for (const s of Object.keys(VARIANTS) as SpeciesName[]) {
@@ -474,64 +490,90 @@ export class Foliage {
 
   update(camera: THREE.Camera): void {
     const p = camera.position;
-    // long evening shadows still reach the shadowed area from a little beyond it
-    const shadowReach = this.shadowDistance + 30;
-    for (const c of this.chunks) {
-      const centre = hypot(c.center.x - p.x, c.center.z - p.z);
-      const d = centre - c.radius;
-      if (d >= this.drawDistance) {
-        c.hi.visible = c.lo.visible = false;
-        continue;
-      }
-      const mode = d > this.lodDistance ? 'lo' : centre + c.radius < this.lodDistance ? 'hi' : 'mixed';
-      const moved = hypot(p.x - c.splitAt.x, p.z - c.splitAt.y) > 3;
-      if (mode !== c.mode || (mode === 'mixed' && moved)) {
-        this.split(c, mode, p);
-        c.mode = mode;
-        c.splitAt.set(p.x, p.z);
-      }
-      c.hi.visible = c.hi.count > 0;
-      c.lo.visible = c.lo.count > 0;
-      c.hi.castShadow = c.lo.castShadow = c.castShadow && d < shadowReach;
-    }
+    // re-sorting every instance is cheap, but re-uploads every matrix: do it every few meters
+    if (hypot(p.x - this.splitAt.x, p.z - this.splitAt.y) <= 3) return;
+    this.splitAt.set(p.x, p.z);
+    for (const b of this.batches) this.split(b, p);
   }
 
-  /** Sorts a chunk's instances into its near (detailed) and far meshes. */
-  private split(c: Chunk, mode: 'hi' | 'lo' | 'mixed', cam: THREE.Vector3): void {
-    const lod2 = this.lodDistance * this.lodDistance;
-    let nh = 0;
-    let nl = 0;
-    const hm = c.hi.instanceMatrix.array as Float32Array;
-    const lm = c.lo.instanceMatrix.array as Float32Array;
-    const hs = c.hiSeed.array as Float32Array;
-    const ls = c.loSeed.array as Float32Array;
-    const src = c.matrices;
-    for (let i = 0; i < c.seeds.length; i++) {
-      const x = src[i * 16 + 12]! - cam.x;
-      const z = src[i * 16 + 14]! - cam.z;
-      const near = mode === 'hi' || (mode === 'mixed' && x * x + z * z < lod2);
-      // copied by hand: a subarray per instance is garbage on every re-split
-      const dst = near ? hm : lm;
-      const at = (near ? nh : nl) * 16;
-      for (let k = 0; k < 16; k++) dst[at + k] = src[i * 16 + k]!;
-      if (near) hs[nh++] = c.seeds[i]!;
-      else ls[nl++] = c.seeds[i]!;
+  /**
+   * Shows every mesh, each with at least one instance, until the next `update`,
+   * so that drawing the loading frame prepares all of their shaders.
+   */
+  prime(): void {
+    for (const b of this.batches) {
+      for (const part of b.parts) {
+        if (part.mesh.count > 0) continue;
+        part.mesh.instanceMatrix.array.set(b.matrices.subarray(0, 16));
+        part.seed.array[0] = b.seeds[0]!;
+        part.mesh.instanceMatrix.needsUpdate = part.seed.needsUpdate = true;
+        part.mesh.count = 1;
+        part.mesh.visible = true;
+        part.mesh.boundingSphere = b.bounds.clone();
+      }
     }
-    c.hi.count = nh;
-    c.lo.count = nl;
-    c.hi.instanceMatrix.needsUpdate = c.lo.instanceMatrix.needsUpdate = true;
-    c.hiSeed.needsUpdate = c.loSeed.needsUpdate = true;
+    this.splitAt.set(NaN, NaN);
+  }
+
+  /** Sorts a batch's instances into its near, far and beyond-the-shadows meshes. */
+  private split(b: Batch, cam: THREE.Vector3): void {
+    const lod2 = this.lodDistance ** 2;
+    // long evening shadows still reach the shadowed area from a little beyond it
+    const shadow2 = (this.shadowDistance + 30) ** 2;
+    const draw2 = this.drawDistance ** 2;
+    const parts = b.parts;
+    const beyond = parts.length > 2;
+    const counts = _counts.fill(0);
+    const scales = _scales.fill(0);
+    const boxes = _boxes;
+    for (const box of boxes) box.makeEmpty();
+    const src = b.matrices;
+    for (let i = 0; i < b.seeds.length; i++) {
+      const o = i * 16;
+      const x = src[o + 12]! - cam.x;
+      const z = src[o + 14]! - cam.z;
+      const d2 = x * x + z * z;
+      if (d2 >= draw2) continue;
+      const k = d2 < lod2 ? 0 : !beyond || d2 < shadow2 ? 1 : 2;
+      const part = parts[k]!;
+      // copied by hand: a subarray per instance is garbage on every re-split
+      const dst = part.mesh.instanceMatrix.array as Float32Array;
+      const at = counts[k]! * 16;
+      for (let j = 0; j < 16; j++) dst[at + j] = src[o + j]!;
+      (part.seed.array as Float32Array)[counts[k]!++] = b.seeds[i]!;
+      boxes[k]!.expandByPoint(_point.set(src[o + 12]!, src[o + 13]!, src[o + 14]!));
+      scales[k] = Math.max(scales[k]!, Math.sqrt(src[o]! ** 2 + src[o + 1]! ** 2 + src[o + 2]! ** 2));
+    }
+    for (let k = 0; k < parts.length; k++) {
+      const part = parts[k]!;
+      const n = counts[k]!;
+      const mesh = part.mesh;
+      mesh.count = n;
+      mesh.visible = n > 0;
+      if (n === 0) continue;
+      // only the instances in use go to the GPU
+      mesh.instanceMatrix.clearUpdateRanges();
+      mesh.instanceMatrix.addUpdateRange(0, n * 16);
+      mesh.instanceMatrix.needsUpdate = true;
+      part.seed.clearUpdateRanges();
+      part.seed.addUpdateRange(0, n);
+      part.seed.needsUpdate = true;
+      const sphere = (mesh.boundingSphere ??= new THREE.Sphere());
+      boxes[k]!.getBoundingSphere(sphere);
+      sphere.radius += part.reach * scales[k]!;
+    }
   }
 
   /** Replaces all instances. Call once after placement (or on quality change). */
   setInstances(list: FoliageInstance[]): void {
     for (const c of [...this.group.children]) this.group.remove(c);
-    this.chunks = [];
+    this.batches = [];
+    this.splitAt.set(NaN, NaN);
     const buckets = new Map<string, { variant: Variant; items: FoliageInstance[] }>();
     for (const it of list) {
       const vs = this.variants.get(it.species)!;
       const vi = Math.floor(Math.abs(Math.sin(it.x * 12.9898 + it.z * 78.233) * 43758.5453) % 1 * vs.length);
-      const key = `${it.species}:${vi}:${Math.floor(it.x / this.chunk)}:${Math.floor(it.z / this.chunk)}`;
+      const key = `${it.species}:${vi}`;
       let b = buckets.get(key);
       if (!b) buckets.set(key, (b = { variant: vs[vi]!, items: [] }));
       b.items.push(it);
@@ -540,48 +582,51 @@ export class Foliage {
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
     const p = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
     let seed = 0;
     for (const [key, { variant, items }] of buckets) {
       const species = key.split(':')[0] as SpeciesName;
+      // ferns are too low and small to read in the shadow maps
+      const castShadow = species !== 'fern';
       const matrices = new Float32Array(items.length * 16);
       const seeds = new Float32Array(items.length);
+      _box.makeEmpty();
+      let maxScale = 0;
       items.forEach((it, i) => {
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.yaw);
+        q.setFromAxisAngle(up, it.yaw);
         m.compose(p.set(it.x, it.y, it.z), q, s.setScalar(it.scale));
         m.toArray(matrices, i * 16);
         seeds[i] = seed++;
+        _box.expandByPoint(p);
+        maxScale = Math.max(maxScale, it.scale);
       });
       const make = (geo: THREE.BufferGeometry, lo: THREE.BufferGeometry, mat: THREE.Material) => {
-        const full = new THREE.InstancedMesh(geo, mat, items.length);
-        full.instanceMatrix.array.set(matrices);
-        full.computeBoundingSphere();
-        const sphere = full.boundingSphere!;
-        const view = (source: THREE.BufferGeometry) => {
+        const part = (source: THREE.BufferGeometry, name: string, cast: boolean): Part => {
           // shares the vertex buffers; only the seed attribute is per mesh
           const g = new THREE.BufferGeometry();
           g.setIndex(source.index);
-          for (const [name, attr] of Object.entries(source.attributes)) g.setAttribute(name, attr);
+          for (const [attr, value] of Object.entries(source.attributes)) g.setAttribute(attr, value);
           g.boundingSphere = source.boundingSphere;
           g.boundingBox = source.boundingBox;
           const seedAttr = new THREE.InstancedBufferAttribute(new Float32Array(items.length), 1);
+          seedAttr.setUsage(THREE.DynamicDrawUsage);
           g.setAttribute('seed', seedAttr);
           const mesh = new THREE.InstancedMesh(g, mat, items.length);
+          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
           mesh.count = 0;
-          mesh.boundingSphere = sphere.clone();
+          mesh.visible = false;
+          mesh.castShadow = cast;
           mesh.receiveShadow = true;
-          mesh.name = key;
+          mesh.name = `${key}:${name}`;
           this.group.add(mesh);
-          return { mesh, seedAttr };
+          const sphere = source.boundingSphere!;
+          return { mesh, seed: seedAttr, reach: sphere.center.length() + sphere.radius };
         };
-        const hi = view(geo);
-        const loView = view(lo);
-        this.chunks.push({
-          hi: hi.mesh, lo: loView.mesh, hiSeed: hi.seedAttr, loSeed: loView.seedAttr, matrices, seeds,
-          center: sphere.center.clone(), radius: sphere.radius,
-          // ferns are too low and small to read in the shadow maps
-          castShadow: species !== 'fern',
-          mode: null, splitAt: new THREE.Vector2(),
-        });
+        const bounds = _box.getBoundingSphere(new THREE.Sphere());
+        const parts = [part(geo, 'hi', castShadow), part(lo, 'lo', castShadow)];
+        if (castShadow) parts.push(part(lo, 'far', false));
+        bounds.radius += parts[0]!.reach * maxScale;
+        this.batches.push({ parts, matrices, seeds, bounds });
       };
       if (variant.trunk) make(variant.trunk, variant.trunkLo!, this.bark);
       make(variant.leaves, variant.leavesLo, this.leaves);

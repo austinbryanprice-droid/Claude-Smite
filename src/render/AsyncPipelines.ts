@@ -8,6 +8,26 @@ interface PipelineCache {
   getForRender(renderObject: unknown, promises?: Promise<void>[] | null): unknown;
 }
 
+/** The slice of three's renderer internals `limitShaderBuilds` hooks. */
+interface DrawInternals {
+  _renderObjectDirect?: (...args: unknown[]) => void;
+  _nodes?: {
+    needsRefresh(renderObject: unknown): unknown;
+    get(renderObject: unknown): { nodeBuilderState?: unknown };
+    getForRenderCacheKey?(renderObject: unknown): unknown;
+    nodeBuilderCache?: Map<unknown, unknown>;
+    nodeFrame: { frameId: number };
+  };
+}
+
+interface RenderObjectLike {
+  _nodeBuilderState: unknown;
+  object: { isQuadMesh?: boolean };
+}
+
+/** Thrown out of a draw whose shader is still being generated, and caught right there. */
+const NOT_READY = Object.freeze({ notReady: true });
+
 /**
  * Makes every GPU pipeline compile in the background, all at once.
  *
@@ -23,10 +43,42 @@ export class AsyncPipelines {
   pending = 0;
   /** Pipelines finished since start. */
   done = 0;
+  /**
+   * Shaders generated since start: the node graph built into WGSL/GLSL on the
+   * main thread, the part of a new material that can't run in the background.
+   */
+  built = 0;
+  /** Draws put off to a later frame because the frame's shader budget was spent. */
+  deferred = 0;
   private idle: (() => void)[] = [];
+  /** Milliseconds of shader generation a frame may spend, once `limitShaderBuilds` is on. */
+  private shaderBudget: number | null = null;
+  /**
+   * While true, frames prepare each scene object (shader, pipeline, buffers)
+   * but send no draws, so a loading frame of everything costs no GPU time.
+   */
+  preparing = false;
   private slots: (() => void)[] = [];
 
-  constructor(renderer: THREE.WebGPURenderer) {
+  constructor(private readonly renderer: THREE.WebGPURenderer) {
+    const backend = renderer.backend as unknown as {
+      createNodeBuilder?: (...args: unknown[]) => unknown;
+      draw?: (renderObject: RenderObjectLike, info: unknown) => void;
+    };
+    if (typeof backend.createNodeBuilder === 'function') {
+      const make = backend.createNodeBuilder.bind(backend);
+      backend.createNodeBuilder = (...args) => {
+        this.built++;
+        return make(...args);
+      };
+    }
+    if (typeof backend.draw === 'function') {
+      const draw = backend.draw.bind(backend);
+      // full-screen passes still run, on the empty scene
+      backend.draw = (renderObject, info) => {
+        if (!this.preparing || renderObject.object.isQuadMesh) draw(renderObject, info);
+      };
+    }
     const cache = (renderer as unknown as { _pipelines?: PipelineCache })._pipelines;
     if (!cache || typeof cache.getForRender !== 'function') return; // three changed: keep its default behaviour
     const original = cache.getForRender.bind(cache);
@@ -39,6 +91,62 @@ export class AsyncPipelines {
       for (const p of started) this.track(p);
       if (promises && this.pending >= MAX_IN_FLIGHT) promises.push(new Promise((r) => this.slots.push(r)));
       return result;
+    };
+  }
+
+  /**
+   * From now on each frame spends at most `budgetMs` generating new shaders
+   * (and always generates one): an object whose shader would start after that
+   * is left out of the frame and drawn a frame or so later, instead of the
+   * frame freezing until every new shader is done. Generating happens inside
+   * the draw, where it reads the pass's render target and outputs; three's own
+   * `getForRenderDeferred` generates between frames, without them. Measured
+   * walking a fresh Conquest match: up to 79 new shaders in one frame, about
+   * 10-70 ms each. Call again to change the budget (Infinity lifts it).
+   */
+  limitShaderBuilds(budgetMs: number): void {
+    const installed = this.shaderBudget !== null;
+    this.shaderBudget = budgetMs;
+    if (installed) return;
+    const r = this.renderer as unknown as DrawInternals;
+    const nodes = r._nodes;
+    const direct = r._renderObjectDirect;
+    // three changed: keep drawing the way it does
+    if (!nodes || typeof nodes.getForRenderCacheKey !== 'function' || !(nodes.nodeBuilderCache instanceof Map) || typeof direct !== 'function') return;
+    const cache = nodes.nodeBuilderCache;
+    const needsRefresh = nodes.needsRefresh.bind(nodes);
+    let drawing = false;
+    let frame = -1;
+    let spent = 0;
+    // three generates a render object's shader in needsRefresh (through its
+    // monitor) unless another object already has the same one
+    nodes.needsRefresh = (renderObject) => {
+      const ro = renderObject as RenderObjectLike;
+      if (!drawing || ro._nodeBuilderState !== null || ro.object.isQuadMesh) return needsRefresh(ro);
+      if (nodes.get(ro).nodeBuilderState !== undefined || cache.has(nodes.getForRenderCacheKey!(ro))) return needsRefresh(ro);
+      if (nodes.nodeFrame.frameId !== frame) {
+        frame = nodes.nodeFrame.frameId;
+        spent = 0;
+      } else if (spent >= this.shaderBudget!) {
+        this.deferred++;
+        throw NOT_READY;
+      }
+      const start = performance.now();
+      try {
+        return needsRefresh(ro);
+      } finally {
+        spent += performance.now() - start;
+      }
+    };
+    r._renderObjectDirect = function (this: unknown, ...args: unknown[]) {
+      drawing = true;
+      try {
+        direct.apply(this, args);
+      } catch (e) {
+        if (e !== NOT_READY) throw e;
+      } finally {
+        drawing = false;
+      }
     };
   }
 
