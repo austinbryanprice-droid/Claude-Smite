@@ -102,8 +102,12 @@ export class CombatGame implements Updatable {
           chaos: { x: 0, z: -62, radius: 9 },
         };
     this.sim = new Sim(terrain, this.bases);
-    // the player walks against the same standing structures as everyone else
-    player.resolve = (x, z, r, y, from) => this.sim.solid(x, z, r, y, from, world.collision);
+    // the player walks against the same standing structures as everyone else,
+    // except mid-leap, where the sim flies them over and settles the landing
+    player.resolve = (x, z, r, y, from) => {
+      const f = this.player?.forced;
+      return f && !f.collide ? world.collision.resolve(x, z, r, y) : this.sim.solid(x, z, r, y, from, world.collision);
+    };
     this.sim.summonFactory = (owner, kind, at, i) => {
       const s = summonUnit(owner, kind, at, i);
       if (kind === 'einherjar') s.brain = new SummonBrain(this.sim, s);
