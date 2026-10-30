@@ -14,10 +14,12 @@ export class Input {
 
   constructor(element: HTMLElement) {
     window.addEventListener('keydown', (e) => {
+      // Tab is the scoreboard, never focus navigation: a held Tab's repeats would
+      // otherwise land focus on the quality picker, where M or H then changes quality
+      if (e.code === 'Tab' || (this.locked && e.code === 'Space')) e.preventDefault();
       if (e.repeat) return;
       this.down.add(e.code);
       this.pressed.add(e.code);
-      if (this.locked && (e.code === 'Tab' || e.code === 'Space')) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
