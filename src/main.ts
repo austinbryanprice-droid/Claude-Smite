@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   const loop = new Loop();
   loop.addFixed(player);
   // Conquest plays a full match against bots; the arena is the training ground
-  const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, shake: (a) => follow.addShake(a) });
+  const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, net: choice.net, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
   void baked;
   const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest', () => !player.grounded);
@@ -159,6 +159,7 @@ async function main(): Promise<void> {
   hud.progress(0.9, 'Preparing shaders…');
   await renderer.compileAsync(world.scene, camera);
   hud.ready();
+  combat.netReady();
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyH' && !e.repeat) hud.toggleHelp();

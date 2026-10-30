@@ -123,6 +123,18 @@ export class Match {
     }
   }
 
+  /** The clock, wave count and winner, which a networked copy of the match takes from the host (see src/net). */
+  netState(): { time: number; wave: number; next: number; winner: Team | null } {
+    return { time: this.time, wave: this.wave, next: this.nextWave, winner: this.winner };
+  }
+
+  applyNet(s: { time: number; wave: number; next: number; winner: Team | null }): void {
+    this.time = s.time;
+    this.wave = s.wave;
+    this.nextWave = s.next;
+    this.winner = s.winner;
+  }
+
   /** The structure a team must break next in a lane, or its Titan when the lane is open. */
   frontStructure(enemy: Team, lane: LaneId): Unit {
     for (const id of [`${enemy}-${lane}-outer`, `${enemy}-${lane}-inner`, `${enemy}-${lane}-phoenix`]) {

@@ -1,6 +1,8 @@
 import type { GodDef } from '../game/types';
 import { compatibilityMode, setCompatibilityMode } from './Fatal';
 import { skillIcon } from './icons';
+import { mountLobby } from '../net/LobbyPanel';
+import type { NetSession } from '../net/Session';
 import './start.css';
 
 export type GameMode = 'conquest' | 'arena';
@@ -8,6 +10,8 @@ export type GameMode = 'conquest' | 'arena';
 export interface StartChoice {
   mode: GameMode;
   god: string;
+  /** A multiplayer Conquest match (the lobby's players and connections). */
+  net?: NetSession;
 }
 
 const STORAGE_KEY = 'ascendant.start';
@@ -81,6 +85,8 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
           <h3>Mode</h3>
           <div class="sm-modes">${MODES.map((m) => `<button class="sm-mode" data-mode="${m.id}"><b>${m.name}</b><span>${m.text}</span></button>`).join('')}</div>
           <div class="sm-detail"></div>
+          <h3 class="help-gap">Play with friends</h3>
+          <div class="sm-net"></div>
         </div>
         <div class="sm-col">
           <h3>Controls</h3>
@@ -117,10 +123,18 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
       render();
     }),
   );
+  const play = root.querySelector<HTMLButtonElement>('.sm-play')!;
+  let started: ((c: StartChoice) => void) | null = null;
+  const lobby = mountLobby(root.querySelector<HTMLDivElement>('.sm-net')!, {
+    god: () => god,
+    inLobby: (on) => play.classList.toggle('held', on),
+    onStart: (net) => started?.({ mode: 'conquest', god: net.self()?.god ?? god, net }),
+  });
   root.querySelectorAll<HTMLButtonElement>('.sm-god').forEach((b) =>
     b.addEventListener('click', () => {
       god = b.dataset.god!;
       render();
+      lobby.godChanged();
     }),
   );
 
@@ -136,13 +150,13 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
   });
 
   return new Promise((resolve) => {
-    const play = root.querySelector<HTMLButtonElement>('.sm-play')!;
-    play.addEventListener('click', () => {
-      const choice = { mode, god };
-      save(choice);
+    const finish = (choice: StartChoice) => {
+      save({ mode: choice.mode, god: choice.god });
       root.classList.add('done');
       setTimeout(() => root.remove(), 400);
       resolve(choice);
-    });
+    };
+    started = finish;
+    play.addEventListener('click', () => finish({ mode, god }));
   });
 }
