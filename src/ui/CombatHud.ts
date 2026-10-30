@@ -34,6 +34,18 @@ const CC_LABEL: Partial<Record<CCKind, string>> = {
 /** Crowd control that only hampers; the rest stops a unit outright. */
 const SOFT_CC = new Set<CCKind>(['slow', 'cripple', 'blind', 'intoxicate']);
 
+/** The crowd control to show on a unit: hard before soft, then the longest left. */
+function ccTag(u: Unit): { kind: CCKind; text: string } | null {
+  let best: { kind: CCKind; remaining: number } | null = null;
+  for (const a of u.combatant.cc.active) {
+    if (!CC_LABEL[a.kind]) continue;
+    const hard = !SOFT_CC.has(a.kind);
+    const bestHard = best !== null && !SOFT_CC.has(best.kind);
+    if (!best || (hard && !bestHard) || (hard === bestHard && a.remaining > best.remaining)) best = a;
+  }
+  return best && { kind: best.kind, text: `${CC_LABEL[best.kind]} ${best.remaining.toFixed(1)}` };
+}
+
 interface Bar {
   el: HTMLDivElement;
   hp: HTMLDivElement;
@@ -104,7 +116,8 @@ export class CombatHud {
   private readonly overlay: HTMLDivElement;
   private readonly bars = new Map<Unit, Bar>();
   /** The big bar under the scoreboard for a boss or Warden the player is near. */
-  private readonly objective: { root: HTMLDivElement; name: HTMLDivElement; hp: HTMLDivElement; lag: HTMLDivElement; pct: HTMLSpanElement; cast: HTMLDivElement; castFill: HTMLDivElement };
+  private readonly objective: { root: HTMLDivElement; name: HTMLDivElement; hp: HTMLDivElement; lag: HTMLDivElement; pct: HTMLSpanElement; cast: HTMLDivElement; castFill: HTMLDivElement; cc: HTMLSpanElement };
+  private objectiveCC = '';
   private objectiveUnit: Unit | null = null;
   private target: Unit | null = null;
   private objectiveLag = 1;
@@ -175,10 +188,11 @@ export class CombatHud {
     const hpFill = el('div', 'ch-boss-hp', track);
     el('div', 'ch-boss-ticks', track);
     const pct = el('span', 'ch-boss-pct', track);
+    const cc = el('span', 'ch-ob-cc', obj);
     const cast = el('div', 'ch-boss-cast', obj);
     const castFill = el('div', 'ch-boss-cast-fill', cast);
     el('span', '', cast);
-    this.objective = { root: obj, name, hp: hpFill, lag, pct, cast, castFill };
+    this.objective = { root: obj, name, hp: hpFill, lag, pct, cast, castFill, cc };
   }
 
   setPlayer(u: Unit): void {
@@ -461,6 +475,14 @@ export class CombatHud {
     o.cast.classList.toggle('show', cast > 0);
     o.castFill.style.width = `${cast * 100}%`;
     o.root.classList.toggle('engaged', brain.target !== null);
+    // its overhead bar is hidden while this bar shows it, so its crowd control shows here
+    const tag = ccTag(best);
+    const text = tag?.text ?? '';
+    if (text !== this.objectiveCC) {
+      this.objectiveCC = text;
+      o.cc.textContent = text;
+      o.cc.className = tag ? `ch-ob-cc ch-ob-cc-on ch-cc-${tag.kind}` : 'ch-ob-cc';
+    }
   }
 
   private overheadBars(units: readonly Unit[], dt: number): void {
@@ -510,27 +532,14 @@ export class CombatHud {
     }
   }
 
-  /** Show what is holding a god or monster: hard crowd control first, then the longest soft one. */
+  /** Show what is holding a god or monster over its overhead bar. */
   private updateBarCC(b: Bar, u: Unit): void {
-    let text = '';
-    let kind = '';
-    if (u !== this.player && (u.kind === 'god' || u.kind === 'monster')) {
-      let best: { kind: CCKind; remaining: number } | null = null;
-      for (const a of u.combatant.cc.active) {
-        if (!CC_LABEL[a.kind]) continue;
-        const hard = !SOFT_CC.has(a.kind);
-        const bestHard = best !== null && !SOFT_CC.has(best.kind);
-        if (!best || (hard && !bestHard) || (hard === bestHard && a.remaining > best.remaining)) best = a;
-      }
-      if (best) {
-        kind = best.kind;
-        text = `${CC_LABEL[best.kind]} ${best.remaining.toFixed(1)}`;
-      }
-    }
+    const tag = u !== this.player && (u.kind === 'god' || u.kind === 'monster') ? ccTag(u) : null;
+    const text = tag?.text ?? '';
     if (text === b.ccText) return;
     b.ccText = text;
     b.cc.textContent = text;
-    b.cc.className = text ? `ch-ob-cc ch-ob-cc-on ch-cc-${kind}` : 'ch-ob-cc';
+    b.cc.className = tag ? `ch-ob-cc ch-ob-cc-on ch-cc-${tag.kind}` : 'ch-ob-cc';
   }
 
   private makeBar(u: Unit): Bar {
