@@ -4,7 +4,11 @@ import {
 } from '../render/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
+import { Layers } from '../render/Layers';
 import type { QualitySettings } from '../render/Quality';
+
+/** Cascades from this one on are far: drawn every fourth frame, without `Layers.NEAR_SHADOW`. */
+const FAR_CASCADE = 2;
 
 /**
  * Sky, sun, image-based lighting and atmosphere.
@@ -183,12 +187,13 @@ export class Environment {
   }
 
   /**
-   * The nearest shadow cascade redraws every frame; the farther ones take
-   * turns, every other frame. The far cascades cover most of the map (the far
-   * one alone was over half the shadow draw calls), so this cuts shadow work
-   * by about 40% and also lowers the most expensive frame. A cascade samples
-   * with the matrix it was last drawn with, so a skipped frame only means the
-   * shadows of things moving out there update at half rate.
+   * The nearest shadow cascade redraws every frame, the second every other
+   * frame, and the rest take turns every fourth frame, so each frame draws two
+   * cascades. The far cascades cover most of the map, so they hold most shadow
+   * draws. A cascade samples with the matrix it was last drawn with, so a
+   * skipped frame only means the shadows of things moving out there update
+   * less often (15 times a second at 60 fps). The far cascades also leave out
+   * `Layers.NEAR_SHADOW` casters, whose shadows are too fine to make out there.
    */
   private staggerCascades(): void {
     const lights = this.cascades();
@@ -196,8 +201,15 @@ export class Environment {
     this.frame++;
     for (let i = 1; i < lights.length; i++) {
       const shadow = lights[i]!.shadow;
-      shadow.autoUpdate = false;
-      if ((this.frame + i) % 2 === 0) shadow.needsUpdate = true;
+      if (shadow.autoUpdate) {
+        shadow.autoUpdate = false;
+        if (i >= FAR_CASCADE) {
+          shadow.camera.layers.set(Layers.WORLD);
+          shadow.camera.layers.enable(Layers.FAR_SHADOW);
+        }
+      }
+      const due = i === 1 ? this.frame % 2 === 1 : this.frame % 4 === ((i - FAR_CASCADE) * 2) % 4;
+      if (due) shadow.needsUpdate = true;
     }
   }
 
