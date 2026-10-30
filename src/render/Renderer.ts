@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { compatibilityMode, showFatal } from '../ui/Fatal';
+import { cardFromRenderer } from './gpuAdvice';
 
 export interface RendererInfo {
   renderer: THREE.WebGPURenderer;
@@ -58,10 +59,30 @@ export function gpuName(renderer: THREE.WebGPURenderer): string {
     gl?: WebGL2RenderingContext;
   };
   const info = backend.device?.adapterInfo;
-  if (info) return (info.description || [info.vendor, info.architecture].filter(Boolean).join(' ')).trim();
-  const gl = backend.gl;
+  if (info) {
+    if (info.description) return info.description.trim();
+    // Chrome only says "intel gen-12lp" here. Its WebGL runs on the same GPU and
+    // names the card in full, so borrow that name when the vendor agrees.
+    const full = cardName(probeGl());
+    if (full && info.vendor && full.toLowerCase().includes(info.vendor.toLowerCase())) return full;
+    return [info.vendor, info.architecture].filter(Boolean).join(' ').trim();
+  }
+  return cardName(backend.gl ?? null);
+}
+
+/** The card named by a WebGL context's renderer string. */
+function cardName(gl: WebGL2RenderingContext | null): string {
   const ext = gl?.getExtension('WEBGL_debug_renderer_info');
-  const name = ext ? String(gl!.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
-  // "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Laptop GPU (0x...) Direct3D11 ...)" -> the card
-  return (/ANGLE \([^,]*, ([^(,]+)/.exec(name)?.[1] ?? name).trim();
+  return cardFromRenderer(ext ? String(gl!.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '');
+}
+
+/** A throwaway WebGL context, released as soon as it has been read. */
+function probeGl(): WebGL2RenderingContext | null {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    queueMicrotask(() => gl?.getExtension('WEBGL_lose_context')?.loseContext());
+    return gl;
+  } catch {
+    return null;
+  }
 }

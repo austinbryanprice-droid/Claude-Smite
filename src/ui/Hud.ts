@@ -131,13 +131,13 @@ export class Hud {
   }
 
   /** A short message that fades on its own. */
-  notice(text: string): void {
+  notice(text: string, seconds = 4): void {
     const el = document.createElement('div');
     el.className = 'hud-notice';
     el.textContent = text;
     this.root.appendChild(el);
-    setTimeout(() => el.classList.add('gone'), 4000);
-    setTimeout(() => el.remove(), 5000);
+    setTimeout(() => el.classList.add('gone'), seconds * 1000);
+    setTimeout(() => el.remove(), seconds * 1000 + 1000);
   }
 
   setInfo(text: string): void {

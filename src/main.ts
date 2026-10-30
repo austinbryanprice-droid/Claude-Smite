@@ -12,6 +12,7 @@ import { AsyncPipelines } from './render/AsyncPipelines';
 import { AutoQuality } from './render/AutoQuality';
 import { shareShaders } from './render/instancing';
 import { createRenderer, gpuName } from './render/Renderer';
+import { gpuAdvice } from './render/gpuAdvice';
 import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from './render/Quality';
 import { TextureLibrary } from './scene/Materials';
 import { mapFromUrl, World } from './scene/World';
@@ -58,7 +59,7 @@ async function main(): Promise<void> {
   const rendering = createRenderer(document.body);
   const chosen: Promise<StartChoice> = skipMenu
     ? Promise.resolve({ mode: mapFromUrl(), god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
-    : showStartMenu(GODS, rendering.then((r) => r.isWebGPU));
+    : showStartMenu(GODS, rendering.then((r) => ({ webgpu: r.isWebGPU, advice: gpuAdvice(gpuName(r.renderer)) })));
   if (!skipMenu) music.play('hymn');
 
   const { renderer, isWebGPU } = await rendering;
@@ -155,6 +156,7 @@ async function main(): Promise<void> {
   hud.setQuality(quality.name);
   const gpu = gpuName(renderer);
   hud.setInfo(`${isWebGPU ? 'WebGPU' : 'WebGL 2'}${gpu ? ` · ${gpu}` : ''}`);
+  const advice = params.has('capture') ? null : gpuAdvice(gpu);
   // a quality forced in the URL (tests, shared links) stays put
   if (!params.has('quality')) {
     autoQuality = new AutoQuality((scale) => {
@@ -183,6 +185,7 @@ async function main(): Promise<void> {
   await pipelines.settle(60000, (done, total) => hud.progress(0.9 + (total ? (0.1 * done) / total : 0.1), `Preparing shaders ${done} / ${total}…`));
   clearTimeout(slow);
   hud.ready();
+  if (advice) hud.notice(advice.text, 15);
   combat.netReady();
 
   window.addEventListener('keydown', (e) => {
