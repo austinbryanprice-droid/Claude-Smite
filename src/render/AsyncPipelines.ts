@@ -25,6 +25,24 @@ interface RenderObjectLike {
   object: { isQuadMesh?: boolean };
 }
 
+/** What three hands its node-builder hook: a render object, or a compute node. */
+interface BuiltFor {
+  object?: THREE.Object3D;
+  material?: THREE.Material;
+  camera?: THREE.Camera;
+}
+
+/** "nearest named ancestor/material", and "(shadow)" in the light's pass. */
+function describe(ro: BuiltFor): string {
+  const o = ro.object;
+  if (!o) return 'compute';
+  let name = '';
+  for (let x: THREE.Object3D | null = o; x && !name; x = x.parent) name = x.name;
+  const m = ro.material;
+  const shadow = (ro.camera as THREE.OrthographicCamera | undefined)?.isOrthographicCamera ? ' (shadow)' : '';
+  return `${name || o.type}/${m?.name || m?.type || '?'}${shadow}`;
+}
+
 /** Thrown out of a draw whose shader is still being generated, and caught right there. */
 const NOT_READY = Object.freeze({ notReady: true });
 
@@ -48,6 +66,8 @@ export class AsyncPipelines {
    * main thread, the part of a new material that can't run in the background.
    */
   built = 0;
+  /** What each of those shaders was for (see `describe`), with counts. */
+  readonly builtFor = new Map<string, number>();
   /** Draws put off to a later frame because the frame's shader budget was spent. */
   deferred = 0;
   private idle: (() => void)[] = [];
@@ -61,17 +81,12 @@ export class AsyncPipelines {
   private slots: (() => void)[] = [];
 
   constructor(private readonly renderer: THREE.WebGPURenderer) {
-    const backend = renderer.backend as unknown as {
-      createNodeBuilder?: (...args: unknown[]) => unknown;
-      draw?: (renderObject: RenderObjectLike, info: unknown) => void;
+    const backend = renderer.backend as unknown as { draw?: (renderObject: RenderObjectLike, info: unknown) => void };
+    (renderer.debug as { onNodeBuilderCreated?: ((builder: unknown, ro: BuiltFor) => void) | null }).onNodeBuilderCreated = (_, ro) => {
+      this.built++;
+      const what = describe(ro);
+      this.builtFor.set(what, (this.builtFor.get(what) ?? 0) + 1);
     };
-    if (typeof backend.createNodeBuilder === 'function') {
-      const make = backend.createNodeBuilder.bind(backend);
-      backend.createNodeBuilder = (...args) => {
-        this.built++;
-        return make(...args);
-      };
-    }
     if (typeof backend.draw === 'function') {
       const draw = backend.draw.bind(backend);
       // full-screen passes still run, on the empty scene

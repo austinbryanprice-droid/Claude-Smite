@@ -595,8 +595,8 @@ export class CombatGame implements Updatable {
     const yaw = Math.atan2(-dir.x, -dir.z);
     this.shapeDecal.setColors(p.vfx, p.core);
     this.rangeDecal.setColors(p.vfx, p.core);
-    this.shapeDecal.opacity.value = 0.9;
-    this.rangeDecal.opacity.value = 0.45;
+    this.shapeDecal.values.opacity = 0.9;
+    this.rangeDecal.values.opacity = 0.45;
 
     let shape: DecalShape | null = null;
     let at = { x: u.x, z: u.z };

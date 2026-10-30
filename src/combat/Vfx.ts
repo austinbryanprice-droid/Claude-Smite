@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {
-  cos, float, fract, hash, instanceIndex, mix, mx_noise_float, sin, smoothstep, time, uniform, uniformArray, uv, vec2, vec3, vec4,
+  attribute, cos, float, fract, hash, instanceIndex, mix, mx_noise_float, sin, smoothstep, time, uv, vec2, vec3, vec4,
 } from '../render/tsl';
+import { instancedSprite, objectUniforms, spriteQuads, useUniforms } from '../render/shared';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
 import { isStructure, WORLD_SCALE, type Unit, type Flash, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
@@ -58,10 +59,8 @@ class Pool<T extends { group: THREE.Object3D }> {
     for (const t of shown) {
       this.parent.add(t.group);
       t.group.traverse((o) => {
-        // except meshes with no vertices yet (a ground decal before its first shape)
-        const show = !(o as THREE.Mesh).isMesh || !!(o as THREE.Mesh).geometry.getAttribute('position');
-        if (o.visible === show) return;
-        o.visible = show;
+        if (o.visible) return;
+        o.visible = true;
         flipped.push(o);
       });
     }
@@ -74,15 +73,28 @@ class Pool<T extends { group: THREE.Object3D }> {
 
 const TRAIL = 9;
 
+/** Each shot's own colors for the materials every shot shares. */
+const shotUniforms = () => ({ main: new THREE.Color(), hot: new THREE.Color() });
+let shotMaterials: { core: THREE.SpriteNodeMaterial; halo: THREE.SpriteNodeMaterial; trail: THREE.SpriteNodeMaterial } | null = null;
+
+function makeShotMaterials(): NonNullable<typeof shotMaterials> {
+  const { main, hot } = objectUniforms(shotUniforms());
+  const trail = glowMaterial(main, float(1.5), 1.8, false, 0.55);
+  // each puff's xyz = position, w = size, from the shot's own `trail` attribute
+  const point = attribute('trail', 'vec4');
+  trail.positionNode = point.xyz;
+  trail.scaleNode = vec2(point.w, point.w);
+  return { core: glowMaterial(hot, float(5), 2.5), halo: glowMaterial(main, float(1.8), 1.6, false, 0.75), trail };
+}
+
 class ProjectileView {
   readonly group = new THREE.Group();
-  private readonly main = uniform(new THREE.Color());
-  private readonly hot = uniform(new THREE.Color());
+  private readonly values = shotUniforms();
   private readonly coreSprite: THREE.Sprite;
   private readonly halo: THREE.Sprite;
-  /** The whole trail is one instanced sprite (a draw call, not one per puff): xyz = position, w = size. */
+  /** The whole trail is one instanced sprite (a draw call, not one per puff). */
   private readonly trail: THREE.Sprite;
-  private readonly trailPoints = Array.from({ length: TRAIL }, () => new THREE.Vector4());
+  private readonly trailPoints: THREE.InstancedBufferAttribute;
   private readonly history: THREE.Vector3[] = [];
   private readonly arc = new ArcView();
   private lightning = false;
@@ -90,24 +102,25 @@ class ProjectileView {
   size = 1;
 
   constructor() {
-    this.coreSprite = new THREE.Sprite(glowMaterial(this.hot, float(5), 2.5));
-    this.halo = new THREE.Sprite(glowMaterial(this.main, float(1.8), 1.6, false, 0.75));
-    const trailMat = glowMaterial(this.main, float(1.5), 1.8, false, 0.55);
-    const point = uniformArray(this.trailPoints, 'vec4').element(instanceIndex);
-    trailMat.positionNode = point.xyz;
-    trailMat.scaleNode = vec2(point.w, point.w);
-    this.trail = new THREE.Sprite(trailMat);
-    (this.trail as unknown as { count: number }).count = TRAIL;
+    const m = (shotMaterials ??= makeShotMaterials());
+    this.group.name = 'shot';
+    this.coreSprite = new THREE.Sprite(m.core);
+    this.halo = new THREE.Sprite(m.halo);
+    this.trail = new THREE.Sprite(m.trail);
+    this.trail.geometry = spriteQuads(TRAIL, true);
+    this.trailPoints = new THREE.InstancedBufferAttribute(new Float32Array(TRAIL * 4), 4).setUsage(THREE.DynamicDrawUsage);
+    this.trail.geometry.setAttribute('trail', this.trailPoints);
     this.group.add(this.trail, this.halo, this.coreSprite, this.arc.group);
     for (const o of [this.coreSprite, this.halo, this.trail]) {
       o.frustumCulled = false;
       o.renderOrder = 12;
     }
+    useUniforms(this.values, this.coreSprite, this.halo, this.trail);
   }
 
   reset(p: GodPalette, size: number, at: THREE.Vector3, crackle = false): void {
-    this.main.value.setHex(p.vfx);
-    this.hot.value.setHex(p.core);
+    this.values.main.setHex(p.vfx);
+    this.values.hot.setHex(p.core);
     this.size = size;
     this.lightning = crackle || p.element === 'lightning';
     this.arc.setColors(p.vfx, p.core);
@@ -124,12 +137,13 @@ class ProjectileView {
     this.coreSprite.scale.setScalar(this.size * 0.7 * flicker);
     this.halo.position.copy(at);
     this.halo.scale.setScalar(this.size * 2.6);
-    this.trailPoints.forEach((s, i) => {
+    for (let i = 0; i < TRAIL; i++) {
       // trail puffs sit between history samples so fast shots stay continuous
       const a = this.history[Math.min(i, this.history.length - 1)]!;
       const b = this.history[Math.min(i + 1, this.history.length - 1)]!;
-      s.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, this.size * 1.9 * (1 - i / TRAIL));
-    });
+      this.trailPoints.setXYZW(i, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, this.size * 1.9 * (1 - i / TRAIL));
+    }
+    this.trailPoints.needsUpdate = true;
     if (this.lightning) this.crackleArcs(at, t);
   }
 
@@ -153,67 +167,117 @@ class ProjectileView {
 /** Elements whose hits and areas raise billowing puffs, and the puff color for each. */
 const PUFF_COLORS: Partial<Record<string, number>> = { smoke: 0x4f9466, sand: 0xe0b77e };
 
+/** Each cloud's own values for the material every cloud shares. */
+const puffUniforms = () => ({
+  age: 0,
+  seed: 0,
+  power: 1,
+  radius: 1,
+  fade: 1,
+  /** 0 for a one-shot burst, 1 for a looping area. */
+  loop: 0,
+  /** Swirl speed: sand spirals, smoke drifts. */
+  swirl: 0,
+  tint: new THREE.Color(),
+});
+let puffMaterial: THREE.SpriteNodeMaterial | null = null;
+
+function makePuffMaterial(): THREE.SpriteNodeMaterial {
+  const u = objectUniforms(puffUniforms());
+  const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false });
+  const id = instanceIndex.toFloat();
+  const h1 = hash(id.add(u.seed));
+  const h2 = hash(id.mul(2.9).add(u.seed));
+  const h3 = hash(id.mul(6.1).add(u.seed));
+  // burst: life is the burst's age; loop: each puff cycles on its own clock
+  const cycle = fract(time.mul(h2.mul(0.25).add(0.3)).add(h3));
+  const life = mix(u.age.div(1.2).clamp(0, 1), cycle, u.loop);
+  const out = float(1).sub(float(1).sub(life).pow(3));
+  const ang = h1.mul(6.283).add(life.mul(u.swirl).mul(3)).add(time.mul(u.swirl).mul(u.loop));
+  const dist = mix(out.mul(h2.mul(1.6).add(0.6)).mul(u.power), h2.sqrt().mul(u.radius), u.loop);
+  mat.positionNode = vec3(cos(ang).mul(dist), life.mul(mix(float(1.1), float(2.2), u.loop)).add(h3.mul(0.5)).add(0.3), sin(ang).mul(dist));
+  const size = mix(float(0.6), float(1.6), out).mul(h3.mul(0.6).add(0.7)).mul(mix(u.power, u.radius.mul(0.3).add(0.8).min(2.6), u.loop));
+  mat.scaleNode = vec2(size, size);
+  const p = uv().sub(0.5);
+  const billow = mx_noise_float(vec3(p.x.mul(3), p.y.mul(3), h1.mul(40).add(time.mul(0.4)))).mul(0.5).add(0.5);
+  const soft = smoothstep(0.5, 0.2, p.length()).pow(0.6).mul(billow.mul(0.5).add(0.5));
+  const fadeLife = smoothstep(0, 0.08, life).mul(float(1).sub(life).pow(0.8));
+  // lit from above: tops a little lighter than undersides
+  const shade = mix(float(0.75), float(1.25), uv().y);
+  mat.colorNode = vec4(u.tint.mul(shade), 1);
+  mat.opacityNode = soft.mul(fadeLife).mul(u.fade).mul(0.9);
+  return mat;
+}
+
 /**
  * Soft, alpha-blended clouds: Loki's smoke and Anubis's sand. One instanced
  * sprite set; a burst throws puffs out once, a zone keeps them rolling.
  */
 class Puffs {
   readonly sprite: THREE.Sprite;
-  readonly age = uniform(0);
-  readonly seed = uniform(0);
-  readonly power = uniform(1);
-  readonly radius = uniform(1);
-  readonly fade = uniform(1);
-  /** 0 for a one-shot burst, 1 for a looping area. */
-  readonly loop = uniform(0);
-  /** Swirl speed: sand spirals, smoke drifts. */
-  readonly swirl = uniform(0);
-  readonly tint = uniform(new THREE.Color());
+  readonly values = puffUniforms();
 
   constructor(count: number) {
-    const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false });
-    const id = instanceIndex.toFloat();
-    const h1 = hash(id.add(this.seed));
-    const h2 = hash(id.mul(2.9).add(this.seed));
-    const h3 = hash(id.mul(6.1).add(this.seed));
-    // burst: life is the burst's age; loop: each puff cycles on its own clock
-    const cycle = fract(time.mul(h2.mul(0.25).add(0.3)).add(h3));
-    const life = mix(this.age.div(1.2).clamp(0, 1), cycle, this.loop);
-    const out = float(1).sub(float(1).sub(life).pow(3));
-    const ang = h1.mul(6.283).add(life.mul(this.swirl).mul(3)).add(time.mul(this.swirl).mul(this.loop));
-    const dist = mix(out.mul(h2.mul(1.6).add(0.6)).mul(this.power), h2.sqrt().mul(this.radius), this.loop);
-    mat.positionNode = vec3(cos(ang).mul(dist), life.mul(mix(float(1.1), float(2.2), this.loop)).add(h3.mul(0.5)).add(0.3), sin(ang).mul(dist));
-    const size = mix(float(0.6), float(1.6), out).mul(h3.mul(0.6).add(0.7)).mul(mix(this.power, this.radius.mul(0.3).add(0.8).min(2.6), this.loop));
-    mat.scaleNode = vec2(size, size);
-    const p = uv().sub(0.5);
-    const billow = mx_noise_float(vec3(p.x.mul(3), p.y.mul(3), h1.mul(40).add(time.mul(0.4)))).mul(0.5).add(0.5);
-    const soft = smoothstep(0.5, 0.2, p.length()).pow(0.6).mul(billow.mul(0.5).add(0.5));
-    const fadeLife = smoothstep(0, 0.08, life).mul(float(1).sub(life).pow(0.8));
-    // lit from above: tops a little lighter than undersides
-    const shade = mix(float(0.75), float(1.25), uv().y);
-    mat.colorNode = vec4(this.tint.mul(shade), 1);
-    mat.opacityNode = soft.mul(fadeLife).mul(this.fade).mul(0.9);
-    this.sprite = new THREE.Sprite(mat);
-    (this.sprite as any).count = count;
+    this.sprite = instancedSprite((puffMaterial ??= makePuffMaterial()), count);
+    this.sprite.name = 'puffs';
     this.sprite.frustumCulled = false;
     this.sprite.renderOrder = 11;
     this.sprite.visible = false;
+    useUniforms(this.values, this.sprite);
   }
 
   set(color: number | undefined): void {
     this.sprite.visible = color !== undefined;
-    if (color !== undefined) this.tint.value.setHex(color);
+    if (color !== undefined) this.values.tint.setHex(color);
   }
+}
+
+/** Each burst's own values for the materials every burst shares. */
+const burstUniforms = () => ({ age: 0, main: new THREE.Color(), hot: new THREE.Color(), seed: 0, power: 1 });
+let burstParts: { ring: THREE.MeshBasicNodeMaterial; ringShape: THREE.BufferGeometry; flash: THREE.SpriteNodeMaterial; sparks: THREE.SpriteNodeMaterial } | null = null;
+const SPARKS = 18;
+
+function makeBurstParts(): NonNullable<typeof burstParts> {
+  const { age, main, hot, seed, power } = objectUniforms(burstUniforms());
+  const fade = float(1).sub(age.div(0.6)).clamp(0, 1);
+  const ring = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const ringFade = float(1).sub(age.div(0.45)).clamp(0, 1);
+  const band = smoothstep(0, 0.5, uv().x).mul(smoothstep(1, 0.6, uv().x));
+  ring.colorNode = vec4(mix(main, hot, band.mul(0.5)).mul(float(2).add(band.mul(4))), 1);
+  ring.opacityNode = band.mul(ringFade.pow(1.4)).mul(0.9);
+  const ringShape = new THREE.RingGeometry(0.7, 1, 48, 1).rotateX(-Math.PI / 2);
+  // RingGeometry's uv is planar; rebuild u as the radial position across the band
+  const uvs = ringShape.getAttribute('uv') as THREE.BufferAttribute;
+  const ps = ringShape.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < ps.count; i++) uvs.setX(i, (hypot(ps.getX(i), ps.getZ(i)) - 0.7) / 0.3);
+  const flash = glowMaterial(mix(main, hot, 0.3).mul(2.5), float(1), 1.8, false, fade.pow(1.5).mul(0.9));
+
+  const sparks = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const id = instanceIndex.toFloat();
+  const h1 = hash(id.add(seed));
+  const h2 = hash(id.mul(3.7).add(seed));
+  const h3 = hash(id.mul(9.1).add(seed));
+  const ang = h1.mul(6.283);
+  const up = h2.mul(0.9).add(0.2);
+  const speed = h3.mul(5).add(3).mul(power);
+  const dist = speed.mul(age).mul(float(1).sub(age.mul(0.6)));
+  sparks.positionNode = vec3(
+    cos(ang).mul(dist),
+    up.mul(speed).mul(age).sub(age.mul(age).mul(9)),
+    sin(ang).mul(dist),
+  );
+  const s = float(0.09).mul(power).mul(fade).mul(h2.add(0.6));
+  sparks.scaleNode = vec2(s, s);
+  const dot = smoothstep(0.5, 0, uv().sub(0.5).length());
+  sparks.colorNode = vec4(mix(main, hot, h3.mul(0.6)).mul(9).mul(fade), 1);
+  sparks.opacityNode = dot.mul(fade);
+  return { ring, ringShape, flash, sparks };
 }
 
 /** A short burst: a flash plus sparks thrown outward, all animated on the GPU from `age`. */
 class Burst {
   readonly group = new THREE.Group();
-  readonly age = uniform(0);
-  readonly main = uniform(new THREE.Color());
-  readonly hot = uniform(new THREE.Color());
-  readonly seed = uniform(0);
-  readonly power = uniform(1);
+  readonly values = burstUniforms();
   life = 0.6;
   private readonly flash: THREE.Sprite;
   /** Flat shockwave ring rolling out over the ground. */
@@ -221,52 +285,18 @@ class Burst {
   private readonly puffs = new Puffs(10);
 
   constructor() {
-    const fade = float(1).sub(this.age.div(0.6)).clamp(0, 1);
-    const rm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
-    const ringFade = float(1).sub(this.age.div(0.45)).clamp(0, 1);
-    const band = smoothstep(0, 0.5, uv().x).mul(smoothstep(1, 0.6, uv().x));
-    rm.colorNode = vec4(mix(this.main, this.hot, band.mul(0.5)).mul(float(2).add(band.mul(4))), 1);
-    rm.opacityNode = band.mul(ringFade.pow(1.4)).mul(0.9);
-    const rg = new THREE.RingGeometry(0.7, 1, 48, 1).rotateX(-Math.PI / 2);
-    // RingGeometry's uv is planar; rebuild u as the radial position across the band
-    const uvs = rg.getAttribute('uv') as THREE.BufferAttribute;
-    const ps = rg.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < ps.count; i++) uvs.setX(i, (hypot(ps.getX(i), ps.getZ(i)) - 0.7) / 0.3);
-    this.ring = new THREE.Mesh(rg, rm);
+    const m = (burstParts ??= makeBurstParts());
+    this.group.name = 'burst';
+    this.ring = new THREE.Mesh(m.ringShape, m.ring);
     this.ring.frustumCulled = false;
     this.ring.renderOrder = 6;
-    this.group.add(this.ring, this.puffs.sprite);
-    this.flash = new THREE.Sprite(glowMaterial(mix(this.main, this.hot, 0.3).mul(2.5), float(1), 1.8, false, fade.pow(1.5).mul(0.9)));
+    this.flash = new THREE.Sprite(m.flash);
     this.flash.frustumCulled = false;
-    this.group.add(this.flash);
-
-    const COUNT = 18;
-    const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const id = instanceIndex.toFloat();
-    const h1 = hash(id.add(this.seed));
-    const h2 = hash(id.mul(3.7).add(this.seed));
-    const h3 = hash(id.mul(9.1).add(this.seed));
-    const ang = h1.mul(6.283);
-    const up = h2.mul(0.9).add(0.2);
-    const speed = h3.mul(5).add(3).mul(this.power);
-    const a = this.age;
-    const dist = speed.mul(a).mul(float(1).sub(a.mul(0.6)));
-    mat.positionNode = vec3(
-      cos(ang).mul(dist),
-      up.mul(speed).mul(a).sub(a.mul(a).mul(9)),
-      sin(ang).mul(dist),
-    );
-    const s = float(0.09).mul(this.power).mul(fade).mul(h2.add(0.6));
-    mat.scaleNode = vec2(s, s);
-    const r = uv().sub(0.5).length();
-    const dot = smoothstep(0.5, 0, r);
-    mat.colorNode = vec4(mix(this.main, this.hot, h3.mul(0.6)).mul(9).mul(fade), 1);
-    mat.opacityNode = dot.mul(fade);
-    const sparks = new THREE.Sprite(mat);
-    (sparks as any).count = COUNT;
+    const sparks = instancedSprite(m.sparks, SPARKS);
     sparks.frustumCulled = false;
     sparks.renderOrder = 13;
-    this.group.add(sparks);
+    this.group.add(this.ring, this.puffs.sprite, this.flash, sparks);
+    useUniforms(this.values, this.ring, this.flash, sparks);
   }
 
   start(p: GodPalette, at: THREE.Vector3, power: number, groundY: number): void {
@@ -275,120 +305,134 @@ class Burst {
     this.ring.visible = power >= 0.75 && at.y - groundY < 2.5;
     this.ring.position.y = groundY - at.y + 0.12;
     const puff = p.element ? PUFF_COLORS[p.element] : undefined;
+    const v = this.values;
+    const cloud = this.puffs.values;
     this.puffs.set(power >= 0.5 ? puff : undefined);
-    this.puffs.age.value = 0;
-    this.puffs.seed.value = this.seed.value;
-    this.puffs.power.value = power;
+    cloud.age = 0;
+    cloud.seed = v.seed;
+    cloud.power = power;
     this.puffs.sprite.position.y = groundY - at.y;
-    this.puffs.swirl.value = p.element === 'sand' ? 1 : 0.15;
+    cloud.swirl = p.element === 'sand' ? 1 : 0.15;
     this.life = this.puffs.sprite.visible ? 1.2 : 0.6;
-    this.main.value.setHex(p.vfx);
-    this.hot.value.setHex(p.core);
-    this.seed.value = Math.random() * 100;
-    this.power.value = power;
-    this.age.value = 0;
+    v.main.setHex(p.vfx);
+    v.hot.setHex(p.core);
+    v.seed = Math.random() * 100;
+    v.power = power;
+    v.age = 0;
     this.flash.scale.setScalar(0.1);
   }
 
   update(dt: number): boolean {
-    this.age.value += dt;
-    this.puffs.age.value = this.age.value;
-    const k = Math.min(1, this.age.value / 0.18);
-    this.flash.scale.setScalar((1.0 + k * 1.6) * this.power.value);
-    const r = 1 - (1 - Math.min(1, this.age.value / 0.45)) ** 3;
-    this.ring.scale.setScalar(0.3 + r * 2.6 * this.power.value);
-    return this.age.value < this.life;
+    const v = this.values;
+    v.age += dt;
+    this.puffs.values.age = v.age;
+    const k = Math.min(1, v.age / 0.18);
+    this.flash.scale.setScalar((1.0 + k * 1.6) * v.power);
+    const r = 1 - (1 - Math.min(1, v.age / 0.45)) ** 3;
+    this.ring.scale.setScalar(0.3 + r * 2.6 * v.power);
+    return v.age < this.life;
   }
+}
+
+/** Each pillar's own values for the material every pillar shares. */
+const pillarUniforms = () => ({ age: 0, main: new THREE.Color(), hot: new THREE.Color() });
+const PILLAR_LIFE = 1.6;
+let pillarMaterial: THREE.MeshBasicNodeMaterial | null = null;
+
+function makePillarMaterial(): THREE.MeshBasicNodeMaterial {
+  const { age, main, hot } = objectUniforms(pillarUniforms());
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
+  const v = uv().y;
+  const fade = float(1).sub(age.div(PILLAR_LIFE)).clamp(0, 1);
+  // bright at the foot, streaked as it climbs
+  const streak = sin(uv().x.mul(6.283 * 7).add(age.mul(3))).mul(0.25).add(0.75);
+  const body = float(1).sub(v).pow(1.6).mul(streak);
+  m.colorNode = vec4(mix(main, hot, float(1).sub(v).pow(10)).mul(body).mul(3).mul(fade.pow(1.5)), 1);
+  m.opacityNode = body.mul(fade);
+  return m;
 }
 
 /** A column of light where a god falls, rising and thinning out. */
 class Pillar {
   readonly group = new THREE.Group();
-  readonly age = uniform(0);
-  readonly main = uniform(new THREE.Color());
-  readonly hot = uniform(new THREE.Color());
-  readonly life = 1.6;
+  private readonly values = pillarUniforms();
   private readonly beam: THREE.Mesh;
 
   constructor() {
-    const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
-    const v = uv().y;
-    const fade = float(1).sub(this.age.div(this.life)).clamp(0, 1);
-    // bright at the foot, streaked as it climbs
-    const streak = sin(uv().x.mul(6.283 * 7).add(this.age.mul(3))).mul(0.25).add(0.75);
-    const body = float(1).sub(v).pow(1.6).mul(streak);
-    m.colorNode = vec4(mix(this.main, this.hot, float(1).sub(v).pow(10)).mul(body).mul(3).mul(fade.pow(1.5)), 1);
-    m.opacityNode = body.mul(fade);
-    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), m);
+    this.group.name = 'pillar';
+    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), (pillarMaterial ??= makePillarMaterial()));
     this.beam.frustumCulled = false;
     this.beam.renderOrder = 12;
+    useUniforms(this.values, this.beam);
     this.group.add(this.beam);
   }
 
   start(p: GodPalette, x: number, y: number, z: number): void {
     this.group.position.set(x, y, z);
-    this.main.value.setHex(p.vfx);
-    this.hot.value.setHex(p.core);
-    this.age.value = 0;
+    this.values.main.setHex(p.vfx);
+    this.values.hot.setHex(p.core);
+    this.values.age = 0;
   }
 
   update(dt: number): boolean {
-    this.age.value += dt;
-    const k = this.age.value;
+    const k = (this.values.age += dt);
     const rise = 1 - Math.exp(-k * 5);
     this.beam.scale.set(0.5 + 0.9 * (1 - rise) + 0.3, 2 + rise * 30, 0.5 + 0.9 * (1 - rise) + 0.3);
-    return k < this.life;
+    return k < PILLAR_LIFE;
   }
+}
+
+/** Each area's own values for the mote material every area shares. */
+const moteUniforms = () => ({ radius: 1, main: new THREE.Color(), fade: 1 });
+let moteMaterial: THREE.SpriteNodeMaterial | null = null;
+
+function makeMoteMaterial(): THREE.SpriteNodeMaterial {
+  const { radius, main, fade } = objectUniforms(moteUniforms());
+  const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const id = instanceIndex.toFloat();
+  const life = fract(time.mul(hash(id).mul(0.4).add(0.35)).add(hash(id.mul(2.3))));
+  const ang = hash(id.mul(5.1)).mul(6.283).add(time.mul(0.6));
+  const rad = hash(id.mul(7.7)).sqrt().mul(radius);
+  mat.positionNode = vec3(cos(ang).mul(rad), life.mul(2.8).add(0.1), sin(ang).mul(rad));
+  const s = float(0.07).mul(float(1).sub(life)).mul(hash(id.mul(1.3)).add(0.5));
+  mat.scaleNode = vec2(s, s);
+  const dot = smoothstep(0.5, 0, uv().sub(0.5).length());
+  mat.colorNode = vec4(main.mul(7).mul(fade), 1);
+  mat.opacityNode = dot.mul(smoothstep(1, 0.5, life)).mul(fade);
+  return mat;
 }
 
 /** A lingering area: a churning ground decal with motes rising through it. */
 class ZoneView {
   readonly group = new THREE.Group();
   readonly decal: GroundDecal;
-  private readonly radius = uniform(1);
-  private readonly main = uniform(new THREE.Color());
-  private readonly fade = uniform(1);
-
-  constructor(ground: Ground) {
-    this.decal = new GroundDecal(ground);
-    this.decal.setStyle('zone');
-    this.group.add(this.decal.mesh);
-
-    const COUNT = 40;
-    const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const id = instanceIndex.toFloat();
-    const life = fract(time.mul(hash(id).mul(0.4).add(0.35)).add(hash(id.mul(2.3))));
-    const ang = hash(id.mul(5.1)).mul(6.283).add(time.mul(0.6));
-    const rad = hash(id.mul(7.7)).sqrt().mul(this.radius);
-    mat.positionNode = vec3(cos(ang).mul(rad), life.mul(2.8).add(0.1), sin(ang).mul(rad));
-    const s = float(0.07).mul(float(1).sub(life)).mul(hash(id.mul(1.3)).add(0.5));
-    mat.scaleNode = vec2(s, s);
-    const dot = smoothstep(0.5, 0, uv().sub(0.5).length());
-    mat.colorNode = vec4(this.main.mul(7).mul(this.fade), 1);
-    mat.opacityNode = dot.mul(smoothstep(1, 0.5, life)).mul(this.fade);
-    const motes = new THREE.Sprite(mat);
-    (motes as any).count = COUNT;
-    motes.frustumCulled = false;
-    motes.renderOrder = 13;
-    this.group.add(motes);
-    this.motes = motes;
-  }
-
+  private readonly values = moteUniforms();
   private readonly motes: THREE.Sprite;
   private readonly arc = new ArcView();
   private strikeAt = 0;
   private readonly puffs = new Puffs(40);
 
+  constructor(ground: Ground) {
+    this.group.name = 'zone';
+    this.decal = new GroundDecal(ground);
+    this.decal.setStyle('zone');
+    this.motes = instancedSprite((moteMaterial ??= makeMoteMaterial()), 40);
+    this.motes.frustumCulled = false;
+    this.motes.renderOrder = 13;
+    useUniforms(this.values, this.motes);
+    this.group.add(this.decal.mesh, this.motes, this.arc.group, this.puffs.sprite);
+  }
+
   set(p: GodPalette, x: number, z: number, radius: number, fade: number, ground: Ground, t: number): void {
-    if (this.arc.group.parent !== this.group) this.group.add(this.arc.group, this.puffs.sprite);
-    this.decal.glyphs.value = p.element === 'runes' ? 1 : 0;
+    this.decal.values.glyphs = p.element === 'runes' ? 1 : 0;
     this.puffs.set(p.element ? PUFF_COLORS[p.element] : undefined);
-    this.puffs.loop.value = 1;
-    this.puffs.radius.value = radius;
-    this.puffs.fade.value = fade;
-    this.puffs.swirl.value = p.element === 'sand' ? 1.4 : 0.1;
+    const cloud = this.puffs.values;
+    cloud.loop = 1;
+    cloud.radius = radius;
+    cloud.fade = fade;
+    cloud.swirl = p.element === 'sand' ? 1.4 : 0.1;
     this.puffs.sprite.position.set(x, ground(x, z), z);
-    this.arc.fade.value = fade * Math.max(0, 1 - (t - this.strikeAt) / 0.14);
+    this.arc.values.fade = fade * Math.max(0, 1 - (t - this.strikeAt) / 0.14);
     // a lightning god's storm keeps striking somewhere inside it
     if (p.element === 'lightning' && t - this.strikeAt > 0.22) {
       this.strikeAt = t;
@@ -403,11 +447,11 @@ class ZoneView {
     } else if (p.element !== 'lightning') this.arc.clear();
     this.decal.setColors(p.vfx, p.core);
     // clouds carry smoke and sand areas, so their ground glow steps back
-    this.decal.opacity.value = fade * (p.element === 'smoke' || p.element === 'sand' ? 0.55 : 1);
+    this.decal.values.opacity = fade * (p.element === 'smoke' || p.element === 'sand' ? 0.55 : 1);
     this.decal.place({ type: 'circle', radius }, x, z, 0);
-    this.radius.value = radius;
-    this.main.value.setHex(p.vfx);
-    this.fade.value = fade;
+    this.values.radius = radius;
+    this.values.main.setHex(p.vfx);
+    this.values.fade = fade;
     this.motes.position.set(x, ground(x, z), z);
   }
 }
@@ -419,6 +463,7 @@ class FlashView {
   lightning = false;
   private struck = -1;
   constructor(private readonly ground: Ground) {
+    this.group.name = 'flash';
     this.decal = new GroundDecal(ground);
     this.decal.setStyle('flash');
     this.group.add(this.decal.mesh, this.arc.group);
@@ -427,7 +472,7 @@ class FlashView {
   reset(p: GodPalette, circle: boolean): void {
     this.decal.setColors(p.vfx, p.core);
     this.lightning = p.element === 'lightning';
-    this.decal.glyphs.value = p.element === 'runes' && circle ? 1 : 0;
+    this.decal.values.glyphs = p.element === 'runes' && circle ? 1 : 0;
     this.arc.setColors(p.vfx, p.core);
     this.arc.clear();
     this.struck = -1;
@@ -436,7 +481,7 @@ class FlashView {
   /** Lightning gods' shapes are struck by bolts, re-forked several times while the wave rolls out. */
   update(f: Flash, wave: number, fade: number): void {
     if (!this.lightning) return;
-    this.arc.fade.value = fade;
+    this.arc.values.fade = fade;
     const step = Math.floor(f.age / 0.06);
     if (step === this.struck || f.age > f.life * 0.6) return;
     this.struck = step;
@@ -539,8 +584,8 @@ export class CombatVfx {
 
   /**
    * Shows every pooled effect until the returned function is called, so that
-   * a loading frame draws them and prepares their shaders: each effect object
-   * has its own, and generating them on its first cast stalled the fight.
+   * a loading frame draws them and prepares their shaders: generating one on
+   * an effect's first cast stalled the fight.
    */
   prime(): () => void {
     const restore = [this.projectilePool, this.zonePool, this.flashPool, this.burstPool, this.pillarPool].map((p) => p.prime());
@@ -587,7 +632,7 @@ export class CombatVfx {
       v.arc.group.visible = true;
       const p = paletteOf(s);
       v.arc.setColors(p.vfx, p.core);
-      v.arc.fade.value = (target === this.player ? 0.9 : 0.4) * (0.8 + Math.sin(t * 14) * 0.2);
+      v.arc.values.fade = (target === this.player ? 0.9 : 0.4) * (0.8 + Math.sin(t * 14) * 0.2);
       if (t - v.at < 0.08) continue;
       v.at = t;
       v.arc.clear();
@@ -743,8 +788,8 @@ export class CombatVfx {
       const k = Math.min(1, f.age / f.life);
       const wave = 1 - (1 - Math.min(1, k / 0.55)) ** 2;
       const fade = k < 0.5 ? 1 : 1 - (k - 0.5) / 0.5;
-      v.decal.wave.value = wave;
-      v.decal.opacity.value = fade * 1.3;
+      v.decal.values.wave = wave;
+      v.decal.values.opacity = fade * 1.3;
       v.update(f, wave, fade);
     }
     for (const [id, v] of this.flashes) {
