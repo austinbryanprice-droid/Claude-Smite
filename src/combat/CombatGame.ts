@@ -23,6 +23,7 @@ import { paletteFor } from './palette';
 import type { StructureModel } from './structures';
 import { UnitViews } from './UnitViews';
 import { BuffAuras } from './BuffAuras';
+import { StatusAuras } from './StatusAuras';
 import { monsterWarmup } from './MonsterViews';
 import { CombatVfx } from './Vfx';
 
@@ -71,6 +72,7 @@ export class CombatGame implements Updatable {
   private readonly views: UnitViews;
   private readonly vfx: CombatVfx;
   private readonly auras = new BuffAuras();
+  private readonly status = new StatusAuras();
   /** Monsters drawn out of sight for the first frames, so their shaders compile during loading. */
   private warm: { group: THREE.Group; frames: number } | null = null;
   /** The HUD's crosshair, which shows whether a basic attack would land. */
@@ -131,7 +133,7 @@ export class CombatGame implements Updatable {
 
     this.vfx = new CombatVfx(this.groundAt);
     this.vfx.targets = () => (this.match ? [...this.match.brains].map(([s, b]) => [s, b.current] as const) : []);
-    world.vfx.add(this.vfx.group, this.auras.group);
+    world.vfx.add(this.vfx.group, this.auras.group, this.status.group);
     this.shapeDecal = new GroundDecal(this.groundAt);
     this.rangeDecal = new GroundDecal(this.groundAt);
     this.shapeDecal.setStyle('telegraph');
@@ -287,6 +289,7 @@ export class CombatGame implements Updatable {
     this.vfx.frame(this.sim, dt, time);
     this.syncCamps();
     this.auras.frame(this.sim.units, time, (u) => u.stealth <= 0 || u.team === this.player.team);
+    this.status.frame(this.sim.units, time, (u) => u.stealth <= 0 || u.team === this.player.team);
     this.updatePreview();
     this.hud.setPreview(this.preview?.slot ?? null);
     this.hud.frame(this.sim.units, dt);
