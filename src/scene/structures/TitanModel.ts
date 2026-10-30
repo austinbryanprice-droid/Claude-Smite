@@ -32,6 +32,10 @@ export class TitanModel implements StructureModel {
   private attackT = -1;
   private destroyed = 0;
   private readonly idle: LocomotionState = { speed: 0, localDir: new THREE.Vector2(), grounded: true, verticalSpeed: 0 };
+  /** Time the statue's pose has not caught up on yet (see `update`). */
+  private animDt = 0;
+  private frame = 0;
+  private readonly at = new THREE.Vector3();
 
   constructor(lib: MaterialLibrary, team: Team, teamMats?: TeamMaterials) {
     const style = TEAM_STYLE[team];
@@ -119,7 +123,7 @@ export class TitanModel implements StructureModel {
     if (this.destroyed > 0) this.shield.visible = false;
   }
 
-  update(dt: number, time: number): void {
+  update(dt: number, time: number, camera?: THREE.Camera): void {
     let cast = 0;
     let impact = 0;
     if (this.attackT >= 0) {
@@ -137,7 +141,20 @@ export class TitanModel implements StructureModel {
       this.light.intensity = 40 * (1 - this.destroyed) * (0.9 + 0.1 * Math.sin(time * 1.3));
     }
     this.statue.castWeight = cast;
-    if (this.destroyed < 0.95) this.statue.animate(dt, this.idle);
+    if (this.destroyed >= 0.95) return;
+    // the statue is a full god rig with cloth: away from the camera its idle
+    // breathing poses every few frames, the way distant bot gods do (an attack
+    // always runs every frame)
+    this.animDt += dt;
+    const every = this.attackT >= 0 || !camera ? 1 : this.animateEvery(camera);
+    if (++this.frame % every !== 0 && this.animDt + dt <= 1 / 20) return;
+    this.statue.animate(this.animDt, this.idle, every === 1 ? this.animDt : Math.min(this.animDt, 1 / 60));
+    this.animDt = 0;
     this.statue.hips.position.y -= impact * 0.12;
+  }
+
+  private animateEvery(camera: THREE.Camera): number {
+    const d = camera.position.distanceTo(this.at.setFromMatrixPosition(this.root.matrixWorld));
+    return d > 70 ? 3 : d > 35 ? 2 : 1;
   }
 }

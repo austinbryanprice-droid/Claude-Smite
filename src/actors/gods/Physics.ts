@@ -24,6 +24,12 @@ class Sheet {
   private readonly stiff: Float32Array;
   private readonly links: Int32Array;
   private readonly rest: Float32Array;
+  /** Per link, the share of a correction each end takes (pinned ends take none). */
+  private readonly share: Float32Array;
+  /** This step's animated rest point of each particle, in world space. */
+  private readonly targets: Float32Array;
+  private readonly rows: number;
+  private readonly cols: number;
   private readonly target = new THREE.Vector3();
   private readonly geo: THREE.BufferGeometry;
   private initialized = false;
@@ -38,11 +44,14 @@ class Sheet {
     private readonly damping: number,
   ) {
     const { rows, cols } = spec;
+    this.rows = rows;
+    this.cols = cols;
     this.n = rows * cols;
     this.pos = new Float32Array(this.n * 3);
     this.prev = new Float32Array(this.n * 3);
     this.local = new Float32Array(this.n * 3);
     this.stiff = new Float32Array(this.n);
+    this.targets = new Float32Array(this.n * 3);
     this.drive = [];
     const v = new THREE.Vector3();
     for (let i = 0; i < this.n; i++) {
@@ -73,9 +82,18 @@ class Sheet {
       const b = spec.points[this.links[k * 2 + 1]!]!;
       this.rest[k] = Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
     }
+    this.share = new Float32Array(this.links.length);
+    for (let k = 0; k < this.rest.length; k++) {
+      const wa = this.stiff[this.links[k * 2]!]! >= 1 ? 0 : 1;
+      const wb = this.stiff[this.links[k * 2 + 1]!]! >= 1 ? 0 : 1;
+      const sum = wa + wb || 1;
+      this.share[k * 2] = (2 * wa) / sum;
+      this.share[k * 2 + 1] = (2 * wb) / sum;
+    }
 
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.n * 3), 3));
+    this.geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(this.n * 3), 3));
     const uv = new Float32Array(this.n * 2);
     const color = new Float32Array(this.n * 4);
     for (let i = 0; i < this.n; i++) {
@@ -139,17 +157,28 @@ class Sheet {
       p[o + 2] = z + (z - q[o + 2]!) * keep;
       q[o] = x; q[o + 1] = y; q[o + 2] = z;
     }
+    // the animated rest shape holds still within a step: place it once, not once per iteration
+    const T = this.targets;
+    for (let i = 0; i < this.n; i++) {
+      if (this.stiff[i]! <= 0) continue;
+      const e = this.drive[i]!.matrixWorld.elements;
+      const o = i * 3;
+      const x = this.local[o]!, y = this.local[o + 1]!, z = this.local[o + 2]!;
+      T[o] = e[0]! * x + e[4]! * y + e[8]! * z + e[12]!;
+      T[o + 1] = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
+      T[o + 2] = e[2]! * x + e[6]! * y + e[10]! * z + e[14]!;
+    }
+    const S = this.share;
     for (let it = 0; it < 4; it++) {
       // pull toward the animated rest shape (strong at the pins, loose at the hem)
       for (let i = 0; i < this.n; i++) {
         const s = this.stiff[i]!;
         if (s <= 0) continue;
-        this.targetOf(i, this.target);
         const o = i * 3;
         const k = s >= 1 ? 1 : s * 0.5;
-        p[o] = p[o]! + (this.target.x - p[o]!) * k;
-        p[o + 1] = p[o + 1]! + (this.target.y - p[o + 1]!) * k;
-        p[o + 2] = p[o + 2]! + (this.target.z - p[o + 2]!) * k;
+        p[o] = p[o]! + (T[o]! - p[o]!) * k;
+        p[o + 1] = p[o + 1]! + (T[o + 1]! - p[o + 1]!) * k;
+        p[o + 2] = p[o + 2]! + (T[o + 2]! - p[o + 2]!) * k;
       }
       const L = this.links;
       for (let k = 0; k < this.rest.length; k++) {
@@ -165,13 +194,14 @@ class Sheet {
           continue;
         }
         const f = ((d - r) / d) * 0.5;
-        const wa = this.stiff[L[k * 2]!]! >= 1 ? 0 : 1;
-        const wb = this.stiff[L[k * 2 + 1]!]! >= 1 ? 0 : 1;
-        const sum = wa + wb || 1;
-        p[a] = p[a]! + dx * f * 2 * wa / sum; p[a + 1] = p[a + 1]! + dy * f * 2 * wa / sum; p[a + 2] = p[a + 2]! + dz * f * 2 * wa / sum;
-        p[b] = p[b]! - dx * f * 2 * wb / sum; p[b + 1] = p[b + 1]! - dy * f * 2 * wb / sum; p[b + 2] = p[b + 2]! - dz * f * 2 * wb / sum;
+        const fa = f * S[k * 2]!, fb = f * S[k * 2 + 1]!;
+        p[a] = p[a]! + dx * fa; p[a + 1] = p[a + 1]! + dy * fa; p[a + 2] = p[a + 2]! + dz * fa;
+        p[b] = p[b]! - dx * fb; p[b + 1] = p[b + 1]! - dy * fb; p[b + 2] = p[b + 2]! - dz * fb;
       }
-      this.collide();
+      // every other pass (ending on the last): pushing out of the body costs as
+      // much as the rest of the pass, and the pull to the rest shape already
+      // keeps the sheet mostly clear
+      if (it % 2 === 1) this.collide();
     }
   }
 
@@ -201,13 +231,45 @@ class Sheet {
   write(inverse: THREE.Matrix4): void {
     const attr = this.geo.getAttribute('position') as THREE.BufferAttribute;
     const out = attr.array as Float32Array;
-    const v = this.target;
-    for (let i = 0; i < this.n; i++) {
-      v.set(this.pos[i * 3]!, this.pos[i * 3 + 1]!, this.pos[i * 3 + 2]!).applyMatrix4(inverse);
-      out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z;
+    const e = inverse.elements;
+    const p = this.pos;
+    for (let o = 0; o < this.n * 3; o += 3) {
+      const x = p[o]!, y = p[o + 1]!, z = p[o + 2]!;
+      out[o] = e[0]! * x + e[4]! * y + e[8]! * z + e[12]!;
+      out[o + 1] = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
+      out[o + 2] = e[2]! * x + e[6]! * y + e[10]! * z + e[14]!;
     }
     attr.needsUpdate = true;
-    this.geo.computeVertexNormals();
+    this.gridNormals(out);
+  }
+
+  /**
+   * Vertex normals straight from the grid (differences across each vertex,
+   * one-sided at the edges), wound like the sheet's triangles: several times
+   * cheaper than computeVertexNormals walking every face.
+   */
+  private gridNormals(p: Float32Array): void {
+    const attr = this.geo.getAttribute('normal') as THREE.BufferAttribute;
+    const out = attr.array as Float32Array;
+    const { rows, cols } = this;
+    for (let r = 0; r < rows; r++) {
+      const up = Math.max(0, r - 1) * cols;
+      const down = Math.min(rows - 1, r + 1) * cols;
+      for (let c = 0; c < cols; c++) {
+        const left = (r * cols + Math.max(0, c - 1)) * 3;
+        const right = (r * cols + Math.min(cols - 1, c + 1)) * 3;
+        const above = (up + c) * 3;
+        const below = (down + c) * 3;
+        const ux = p[right]! - p[left]!, uy = p[right + 1]! - p[left + 1]!, uz = p[right + 2]! - p[left + 2]!;
+        const vx = p[below]! - p[above]!, vy = p[below + 1]! - p[above + 1]!, vz = p[below + 2]! - p[above + 2]!;
+        // triangles run (here, below, right): the face normal is down x right
+        const nx = vy * uz - vz * uy, ny = vz * ux - vx * uz, nz = vx * uy - vy * ux;
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        const o = (r * cols + c) * 3;
+        out[o] = nx / len; out[o + 1] = ny / len; out[o + 2] = nz / len;
+      }
+    }
+    attr.needsUpdate = true;
   }
 
   /** Average distance moved by the drive targets since the last step (teleport detection). */
