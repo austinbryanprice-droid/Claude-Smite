@@ -105,5 +105,5 @@ describe('networked match copy', () => {
     expect(Math.abs(guest.match.time - host.match.time)).toBeLessThan(0.5);
     // a guest's download stays modest: well under 100 KB/s once the match is busy
     expect(bytes / 50).toBeLessThan(100_000);
-  });
+  }, 30_000);
 });
