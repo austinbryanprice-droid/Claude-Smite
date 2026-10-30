@@ -48,6 +48,11 @@ function load(): Partial<StartChoice> {
   }
 }
 
+/** The mode the title screen opens with: the last one played, Conquest at first. */
+export function savedMode(): GameMode {
+  return load().mode === 'arena' ? 'arena' : 'conquest';
+}
+
 function save(c: StartChoice): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
@@ -62,7 +67,7 @@ function save(c: StartChoice): void {
  */
 export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>): Promise<StartChoice> {
   const prev = load();
-  let mode: GameMode = prev.mode === 'arena' ? 'arena' : 'conquest';
+  let mode = savedMode();
   let god = gods.some((g) => g.id === prev.god) ? prev.god! : gods[0]!.id;
 
   const root = document.createElement('div');
