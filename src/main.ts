@@ -11,7 +11,7 @@ import { grading, PostFX } from './render/PostFX';
 import { AsyncPipelines } from './render/AsyncPipelines';
 import { AutoQuality } from './render/AutoQuality';
 import { shareShaders } from './render/instancing';
-import { createRenderer } from './render/Renderer';
+import { createRenderer, gpuName } from './render/Renderer';
 import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from './render/Quality';
 import { TextureLibrary } from './scene/Materials';
 import { mapFromUrl, World } from './scene/World';
@@ -74,8 +74,10 @@ async function main(): Promise<void> {
   await preloadGodAssets((f) => hud.progress(0.55 + f * 0.05, 'Summoning the gods…'));
 
   let quality = QUALITY_PRESETS[initialQuality(isWebGPU)];
+  /** Lowered by AutoQuality when the frame rate stays low. */
+  let renderScale = 1;
   const resize = () => {
-    const pr = Math.min(window.devicePixelRatio * quality.resolutionScale, quality.maxPixelRatio);
+    const pr = Math.min(window.devicePixelRatio * quality.resolutionScale, quality.maxPixelRatio) * renderScale;
     renderer.setPixelRatio(pr);
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -115,14 +117,10 @@ async function main(): Promise<void> {
   const guessMode = skipMenu ? null : savedMode();
   const guess = guessMode ? prepare(guessMode) : null;
   const choice = await chosen;
+  // A map built for the other mode is left to the garbage collector, not disposed:
+  // it shares cached geometry with the new map, and disposing destroys GPU
+  // buffers that the new map still draws ("buffer used in submit while destroyed").
   const reuse = guess && guessMode === choice.mode;
-  // free the map built for the other mode; three re-uploads anything still shared
-  if (guess && !reuse) {
-    void guess.then(({ world: unused }) => {
-      unused.scene.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
-      unused.scene.environment?.dispose();
-    });
-  }
   const { world, post } = reuse ? await guess : await prepare(choice.mode);
 
   const input = new Input(renderer.domElement);
@@ -146,6 +144,7 @@ async function main(): Promise<void> {
 
   applyQuality = async (name: QualityName) => {
     quality = QUALITY_PRESETS[name];
+    renderScale = 1;
     saveQuality(name);
     hud.setQuality(name);
     resize();
@@ -154,12 +153,14 @@ async function main(): Promise<void> {
   };
   saveQuality(quality.name);
   hud.setQuality(quality.name);
-  hud.setInfo(isWebGPU ? 'WebGPU' : 'WebGL 2');
+  const gpu = gpuName(renderer);
+  hud.setInfo(`${isWebGPU ? 'WebGPU' : 'WebGL 2'}${gpu ? ` · ${gpu}` : ''}`);
   // a quality forced in the URL (tests, shared links) stays put
   if (!params.has('quality')) {
-    autoQuality = new AutoQuality(() => quality.name, (to) => {
-      void applyQuality(to);
-      hud.notice(`Lowered graphics to ${QUALITY_PRESETS[to].label} for a smoother frame rate. You can change it at the bottom right.`);
+    autoQuality = new AutoQuality((scale) => {
+      renderScale = scale;
+      resize();
+      hud.notice(`Lowered the render resolution to ${Math.round(scale * 100)}% for a smoother frame rate. Picking a quality at the bottom right resets it.`);
     });
   }
 
