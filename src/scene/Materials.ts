@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  abs, float, normalWorld, positionWorld, sqrt, texture, transformNormalToView, uniform, vec3,
+  abs, attribute, cross, float, normalWorld, positionWorld, sqrt, texture, transformNormalToView, uniform, vec3,
 } from '../render/tsl';
 
 /** Names of the generated PBR sets in public/textures/pbr (see tools/textures/gen.py). */
@@ -126,9 +126,43 @@ export function planar(set: PbrSet, uvNode: any, geomNormal: any = normalWorld):
   return { color: c.rgb, normal, roughness: nr.z, ao: float(1) };
 }
 
+/** The world-space normal each library material lights with, for `turnedVariant`. */
+const litNormals = new WeakMap<THREE.Material, any>();
+const variants = new WeakMap<THREE.Material, THREE.Material>();
+
+function lightWith(mat: THREE.MeshStandardNodeMaterial, normal: any): void {
+  mat.normalNode = transformNormalToView(normal);
+  litNormals.set(mat, normal);
+}
+
+/**
+ * Library materials hand a world-space normal to `transformNormalToView`,
+ * which also turns it by the mesh's rotation and scale, so a turned column or
+ * rock is lit as if the sun stood elsewhere. The temple and structures were
+ * tuned with that light. A baked mesh (`mergeStatic`) has no part transforms
+ * left, so its vertices carry their part's rotation in `turn` (a quaternion)
+ * and inverse scale in `turnScale`, and this variant of `mat` applies them to
+ * light every part as before. Null for materials outside the library.
+ */
+export function turnedVariant(mat: THREE.Material): THREE.Material | null {
+  const normal = litNormals.get(mat);
+  if (!normal) return null;
+  let v = variants.get(mat) as THREE.MeshStandardNodeMaterial | undefined;
+  if (!v) {
+    v = (mat as THREE.MeshStandardNodeMaterial).clone();
+    v.name = `${mat.name}-turned`;
+    const q = attribute('turn', 'vec4');
+    const n = normal.mul(attribute('turnScale', 'vec4').xyz);
+    const t = cross(q.xyz, n).mul(2);
+    v.normalNode = transformNormalToView(n.add(t.mul(q.w)).add(cross(q.xyz, t)));
+    variants.set(mat, v);
+  }
+  return v;
+}
+
 export function applySurface(mat: THREE.MeshStandardNodeMaterial, s: SurfaceNodes, opts: { tint?: any; roughnessMul?: any; aoStrength?: number } = {}): void {
   mat.colorNode = opts.tint ? s.color.mul(opts.tint) : s.color;
-  mat.normalNode = transformNormalToView(s.normal);
+  lightWith(mat, s.normal);
   mat.roughnessNode = opts.roughnessMul ? s.roughness.mul(opts.roughnessMul) : s.roughness;
   const k = opts.aoStrength ?? 1;
   mat.aoNode = k === 1 ? s.ao : float(1).sub(float(1).sub(s.ao).mul(k));
@@ -174,7 +208,7 @@ export class MaterialLibrary {
     mat.colorNode = col;
     mat.metalnessNode = patina ? float(1).sub(patinaMask) : float(1);
     mat.roughnessNode = float(roughness).add(s.roughness.sub(0.8).mul(0.4));
-    mat.normalNode = transformNormalToView(s.normal.mix(normalWorld, 0.6).normalize());
+    lightWith(mat, s.normal.mix(normalWorld, 0.6).normalize());
     return mat;
   }
 }
