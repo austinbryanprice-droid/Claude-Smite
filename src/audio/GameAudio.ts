@@ -158,6 +158,10 @@ export class GameAudio {
     const gain = (mine ? 1 : 0.85) * (ult ? 1.15 : 1);
     this.at(skillPart(id, 'cast'), u, { gain, ref: ult ? 12 : 8, vary: 0.02, wet: ult ? 0.2 : 0.05 }, mine ? 6 : 4);
     if (ult) this.voice(u, 'cry', 0.9, 5);
+    if (ult && mine) {
+      this.engine.duckMusic(0.6, 1.4);
+      this.engine.play('ult.surge', { gain: 0.8 }, 6);
+    } else if (ult && u.team !== this.me.team && u.stealth <= 0 && this.dist(u) < 35) this.engine.play('ult.warn', { gain: 0.75 * (1 - this.dist(u) / 50) }, 5, 1);
     else if (Math.random() < 0.5) this.voice(u, 'effort', 0.6, 3, 0.6);
     if (!ss.impact) return;
     if (targeting === 'leap') {

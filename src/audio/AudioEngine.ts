@@ -215,6 +215,17 @@ export class AudioEngine {
     this.musicDuck.gain.setTargetAtTime(1 - 0.45 * m, now, 0.4);
   }
 
+  /** Dip the music for a big moment (`depth` 0..1), then bring it back after `hold` seconds. */
+  duckMusic(depth: number, hold: number): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const base = 1 - 0.45 * this.muffle;
+    const g = this.musicDuck.gain;
+    g.cancelScheduledValues(now);
+    g.setTargetAtTime(base * (1 - depth), now, 0.04);
+    g.setTargetAtTime(base, now + hold, 0.5);
+  }
+
   // -------------------------------------------------------------------------
   // Settings
 
