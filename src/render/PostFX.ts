@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {
-  builtinAOContext, cdl, float, Fn, hash, mrt, normalView, output, packNormalToRGB, pass,
-  renderOutput, sample, screenUV, smoothstep, time, uniform, unpackRGBToNormal, vec3, vec4, velocity,
+  builtinAOContext, cdl, float, floor, Fn, hash, int, ivec2, max, min, mrt, normalView, output,
+  packNormalToRGB, pass, renderOutput, sample, screenUV, smoothstep, textureLoad, textureSize, time,
+  uniform, unpackRGBToNormal, vec3, vec4, velocity,
 } from './tsl';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
@@ -12,25 +13,37 @@ import type { QualitySettings } from './Quality';
 
 /** Artist controls for the final image. Values are live uniforms. */
 export const grading = {
-  exposure: uniform(0.85),
-  /** ASC CDL in display space: slope (gain), offset (lift), power (gamma). */
-  slope: uniform(new THREE.Vector3(1.05, 1.0, 0.94)),
-  offset: uniform(new THREE.Vector3(-0.022, -0.014, 0.012)),
-  power: uniform(new THREE.Vector3(1.2, 1.16, 1.08)),
-  saturation: uniform(1.3),
-  vignette: uniform(0.32),
-  grain: uniform(0.025),
+  exposure: uniform(0.95),
+  /**
+   * ASC CDL in display space: slope (gain), offset (lift), power (gamma).
+   * Kept close to neutral: a lifted blue offset veils the whole frame, and a
+   * power above 1 crushes everything in shadow.
+   */
+  slope: uniform(new THREE.Vector3(1.04, 1.0, 0.96)),
+  offset: uniform(new THREE.Vector3(-0.01, -0.01, -0.008)),
+  power: uniform(new THREE.Vector3(1.04, 1.03, 1.0)),
+  saturation: uniform(1.25),
+  vignette: uniform(0.2),
+  grain: uniform(0.01),
   bloomStrength: uniform(0.22),
-  bloomRadius: uniform(0.55),
-  bloomThreshold: uniform(0.9),
+  bloomRadius: uniform(0.4),
+  /**
+   * Scene luminance where bloom starts, ramping in over `bloomKnee`. Sunlit
+   * ground and sky reach 1 to 2, so a lower threshold glows the whole frame
+   * (a milky haze); only fire, spells and emissive trim should bloom.
+   */
+  bloomThreshold: uniform(2.5),
+  bloomKnee: uniform(1.5),
+  /** Contrast-adaptive sharpening after temporal AA, which softens detail (0 = off). */
+  sharpness: uniform(0.6),
 };
 
 /**
  * Builds and owns the post-processing chain:
  *
  *   [depth/normal pre-pass] -> GTAO -> scene pass (AO feeds the ambient term)
- *   -> TRAA (or SMAA/FXAA at the end) -> bloom -> tone map -> color grade
- *   -> vignette + film grain
+ *   -> TRAA (or SMAA/FXAA at the end) -> sharpen (with TRAA) -> bloom
+ *   -> tone map -> color grade -> vignette + film grain
  *
  * The chain is rebuilt whenever quality changes. Gameplay never touches this;
  * it only adds objects to the scene.
@@ -92,15 +105,19 @@ export class PostFX {
     this.disposables.push(scenePass);
 
     let hdr: any = scenePass.getTextureNode('output');
+    let bloomInput: any = hdr;
     if (q.antiAliasing === 'traa') {
       const t = traa(scenePass, depthNode, velocityNode, camera);
       t.useSubpixelCorrection = false;
       this.disposables.push(t);
-      hdr = t;
+      bloomInput = t;
+      // sharpened in the grading pass itself, so it costs no extra pass
+      hdr = sharpen((t as unknown as { getTextureNode(): { value: THREE.Texture } }).getTextureNode().value, grading.sharpness);
     }
 
     if (q.bloom) {
-      const b = bloom(hdr, grading.bloomStrength.value, grading.bloomRadius.value, grading.bloomThreshold.value);
+      const b = bloom(bloomInput, grading.bloomStrength.value, grading.bloomRadius.value, grading.bloomThreshold.value);
+      b.smoothWidth = grading.bloomKnee;
       this.bloomNode = b;
       this.disposables.push(b);
       hdr = hdr.add(b);
@@ -136,4 +153,32 @@ export class PostFX {
     this.scene.updateMatrixWorld();
     this.pipeline.render();
   }
+}
+
+/**
+ * Robust contrast-adaptive sharpening (RCAS, from AMD FSR 1, as in three's
+ * SharpenNode) of an HDR texture at the current pixel. RCAS expects values in
+ * 0..1, so it runs on x / (1 + x) and maps the result back. The lobe is
+ * limited by the local contrast, so edges sharpen without halos.
+ */
+function sharpen(tex: THREE.Texture, sharpness: any): any {
+  return Fn(() => {
+    const size = textureSize(textureLoad(tex));
+    const p = ivec2(int(floor(screenUV.x.mul(size.x))), int(floor(screenUV.y.mul(size.y)))).toConst();
+    const center = textureLoad(tex, p);
+    const fit = (c: any) => c.rgb.div(c.rgb.add(1));
+    const e = fit(center).toConst();
+    const b = fit(textureLoad(tex, p.add(ivec2(0, -1)))).toConst();
+    const d = fit(textureLoad(tex, p.add(ivec2(-1, 0)))).toConst();
+    const f = fit(textureLoad(tex, p.add(ivec2(1, 0)))).toConst();
+    const h = fit(textureLoad(tex, p.add(ivec2(0, 1)))).toConst();
+    const mn4 = min(min(b, d), min(f, h)).toConst();
+    const mx4 = max(max(b, d), max(f, h)).toConst();
+    const hitMin = min(mn4, e).div(mx4.mul(4)).toConst();
+    const hitMax = vec3(1).sub(max(mx4, e)).div(mn4.mul(4).sub(4)).toConst();
+    const lobeRGB = max(hitMin.negate(), hitMax).toConst();
+    const lobe = max(float(-(0.25 - 1 / 16)), min(max(lobeRGB.r, max(lobeRGB.g, lobeRGB.b)), 0)).mul(sharpness).toConst();
+    const r = b.add(d).add(f).add(h).mul(lobe).add(e).div(lobe.mul(4).add(1)).clamp(0, 0.999).toConst();
+    return vec4(r.div(float(1).sub(r)), center.a);
+  })();
 }

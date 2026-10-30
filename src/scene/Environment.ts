@@ -24,10 +24,16 @@ export class Environment {
 
   /** Brightness multiplier that puts the sky model in the same units as the sun. */
   readonly skyScale = uniform(0.5);
-  readonly fogDensity = uniform(0.009);
+  readonly fogDensity = uniform(0.005);
   readonly fogHeightFalloff = uniform(0.022);
-  /** Lavender-blue haze, so jungle layers separate with distance as in the references. */
-  readonly fogColor = uniform(new THREE.Color(0.42, 0.44, 0.9));
+  /** Meters around the camera with no fog at all, so the fight itself stays clear. */
+  readonly fogStart = uniform(30);
+  /** Soft blue haze, so jungle layers separate with distance as in the references. */
+  readonly fogColor = uniform(new THREE.Color(0.5, 0.58, 0.86));
+  /** Light that the ambient sky fills shadowed areas with, against the sun's 6.6. */
+  readonly ambient = 1.0;
+  /** How much the sun's shadows darken (1 = only ambient light remains). */
+  readonly shadowStrength = 0.8;
   readonly sunColor = new THREE.Color(1.0, 0.86, 0.68);
 
   /** Sun elevation and azimuth in degrees. Late-morning sun gives long, readable shadows. */
@@ -88,7 +94,7 @@ export class Environment {
     const kdy = k.mul(toFrag.y);
     const safeKdy = kdy.abs().max(1e-3).mul(kdy.sign().add(kdy.equal(0).select(1, 0)));
     const lineInt = exp(k.mul(cameraPosition.y.max(0)).negate()).mul(float(1).sub(exp(safeKdy.negate())).div(safeKdy));
-    const optical = this.fogDensity.mul(dist).mul(lineInt);
+    const optical = this.fogDensity.mul(dist.sub(this.fogStart).max(0)).mul(lineInt);
     const factor = float(1).sub(exp(optical.negate())).clamp(0, 0.95);
     const sunAmount = pow(max(dot(viewDir, sunDir), 0), float(8));
     const fogCol = mix(this.fogColor, sunTint.mul(1.6), sunAmount.mul(0.7));
@@ -103,6 +109,7 @@ export class Environment {
     s.bias = -0.0002;
     s.normalBias = 0.04;
     s.radius = 3;
+    s.intensity = this.shadowStrength; // copied into every cascade below
     const ext = 260;
     const cam = s.camera as THREE.OrthographicCamera;
     cam.left = -ext; cam.right = ext; cam.top = ext; cam.bottom = -ext;
@@ -151,8 +158,7 @@ export class Environment {
     this.envTarget?.dispose();
     this.envTarget = pmrem.fromScene(envScene, 0.0, 0.1, 400);
     this.scene.environment = this.envTarget.texture;
-    // kept below the sun so shadows read deep and cool, as in the stylized references
-    this.scene.environmentIntensity = 0.72;
+    this.scene.environmentIntensity = this.ambient;
     pmrem.dispose();
     sky.geometry.dispose();
     ground.geometry.dispose();
