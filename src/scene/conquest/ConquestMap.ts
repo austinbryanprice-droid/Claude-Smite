@@ -17,6 +17,7 @@ import type { Terrain } from '../Terrain';
 import type { MapContent } from '../World';
 import type { ConquestTerrainDef } from './ConquestTerrain';
 import { ConquestProps } from './Props';
+import { hypot } from '../../core/math';
 
 /** Spatial hash for rejecting placements that crowd each other. */
 class Spacing {
@@ -32,7 +33,7 @@ class Spacing {
     const j = Math.floor(z / this.cell);
     for (let a = i - 2; a <= i + 2; a++) {
       for (let b = j - 2; b <= j + 2; b++) {
-        for (const p of this.cells.get(this.key(a, b)) ?? []) if (Math.hypot(p.x - x, p.z - z) < p.r + r) return false;
+        for (const p of this.cells.get(this.key(a, b)) ?? []) if (hypot(p.x - x, p.z - z) < p.r + r) return false;
       }
     }
     return true;
@@ -181,7 +182,7 @@ export class ConquestMap implements MapContent {
       // off every paved surface, and close to at least one of them
       if (lane < 0.6 || path < 0.4 || (lane > 4.5 && path > 3.5)) continue;
       if (this.def.plazaDistance(x, z) < 2) continue;
-      if (L.camps.some((c) => Math.hypot(x - c.at[0], z - c.at[1]) < (c.team === null ? L.radii.boss : L.radii.camp) + 1)) continue;
+      if (L.camps.some((c) => hypot(x - c.at[0], z - c.at[1]) < (c.team === null ? L.radii.boss : L.radii.camp) + 1)) continue;
       // drifts of flowers rather than an even sprinkle
       const patch = Math.sin(x * 0.13 + Math.sin(z * 0.11) * 2) * Math.sin(z * 0.17 + x * 0.07);
       if (patch < 0.12 || rand() > (patch - 0.12) * 2.2) continue;
@@ -223,7 +224,7 @@ export class ConquestMap implements MapContent {
         species = 'fern';
       }
       // palms ring the base courtyards
-      if (plaza < 6 && open > 0 && rand() < 0.5 && L.bases.some((b) => Math.hypot(x - b.plaza.at[0], z - b.plaza.at[1]) < b.plaza.radius + 8)) species = 'palm';
+      if (plaza < 6 && open > 0 && rand() < 0.5 && L.bases.some((b) => hypot(x - b.plaza.at[0], z - b.plaza.at[1]) < b.plaza.radius + 8)) species = 'palm';
       this.terrain.normalAt(x, z, normal);
       const tree = species === 'canopy' || species === 'slender';
       if (normal.y < (tree ? 0.72 : 0.6)) continue;

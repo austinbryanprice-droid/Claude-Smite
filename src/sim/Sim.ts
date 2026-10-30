@@ -3,6 +3,7 @@ import { FAVOR_REWARDS, ranked } from '../game/progression';
 import type { DamageType } from '../game/types';
 import { WISDOM_XP } from './Jungle';
 import { Passives } from './Passives';
+import { hypot } from '../core/math';
 import {
   isStructure,
   nextEntityId,
@@ -128,7 +129,7 @@ export class Sim {
   inBase(u: Unit): boolean {
     if (u.team === 'neutral') return false;
     const b = this.bases[u.team];
-    return Math.hypot(u.x - b.x, u.z - b.z) <= b.radius;
+    return hypot(u.x - b.x, u.z - b.z) <= b.radius;
   }
 
   /** Whether input (or a bot) may walk this unit right now. */
@@ -165,7 +166,7 @@ export class Sim {
     if (def.projectileSpeed === undefined) {
       this.emit({ type: 'basic', unit: u, melee: true });
       for (const t of this.enemiesOf(u)) {
-        const d = Math.hypot(t.x - u.x, t.z - u.z);
+        const d = hypot(t.x - u.x, t.z - u.z);
         if (d > range + t.radius) continue;
         if (d > t.radius && angleBetween(dir, { x: t.x - u.x, z: t.z - u.z }) > MELEE_ARC / 2) continue;
         this.landBasic(u, t, shot);
@@ -207,7 +208,7 @@ export class Sim {
   aimPoint(u: Unit, range: number): Point {
     const dx = u.aim.x - u.x;
     const dz = u.aim.z - u.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     if (d <= range) return { x: u.aim.x, z: u.aim.z };
     return { x: u.x + (dx / d) * range, z: u.z + (dz / d) * range };
   }
@@ -216,7 +217,7 @@ export class Sim {
   aimDir(u: Unit): Point {
     const dx = u.aim.x - u.x;
     const dz = u.aim.z - u.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     return d > 0.5 ? { x: dx / d, z: dz / d } : u.forward;
   }
 
@@ -256,7 +257,7 @@ export class Sim {
         for (const target of this.enemiesOf(u)) {
           const dx = target.x - u.x;
           const dz = target.z - u.z;
-          if (Math.hypot(dx, dz) > r + target.radius) continue;
+          if (hypot(dx, dz) > r + target.radius) continue;
           if (angleBetween(dir, { x: dx, z: dz }) > t.angle / 2) continue;
           this.hit(u, cast, target);
         }
@@ -302,7 +303,7 @@ export class Sim {
         this.applySelf(u, cast);
         if (movement?.kind === 'movement' && movement.style === 'blink') {
           const end = this.sweepEnd(u, dir, dist);
-          const len = Math.hypot(end.x - u.x, end.z - u.z);
+          const len = hypot(end.x - u.x, end.z - u.z);
           for (const target of this.unitsInLine(u, u.x, u.z, dir, len, width / 2)) this.hit(u, cast, target);
           this.flash(u, { type: 'line', x: u.x, z: u.z, yaw, length: len, width });
           this.teleport(u, end.x, end.z);
@@ -325,7 +326,7 @@ export class Sim {
       case 'leap': {
         at = this.aimPoint(u, range(t.range));
         const r = radius(t.radius);
-        const d = Math.hypot(at.x - u.x, at.z - u.z);
+        const d = hypot(at.x - u.x, at.z - u.z);
         const time = Math.min(1.1, Math.max(0.45, d / LEAP_SPEED));
         u.forced = {
           vx: (at.x - u.x) / time,
@@ -350,7 +351,7 @@ export class Sim {
           if (a === u || a.team !== u.team || !a.alive || a.kind === 'dummy') continue;
           const dx = a.x - u.x;
           const dz = a.z - u.z;
-          if (Math.hypot(dx, dz) > r) continue;
+          if (hypot(dx, dz) > r) continue;
           const ang = angleBetween(dir, { x: dx, z: dz });
           if (ang < bestAngle) {
             best = a;
@@ -482,7 +483,7 @@ export class Sim {
     const primes = cast.skill.primes;
     for (const t of [...this.units]) {
       if (!t.alive || t === owner) continue;
-      if (Math.hypot(t.x - at.x, t.z - at.z) > r + t.radius) continue;
+      if (hypot(t.x - at.x, t.z - at.z) > r + t.radius) continue;
       if (t.team === owner.team && !touchesAllies(cast)) continue;
       if (primes) {
         if (t.team !== owner.team && t.kind === 'god') {
@@ -533,7 +534,7 @@ export class Sim {
       if (!target.combatant.cc.has(e.cc)) continue;
       const dx = target.x - owner.x;
       const dz = target.z - owner.z;
-      const d = Math.hypot(dx, dz) || 1;
+      const d = hypot(dx, dz) || 1;
       if (e.cc === 'knockback') {
         const time = 0.3;
         const dist = 3.5;
@@ -567,7 +568,7 @@ export class Sim {
     if (!killer || killer.team === victim.team || victim.kind === 'summon') return;
 
     const enemyGods = this.units.filter((g) => g.kind === 'god' && g.alive && g.team === killer.team);
-    const near = (g: Unit) => Math.hypot(g.x - victim.x, g.z - victim.z) <= XP_SHARE_RANGE;
+    const near = (g: Unit) => hypot(g.x - victim.x, g.z - victim.z) <= XP_SHARE_RANGE;
     switch (victim.kind) {
       case 'god': {
         if (killer.kind === 'god') this.reward(killer, 120 + 30 * victim.combatant.level, FAVOR_REWARDS.godKill);
@@ -734,7 +735,7 @@ export class Sim {
   /** Whether a minion of `team` stands near a structure (lifts backdoor protection). */
   minionNear(team: Team, structure: Unit): boolean {
     const reach = structure.radius + 14;
-    return this.units.some((m) => m.kind === 'minion' && m.alive && m.team === team && Math.hypot(m.x - structure.x, m.z - structure.z) <= reach);
+    return this.units.some((m) => m.kind === 'minion' && m.alive && m.team === team && hypot(m.x - structure.x, m.z - structure.z) <= reach);
   }
 
   /** Enemies whose circle touches the segment from (x, z) along dir. */
@@ -759,7 +760,7 @@ export class Sim {
       const nx = u.x + dir.x * (dist * i) / steps;
       const nz = u.z + dir.z * (dist * i) / steps;
       const r = this.solid(nx, nz, u.radius, this.terrain.groundAt(nx, nz));
-      if (Math.hypot(r.x - nx, r.z - nz) > 0.05) break;
+      if (hypot(r.x - nx, r.z - nz) > 0.05) break;
       x = nx;
       z = nz;
     }
@@ -833,7 +834,7 @@ export class Sim {
     else if (c.cc.locks().forcedMovement) this.stepFearTaunt(u, dt);
     else if (u.move && this.canMove(u)) this.walk(u, u.move.x, u.move.z, this.moveSpeed(u) * dt);
 
-    const moved = Math.hypot(u.x - startX, u.z - startZ);
+    const moved = hypot(u.x - startX, u.z - startZ);
     u.vx = (u.x - startX) / dt;
     u.vz = (u.z - startZ) / dt;
     if (u.recall > 0) {
@@ -862,12 +863,12 @@ export class Sim {
       const min = s.radius + radius;
       let dx = r.x - s.x;
       let dz = r.z - s.z;
-      let d = Math.hypot(dx, dz);
+      let d = hypot(dx, dz);
       if (d >= min) continue;
       if (d < 1e-4) {
         dx = from.x - s.x;
         dz = from.z - s.z;
-        d = Math.hypot(dx, dz);
+        d = hypot(dx, dz);
         // dead center with nowhere to come from: pick a side
         if (d < 1e-4) [dx, dz, d] = [1, 0, 1];
       }
@@ -877,18 +878,18 @@ export class Sim {
       const mx = r.x - from.x;
       const mz = r.z - from.z;
       const along = mx * -nz + mz * nx;
-      const step = Math.hypot(mx, mz);
+      const step = hypot(mx, mz);
       const slide = Math.abs(along) < step * 0.3 ? (along < 0 ? -step : step) : along;
       const px = s.x + nx * min - nz * slide;
       const pz = s.z + nz * min + nx * slide;
-      const pd = Math.hypot(px - s.x, pz - s.z) || 1;
+      const pd = hypot(px - s.x, pz - s.z) || 1;
       r = terrain.resolve(s.x + ((px - s.x) / pd) * min, s.z + ((pz - s.z) / pd) * min, radius, feetY);
     }
     return r;
   }
 
   private walk(u: Unit, dx: number, dz: number, dist: number): void {
-    const len = Math.hypot(dx, dz);
+    const len = hypot(dx, dz);
     if (len < 1e-6) return;
     const nx = u.x + (dx / len) * dist;
     const nz = u.z + (dz / len) * dist;
@@ -917,7 +918,7 @@ export class Sim {
     if (f.sweep) {
       for (const t of this.enemiesOf(u)) {
         if (f.sweep.hit.has(t)) continue;
-        if (Math.hypot(t.x - nx, t.z - nz) > f.sweep.width / 2 + t.radius + u.radius) continue;
+        if (hypot(t.x - nx, t.z - nz) > f.sweep.width / 2 + t.radius + u.radius) continue;
         f.sweep.hit.add(t);
         this.hit(u, f.sweep.cast, t);
       }
@@ -938,7 +939,7 @@ export class Sim {
     const sign = entry.kind === 'fear' ? -1 : 1;
     const dx = (src.x - u.x) * sign;
     const dz = (src.z - u.z) * sign;
-    if (entry.kind === 'taunt' && Math.hypot(dx, dz) < u.radius + src.radius + 1) return;
+    if (entry.kind === 'taunt' && hypot(dx, dz) < u.radius + src.radius + 1) return;
     this.walk(u, dx, dz, this.moveSpeed(u) * dt);
     u.body.yaw = Math.atan2(-(src.x - u.x), -(src.z - u.z));
   }
@@ -954,7 +955,7 @@ export class Sim {
         }
         const dx = h.x - p.x;
         const dz = h.z - p.z;
-        const d = Math.hypot(dx, dz) || 1;
+        const d = hypot(dx, dz) || 1;
         p.dx = dx / d;
         p.dz = dz / d;
         p.traveled = 0;
@@ -984,7 +985,7 @@ export class Sim {
       if (p.homing && t !== p.homing) continue;
       // skill shots pass by structures
       if (p.cast && isStructure(t)) continue;
-      if (Math.hypot(t.x - p.x, t.z - p.z) > p.radius + t.radius) continue;
+      if (hypot(t.x - p.x, t.z - p.z) > p.radius + t.radius) continue;
       p.hit.add(t);
       this.emit({ type: 'impact', x: p.x, z: p.z, owner: p.owner, big: !!p.cast });
       if (p.shot) this.landBasic(p.owner, t, p.shot);
@@ -1004,7 +1005,7 @@ export class Sim {
           p.bounces--;
           const dx = next.x - p.x;
           const dz = next.z - p.z;
-          const d = Math.hypot(dx, dz);
+          const d = hypot(dx, dz);
           p.dx = dx / d;
           p.dz = dz / d;
           p.traveled = Math.max(0, p.range - BOUNCE_RANGE - 2);
@@ -1020,7 +1021,7 @@ export class Sim {
     let bestD = BOUNCE_RANGE;
     for (const t of this.units) {
       if (t.team === p.owner.team || !t.targetable || p.hit.has(t)) continue;
-      const d = Math.hypot(t.x - from.x, t.z - from.z);
+      const d = hypot(t.x - from.x, t.z - from.z);
       if (d < bestD) {
         best = t;
         bestD = d;
@@ -1040,7 +1041,7 @@ export class Sim {
   private blocked(x: number, z: number): boolean {
     const ground = this.terrain.groundAt(x, z);
     const r = this.terrain.resolve(x, z, 0.1, ground + PROJECTILE_HEIGHT - 0.55);
-    return Math.hypot(r.x - x, r.z - z) > 0.01;
+    return hypot(r.x - x, r.z - z) > 0.01;
   }
 
   private stepZones(dt: number): void {
@@ -1054,7 +1055,7 @@ export class Sim {
         const goal = this.aimPoint(o, zn.range);
         const dx = goal.x - zn.x;
         const dz = goal.z - zn.z;
-        const d = Math.hypot(dx, dz);
+        const d = hypot(dx, dz);
         const maxStep = 14 * dt;
         if (d > maxStep) {
           zn.x += (dx / d) * maxStep;
@@ -1069,7 +1070,7 @@ export class Sim {
         zn.ticks--;
         zn.timer += zn.interval;
         for (const t of [...this.units]) {
-          if (!t.alive || Math.hypot(t.x - zn.x, t.z - zn.z) > zn.radius + t.radius) continue;
+          if (!t.alive || hypot(t.x - zn.x, t.z - zn.z) > zn.radius + t.radius) continue;
           if (t.team === o.team && t !== o && !touchesAllies(zn.cast)) continue;
           if (t !== o && !t.targetable) continue;
           this.applyOnce(o, zn.cast, t);
@@ -1101,8 +1102,8 @@ export class Sim {
 
 /** Angle in degrees between two XZ vectors. */
 export function angleBetween(a: Point, b: Point): number {
-  const la = Math.hypot(a.x, a.z);
-  const lb = Math.hypot(b.x, b.z);
+  const la = hypot(a.x, a.z);
+  const lb = hypot(b.x, b.z);
   if (la < 1e-6 || lb < 1e-6) return 0;
   const c = (a.x * b.x + a.z * b.z) / (la * lb);
   return (Math.acos(Math.max(-1, Math.min(1, c))) * 180) / Math.PI;

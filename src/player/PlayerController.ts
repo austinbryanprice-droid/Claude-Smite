@@ -3,6 +3,7 @@ import type { Input } from '../core/Input';
 import type { Updatable } from '../core/Loop';
 import type { GodModel } from '../actors/GodModel';
 import type { CollisionWorld } from '../scene/Collision';
+import { hypot } from '../core/math';
 
 /**
  * Smite-style movement: the god always faces where the camera aims (mouse
@@ -111,7 +112,7 @@ export class PlayerController implements Updatable {
     m.position.lerpVectors(this.prevPosition, this.position, alpha);
     m.rotation.y = this.yaw + Math.PI; // the model is built facing +Z
     this.model.animate(dt, {
-      speed: Math.hypot(this.velocity.x, this.velocity.z),
+      speed: hypot(this.velocity.x, this.velocity.z),
       localDir: this.localDir,
       grounded: this.grounded,
       verticalSpeed: this.verticalSpeed,

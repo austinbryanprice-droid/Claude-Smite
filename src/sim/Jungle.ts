@@ -5,6 +5,7 @@ import { monsterUnit, type MonsterType } from './factory';
 import { attackReach } from './Lanes';
 import type { Sim } from './Sim';
 import type { Brain, SimEvent, Unit } from './Unit';
+import { hypot } from '../core/math';
 
 /** Jungle camps first appear this long into a match. */
 export const CAMP_FIRST_SPAWN = 30;
@@ -204,7 +205,7 @@ function engageable(c: CampState, t: Unit): boolean {
   if (!t.targetable || t.stealth > 0) return false;
   const [cx, cz] = c.camp.at;
   const reach = isBoss(c.camp.kind) ? L.radii.boss + BOSS_LEASH : L.radii.camp + LEASH;
-  return Math.hypot(t.x - cx, t.z - cz) <= reach;
+  return hypot(t.x - cx, t.z - cz) <= reach;
 }
 
 /**
@@ -255,7 +256,7 @@ export class MonsterBrain implements Brain {
     if (!camp.foe) {
       const dx = u.home.x - u.x;
       const dz = u.home.z - u.z;
-      const d = Math.hypot(dx, dz);
+      const d = hypot(dx, dz);
       if (d > 0.4) {
         u.move = { x: dx / d, z: dz / d };
         u.body.yaw = Math.atan2(-dx, -dz);
@@ -280,7 +281,7 @@ export class MonsterBrain implements Brain {
     const t = camp.foe;
     const dx = t.x - u.x;
     const dz = t.z - u.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     u.body.yaw = Math.atan2(-dx, -dz);
     u.aim.x = t.x;
     u.aim.z = t.z;
@@ -301,7 +302,7 @@ export class MonsterBrain implements Brain {
     sim.flashAt(u, { type: 'circle', x: u.x, z: u.z, radius: s.radius });
     const raw = u.combatant.stats.attackPower * s.scale;
     for (const t of sim.enemiesOf(u)) {
-      if (Math.hypot(t.x - u.x, t.z - u.z) > s.radius + t.radius) continue;
+      if (hypot(t.x - u.x, t.z - u.z) > s.radius + t.radius) continue;
       sim.strike(u, t, raw, 'magical');
     }
   }

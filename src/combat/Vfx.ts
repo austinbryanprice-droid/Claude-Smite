@@ -9,6 +9,7 @@ import { ArcView } from './Arcs';
 import { GroundDecal, type DecalShape } from './GroundDecal';
 import { BUFF_GLOW } from './MonsterViews';
 import { paletteFor, paletteOf, type GodPalette } from './palette';
+import { hypot } from '../core/math';
 
 type Ground = (x: number, z: number) => number;
 
@@ -210,7 +211,7 @@ class Burst {
     // RingGeometry's uv is planar; rebuild u as the radial position across the band
     const uvs = rg.getAttribute('uv') as THREE.BufferAttribute;
     const ps = rg.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < ps.count; i++) uvs.setX(i, (Math.hypot(ps.getX(i), ps.getZ(i)) - 0.7) / 0.3);
+    for (let i = 0; i < ps.count; i++) uvs.setX(i, (hypot(ps.getX(i), ps.getZ(i)) - 0.7) / 0.3);
     this.ring = new THREE.Mesh(rg, rm);
     this.ring.frustumCulled = false;
     this.ring.renderOrder = 6;
@@ -426,7 +427,7 @@ class FlashView {
     const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
     switch (s.type) {
       case 'circle': {
-        const fromCaster = Math.hypot(f.owner.x - s.x, f.owner.z - s.z) < 1;
+        const fromCaster = hypot(f.owner.x - s.x, f.owner.z - s.z) < 1;
         if (!fromCaster || s.radius < 6) {
           // a bolt from the sky into the center
           const top = v(s.x + (Math.random() - 0.5) * 3, g(s.x, s.z) + 18, s.z + (Math.random() - 0.5) * 3);
@@ -769,7 +770,7 @@ function projectileHeight(p: Projectile): number {
   const top = MUZZLE_HEIGHT[p.owner.kind];
   if (top === undefined || !p.homing) return PROJECTILE_HEIGHT;
   const range = p.owner.combatant.god.basicAttack.range * WORLD_SCALE + p.owner.radius;
-  const d = Math.hypot(p.homing.x - p.x, p.homing.z - p.z);
+  const d = hypot(p.homing.x - p.x, p.homing.z - p.z);
   const k = Math.min(1, d / range);
   return 1.3 + (top - 1.3) * k;
 }

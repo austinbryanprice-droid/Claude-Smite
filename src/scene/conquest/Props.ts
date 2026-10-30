@@ -13,6 +13,7 @@ import type { MaterialLibrary } from '../Materials';
 import type { Terrain } from '../Terrain';
 import { mergeStatic } from '../structures/common';
 import type { ConquestTerrainDef } from './ConquestTerrain';
+import { hypot } from '../../core/math';
 
 const CAMP_LIGHT = 35;
 
@@ -215,7 +216,7 @@ export class ConquestProps {
         for (let i = 1; i < pts.length; i++) {
           const [ax, az] = pts[i - 1]!;
           const [bx, bz] = pts[i]!;
-          const len = Math.hypot(bx - ax, bz - az);
+          const len = hypot(bx - ax, bz - az);
           const dx = (bx - ax) / len;
           const dz = (bz - az) / len;
           const yaw = Math.atan2(dx, dz) + Math.PI / 2;
@@ -267,7 +268,7 @@ export class ConquestProps {
       for (let i = 1; i < pts.length; i++) {
         const [ax, az] = pts[i - 1]!;
         const [bx, bz] = pts[i]!;
-        const len = Math.hypot(bx - ax, bz - az);
+        const len = hypot(bx - ax, bz - az);
         while (next <= walked + len) {
           const s = next - walked;
           const dx = (bx - ax) / len;

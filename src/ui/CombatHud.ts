@@ -8,6 +8,7 @@ import { RECALL_TIME } from '../sim/Sim';
 import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
 import { hex, TEAM_COLORS } from '../combat/palette';
 import { skillIcon } from './icons';
+import { hypot } from '../core/math';
 import './combat.css';
 
 const CC_LABEL: Partial<Record<CCKind, string>> = {
@@ -59,6 +60,8 @@ interface Bar {
   level: HTMLSpanElement;
   name: HTMLSpanElement;
   marks: HTMLSpanElement;
+  /** The frame this bar's unit was last in the list. */
+  seen: number;
 }
 
 interface Floater {
@@ -147,6 +150,9 @@ export class CombatHud {
   private objectiveLag = 1;
   private readonly floaters: Floater[] = [];
   private readonly v = new THREE.Vector3();
+  private readonly head = new THREE.Vector3();
+  private readonly screen = { x: 0, y: 0 };
+  private barFrame = 0;
   private loadoutKey = '';
 
   /** Red screen edges: pulse on damage taken, linger at low health. */
@@ -448,10 +454,13 @@ export class CombatHud {
     }
   }
 
+  /** Screen position of `p`, or null behind the camera. The result is reused by the next call. */
   private project(p: THREE.Vector3): { x: number; y: number } | null {
     this.v.copy(p).project(this.camera);
     if (this.v.z > 1 || this.v.z < -1) return null;
-    return { x: (this.v.x * 0.5 + 0.5) * window.innerWidth, y: (-this.v.y * 0.5 + 0.5) * window.innerHeight };
+    this.screen.x = (this.v.x * 0.5 + 0.5) * window.innerWidth;
+    this.screen.y = (-this.v.y * 0.5 + 0.5) * window.innerHeight;
+    return this.screen;
   }
 
   /** Bosses and Wardens near the player get a big named bar under the scoreboard instead of a small overhead one. */
@@ -463,7 +472,7 @@ export class CombatHud {
       if (!u.alive || !(u.brain instanceof MonsterBrain)) continue;
       const kind = u.brain.camp.camp.kind;
       if (!isBoss(kind) && !isBuff(kind)) continue;
-      const d = Math.hypot(u.x - p.x, u.z - p.z);
+      const d = hypot(u.x - p.x, u.z - p.z);
       if (d < bd) {
         best = u;
         bd = d;
@@ -510,27 +519,22 @@ export class CombatHud {
   }
 
   private overheadBars(units: readonly Unit[], dt: number): void {
-    const seen = new Set<Unit>();
+    const frame = ++this.barFrame;
     for (const u of units) {
-      seen.add(u);
-      let b = this.bars.get(u);
-      if (!b) b = this.makeBar(u);
-      const head = u.alive ? this.headOf(u, this.v) : null;
-      const at = head && this.project(head);
+      const b = this.bars.get(u) ?? this.makeBar(u);
+      b.seen = frame;
+      const head = u.alive ? this.headOf(u, this.head) : null;
       const enemyHidden = u.team !== this.player.team && u.stealth > 0;
-      // the objective bar already shows it
-      if (!at || enemyHidden || u === this.objectiveUnit) {
+      // keep the screen readable in a big fight: minion bars only up close
+      const maxDist = u.kind === 'minion' || u.kind === 'monster' ? 45 : isStructure(u) ? 45 : 80;
+      const dist = head ? this.camera.position.distanceTo(head) : Infinity;
+      // (the objective bar already shows its unit)
+      const at = dist <= maxDist && !enemyHidden && u !== this.objectiveUnit ? this.project(head!) : null;
+      if (!at) {
         setStyle(b.el, 'display', 'none');
         continue;
       }
       const c = u.combatant;
-      const dist = this.camera.position.distanceTo(head!);
-      // keep the screen readable in a big fight: minion bars only up close
-      const maxDist = u.kind === 'minion' || u.kind === 'monster' ? 45 : isStructure(u) ? 45 : 80;
-      if (dist > maxDist) {
-        setStyle(b.el, 'display', 'none');
-        continue;
-      }
       setStyle(b.el, 'display', '');
       setStyle(b.el, 'transform', `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, -100%) scale(${Math.max(0.6, Math.min(1, 22 / dist)).toFixed(2)})`);
       const max = c.stats.maxHealth;
@@ -552,7 +556,7 @@ export class CombatHud {
       this.updateBarCC(b, u);
     }
     for (const [u, b] of this.bars) {
-      if (seen.has(u)) continue;
+      if (b.seen === frame) continue;
       b.el.remove();
       this.bars.delete(u);
     }
@@ -583,7 +587,7 @@ export class CombatHud {
     const shield = el('div', 'ch-ob-shield', bar);
     el('div', 'ch-ob-ticks', bar);
     if (u === this.target) root.classList.add('ch-ob-target');
-    const b = { el: root, hp, lag, lagPct: 1, shield, level, name, marks, cc, ccText: '' };
+    const b = { el: root, hp, lag, lagPct: 1, shield, level, name, marks, cc, ccText: '', seen: 0 };
     this.bars.set(u, b);
     return b;
   }

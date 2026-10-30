@@ -6,6 +6,7 @@ import {
 import { rng } from '../core/random';
 import type { Terrain } from './Terrain';
 import type { QualitySettings } from '../render/Quality';
+import { hypot } from '../core/math';
 
 const CHUNK = 14;
 /** Blades per square meter at density 1. */
@@ -166,7 +167,7 @@ export class Grass {
       for (let cx = 0; cx < n; cx++) {
         const x0 = -extent + cx * CHUNK;
         const z0 = -extent + cz * CHUNK;
-        if (this.field.round && Math.hypot(x0 + CHUNK / 2, z0 + CHUNK / 2) > extent + CHUNK) continue;
+        if (this.field.round && hypot(x0 + CHUNK / 2, z0 + CHUNK / 2) > extent + CHUNK) continue;
         const tries = Math.round(CHUNK * CHUNK * density);
         const A: number[] = [];
         const B: number[] = [];
@@ -225,7 +226,7 @@ export class Grass {
     if (playerPosition) this.pusher.value.copy(playerPosition);
     const p = camera.position;
     for (const c of this.chunks) {
-      const d = Math.max(0, Math.hypot(c.center.x - p.x, c.center.z - p.z) - CHUNK * 0.5);
+      const d = Math.max(0, hypot(c.center.x - p.x, c.center.z - p.z) - CHUNK * 0.5);
       const f = d <= this.fullDistance ? 1 : 1 - (d - this.fullDistance) / (this.maxDistance - this.fullDistance);
       const k = Math.max(0, Math.min(1, f));
       c.mesh.visible = k > 0.01;

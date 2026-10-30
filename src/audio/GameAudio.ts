@@ -14,6 +14,7 @@ import type { Announcer } from './Announcer';
 import type { AudioEngine, LoopHandle } from './AudioEngine';
 import { skillPart, skillSound } from './bank';
 import type { Music, SongName } from './music';
+import { hypot } from '../core/math';
 
 /** A match's music only ever moves forward: dawn, then battle, then the siege. */
 const PHASES: SongName[] = ['dawn', 'battle', 'siege'];
@@ -134,7 +135,7 @@ export class GameAudio {
         if (e.unit === me && e.favor > 0) this.engine.play('favor', { gain: 0.35, vary: 0.05 }, 2, 0.08);
         break;
       case 'teleport':
-        if (this.dist(e.unit) < 50 || Math.hypot(e.fromX - this.engine.listenerPos.x, e.fromZ - this.engine.listenerPos.z) < 50) {
+        if (this.dist(e.unit) < 50 || hypot(e.fromX - this.engine.listenerPos.x, e.fromZ - this.engine.listenerPos.z) < 50) {
           this.engine.play('teleport', { at: { x: e.fromX, z: e.fromZ }, gain: 0.6 }, 2);
           this.at('teleport', e.unit, { gain: 0.5, delay: 0.05 }, 2);
         }
@@ -229,7 +230,7 @@ export class GameAudio {
     for (const p of this.game.sim.projectiles) {
       if (p.owner !== owner || Math.abs(p.x - x) > 0.01 || Math.abs(p.z - z) > 0.01) continue;
       if (p.cast) this.engine.play(skillPart(p.cast.skill.id, 'impact'), { at: { x, z }, gain: 0.9, vary: 0.05, ref: 8 }, owner === this.me ? 5 : 3, 0.03);
-      else if (p.shot && this.game.sim.units.some((u) => isStructure(u) && u.shielded() && Math.hypot(u.x - x, u.z - z) < u.radius + 1)) {
+      else if (p.shot && this.game.sim.units.some((u) => isStructure(u) && u.shielded() && hypot(u.x - x, u.z - z) < u.radius + 1)) {
         this.engine.play('hit.structure', { at: { x, z }, gain: 0.4, vary: 0.1 }, 1, 0.08);
       }
       return;
@@ -452,14 +453,14 @@ export class GameAudio {
     const lz = this.engine.listenerPos.z;
     for (const u of this.game.sim.units) {
       if (isStructure(u) || u.kind === 'dummy') continue;
-      const d = Math.hypot(u.x - lx, u.z - lz);
+      const d = hypot(u.x - lx, u.z - lz);
       const range = u.kind === 'minion' ? 22 : u.radius > 2 ? 60 : 38;
       let s = this.strides.get(u);
       if (!s) {
         s = { x: u.x, z: u.z, acc: 0, foot: 0, air: false };
         this.strides.set(u, s);
       }
-      const moved = Math.hypot(u.x - s.x, u.z - s.z);
+      const moved = hypot(u.x - s.x, u.z - s.z);
       s.x = u.x;
       s.z = u.z;
       // coming down from a leap, a jump or a knock-up
@@ -492,10 +493,10 @@ export class GameAudio {
   private surface(x: number, z: number): Surface {
     if (!this.conquest) return 'stone';
     for (const c of L.camps) {
-      if (c.team !== null || Math.hypot(x - c.at[0], z - c.at[1]) > L.radii.boss) continue;
+      if (c.team !== null || hypot(x - c.at[0], z - c.at[1]) > L.radii.boss) continue;
       return c.kind === 'treasureWyrm' ? 'coins' : 'ash';
     }
-    for (const p of L.plazas) if (Math.hypot(x - p.at[0], z - p.at[1]) < p.radius) return 'stone';
+    for (const p of L.plazas) if (hypot(x - p.at[0], z - p.at[1]) < p.radius) return 'stone';
     for (const lane of L.lanes) if (nearestOnPolyline(lane.points, x, z).distance < lane.width * 0.55) return 'stone';
     for (const path of L.paths) if (nearestOnPolyline(path.points, x, z).distance < path.width * 0.6) return 'dirt';
     return 'grass';
@@ -557,7 +558,7 @@ export class GameAudio {
     for (const [u] of near) {
       if (want.size >= 4) break;
       // the biggest beast speaks for its camp
-      if ([...want].some((w) => Math.hypot(w.x - u.x, w.z - u.z) < 9)) continue;
+      if ([...want].some((w) => hypot(w.x - u.x, w.z - u.z) < 9)) continue;
       want.add(u);
     }
     for (const [u, l] of this.idle) {
@@ -580,7 +581,7 @@ export class GameAudio {
   private marching(): void {
     const groups = new Map<string, { x: number; z: number; n: number }>();
     for (const u of this.game.sim.units) {
-      if (u.kind !== 'minion' || !u.alive || Math.hypot(u.vx, u.vz) < 0.5 || this.dist(u) > 30) continue;
+      if (u.kind !== 'minion' || !u.alive || hypot(u.vx, u.vz) < 0.5 || this.dist(u) > 30) continue;
       const g = groups.get(u.team) ?? { x: 0, z: 0, n: 0 };
       g.x += u.x;
       g.z += u.z;
@@ -718,7 +719,7 @@ export class GameAudio {
   // -------------------------------------------------------------------------
 
   private dist(u: Unit): number {
-    return Math.hypot(u.x - this.engine.listenerPos.x, u.z - this.engine.listenerPos.z);
+    return hypot(u.x - this.engine.listenerPos.x, u.z - this.engine.listenerPos.z);
   }
 
   /** A god's own voice (voices.ts): an effort, pain, a battle cry or a death cry. */

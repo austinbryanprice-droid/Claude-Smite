@@ -8,6 +8,7 @@ import { MinionViews } from './MinionViews';
 import { createMonsterView, type MonsterView } from './MonsterViews';
 import { createStructureModel, type StructureModel } from './structures';
 import { MUZZLE_HEIGHT } from './Vfx';
+import { hypot } from '../core/math';
 
 /** A wooden training post with a straw body and a painted target shield. */
 /** Seconds a fallen god stays on the ground before it is hidden. */
@@ -351,7 +352,7 @@ export class UnitViews {
     v.root.visible = !hidden && (u.alive || v.deathTime < (v.model ? GOD_CORPSE : 0.05));
     if (!v.model) return;
     v.root.position.y -= godSink(v.deathTime);
-    const speed = Math.hypot(u.vx, u.vz);
+    const speed = hypot(u.vx, u.vz);
     if (speed > 0.1) {
       const sin = Math.sin(u.body.yaw);
       const cos = Math.cos(u.body.yaw);
