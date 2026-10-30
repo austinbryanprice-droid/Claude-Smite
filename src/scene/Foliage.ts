@@ -437,7 +437,11 @@ export class Foliage {
     const d = max(dot(dFdx(texel), dFdx(texel)), dot(dFdy(texel), dFdy(texel)));
     const mip = max(float(0), log2(d).mul(0.5));
     mat.opacityNode = tex.a.mul(float(1).add(mip.mul(0.3)));
-    mat.alphaTest = 0.5;
+    // As a node, not `alphaTest`: shadow passes copy `alphaTest` onto their
+    // shared material, and every flip between 0 and non-zero bumps its version,
+    // which made every shadow draw rebuild its material key, every frame.
+    // (Shadows never used it: leaf cards cast with alpha 1 either way.)
+    mat.alphaTestNode = float(0.5);
     mat.positionNode = this.swayNode(true);
 
     // Per-instance hue shift between yellow-green and blue-green.
