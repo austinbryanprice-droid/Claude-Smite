@@ -23,13 +23,20 @@ describe('gpuAdvice', () => {
     expect(gpuAdvice('Intel(R) UHD Graphics', EDGE)?.copy).toBe('edge://flags/#force-high-performance-gpu');
   });
 
+  it('walks Windows players through the Graphics setting for their browser', () => {
+    const steps = gpuAdvice('Intel(R) UHD Graphics', CHROME)!.steps.join(' ');
+    expect(steps).toMatch(/Settings > System > Display > Graphics/);
+    expect(steps).toMatch(/Google Chrome.*High performance/);
+    expect(gpuAdvice('Intel(R) UHD Graphics', EDGE)!.steps.join(' ')).toMatch(/Microsoft Edge/);
+  });
+
   it('names the Chrome flag only where it exists', () => {
     const firefox = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0';
     const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
     for (const ua of [firefox, mac]) {
       const advice = gpuAdvice('Intel(R) UHD Graphics', ua);
       expect(advice?.copy).toBeUndefined();
-      expect(advice?.text).toMatch(/graphics settings/);
+      expect(advice?.steps.join(' ')).toMatch(/graphics settings/);
     }
   });
 
@@ -40,7 +47,7 @@ describe('gpuAdvice', () => {
   });
 
   it('calls out software rendering', () => {
-    expect(gpuAdvice('SwiftShader Device (Subzero)', CHROME)?.text).toMatch(/graphics acceleration/);
+    expect(gpuAdvice('SwiftShader Device (Subzero)', CHROME)?.steps.join(' ')).toMatch(/Use graphics acceleration/);
     expect(gpuAdvice('Microsoft Basic Render Driver', CHROME)?.text).toMatch(/graphics acceleration/);
   });
 });
