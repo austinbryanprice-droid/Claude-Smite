@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { Layers } from '../render/Layers';
 import {
   attribute, cameraPosition, cos, dot, faceDirection, float, mix, mx_noise_float, normalize, positionLocal, pow, sin,
   smoothstep, time, transformNormalToView, uniform, vec2, vec3,
@@ -213,6 +214,7 @@ export class Grass {
         );
         const mesh = new THREE.Mesh(geo, this.material);
         mesh.castShadow = q.grassShadows;
+        mesh.layers.set(Layers.NEAR_SHADOW);
         mesh.receiveShadow = true;
         mesh.name = 'grass-chunk';
         this.group.add(mesh);

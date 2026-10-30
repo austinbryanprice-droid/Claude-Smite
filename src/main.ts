@@ -14,6 +14,7 @@ import { PerfStats } from './render/PerfStats';
 import { shareShaders } from './render/instancing';
 import { createRenderer, gpuName } from './render/Renderer';
 import { gpuAdvice } from './render/gpuAdvice';
+import { Layers } from './render/Layers';
 import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from './render/Quality';
 import { TextureLibrary } from './scene/Materials';
 import { mapFromUrl, World } from './scene/World';
@@ -73,6 +74,7 @@ async function main(): Promise<void> {
   const pipelines = new AsyncPipelines(renderer);
   shareShaders(renderer);
   const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 3000);
+  camera.layers.enable(Layers.NEAR_SHADOW);
 
   // textures and god models load behind the title screen
   const textures = new TextureLibrary(renderer.getMaxAnisotropy?.() ?? 8);
