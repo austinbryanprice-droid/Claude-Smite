@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeSkinned } from '../../scene/merge';
 
 /** Gods with a built model in public/models/gods (see tools/gods/build.py). */
 export const GOD_IDS = ['zeus', 'thor', 'odin', 'loki', 'anubis'] as const;
@@ -67,6 +68,8 @@ export function preloadGodAssets(onProgress?: (fraction: number) => void): Promi
       tick();
       if (!gltf) return;
       widenVertexFormats(gltf.scene);
+      // one draw per material instead of one per armor piece
+      mergeSkinned(gltf.scene);
       const root = gltf.scene.getObjectByName('god') ?? gltf.scene;
       const meta = root.userData as GodMeta;
       const clips = new Map<string, THREE.AnimationClip>();

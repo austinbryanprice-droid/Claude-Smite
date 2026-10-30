@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-  cos, float, fract, hash, instanceIndex, mix, mx_noise_float, sin, smoothstep, time, uniform, uv, vec2, vec3, vec4,
+  cos, float, fract, hash, instanceIndex, mix, mx_noise_float, sin, smoothstep, time, uniform, uniformArray, uv, vec2, vec3, vec4,
 } from '../render/tsl';
 import type { Sim } from '../sim/Sim';
 import { PROJECTILE_HEIGHT } from '../sim/Sim';
@@ -59,7 +59,9 @@ class ProjectileView {
   private readonly hot = uniform(new THREE.Color());
   private readonly coreSprite: THREE.Sprite;
   private readonly halo: THREE.Sprite;
-  private readonly trail: THREE.Sprite[] = [];
+  /** The whole trail is one instanced sprite (a draw call, not one per puff): xyz = position, w = size. */
+  private readonly trail: THREE.Sprite;
+  private readonly trailPoints = Array.from({ length: TRAIL }, () => new THREE.Vector4());
   private readonly history: THREE.Vector3[] = [];
   private readonly arc = new ArcView();
   private lightning = false;
@@ -70,13 +72,13 @@ class ProjectileView {
     this.coreSprite = new THREE.Sprite(glowMaterial(this.hot, float(5), 2.5));
     this.halo = new THREE.Sprite(glowMaterial(this.main, float(1.8), 1.6, false, 0.75));
     const trailMat = glowMaterial(this.main, float(1.5), 1.8, false, 0.55);
-    for (let i = 0; i < TRAIL; i++) {
-      const s = new THREE.Sprite(trailMat);
-      this.trail.push(s);
-      this.group.add(s);
-    }
-    this.group.add(this.halo, this.coreSprite, this.arc.group);
-    for (const o of [this.coreSprite, this.halo, ...this.trail]) {
+    const point = uniformArray(this.trailPoints, 'vec4').element(instanceIndex);
+    trailMat.positionNode = point.xyz;
+    trailMat.scaleNode = vec2(point.w, point.w);
+    this.trail = new THREE.Sprite(trailMat);
+    (this.trail as unknown as { count: number }).count = TRAIL;
+    this.group.add(this.trail, this.halo, this.coreSprite, this.arc.group);
+    for (const o of [this.coreSprite, this.halo, this.trail]) {
       o.frustumCulled = false;
       o.renderOrder = 12;
     }
@@ -95,19 +97,17 @@ class ProjectileView {
   }
 
   update(at: THREE.Vector3, t: number): void {
-    this.history.pop();
-    this.history.unshift(at.clone());
+    this.history.unshift(this.history.pop()!.copy(at));
     const flicker = 1 + Math.sin(t * 40) * 0.08;
     this.coreSprite.position.copy(at);
     this.coreSprite.scale.setScalar(this.size * 0.7 * flicker);
     this.halo.position.copy(at);
     this.halo.scale.setScalar(this.size * 2.6);
-    this.trail.forEach((s, i) => {
-      // trail sprites sit between history samples so fast shots stay continuous
+    this.trailPoints.forEach((s, i) => {
+      // trail puffs sit between history samples so fast shots stay continuous
       const a = this.history[Math.min(i, this.history.length - 1)]!;
       const b = this.history[Math.min(i + 1, this.history.length - 1)]!;
-      s.position.lerpVectors(a, b, 0.5);
-      s.scale.setScalar(this.size * 1.9 * (1 - i / TRAIL));
+      s.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, this.size * 1.9 * (1 - i / TRAIL));
     });
     if (this.lightning) this.crackleArcs(at, t);
   }
