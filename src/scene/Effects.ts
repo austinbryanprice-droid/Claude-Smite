@@ -27,7 +27,9 @@ export class Fire {
     this.group.position.copy(position);
     this.group.name = 'fire';
 
+    // seed, size and colours are uniforms, so every fire shares the same shaders
     const s = uniform(seed);
+    const sz = uniform(size);
     const flameMat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     const u = uv();
     const t = time.mul(1.6).add(s);
@@ -39,10 +41,10 @@ export class Fire {
     const core = body.mul(smoothstep(1.0, 0.1, u.y)).mul(smoothstep(0.0, 0.12, u.y));
     const flame = smoothstep(0.32, 0.85, core.mul(n.mul(1.25).add(0.25))).toVar();
     const heat = pow(flame, float(1.6));
-    const col = mix(color(palette.low), color(palette.high), heat).mul(mix(float(2.2), float(9.0), heat));
+    const col = mix(uniform(new THREE.Color(palette.low)), uniform(new THREE.Color(palette.high)), heat).mul(mix(float(2.2), float(9.0), heat));
     flameMat.colorNode = vec4(col.mul(flame).mul(this.strength), 1);
     flameMat.opacityNode = flame.mul(this.strength);
-    flameMat.scaleNode = vec2(0.85 * size, 1.5 * size);
+    flameMat.scaleNode = vec2(0.85, 1.5).mul(sz);
     const flame1 = new THREE.Sprite(flameMat);
     flame1.position.y = 0.62 * size;
     flame1.layers.set(Layers.WORLD);
@@ -55,17 +57,17 @@ export class Fire {
     const id = instanceIndex.toFloat();
     const life = fract(time.mul(hash(id.add(s)).mul(0.35).add(0.3)).add(hash(id.mul(3.1))));
     const ang = hash(id.mul(7.7)).mul(6.283).add(time.mul(0.8));
-    const spread = life.mul(0.55).mul(size);
+    const spread = life.mul(0.55).mul(sz);
     emberMat.positionNode = vec3(
       cos(ang).mul(spread).add(sin(life.mul(9).add(id)).mul(0.08)),
-      life.mul(2.6 * size).add(0.4 * size),
+      life.mul(2.6).add(0.4).mul(sz),
       sin(ang).mul(spread),
     );
-    const emberSize = float(0.035).mul(float(1).sub(life)).mul(size).mul(hash(id.mul(1.7)).add(0.5));
+    const emberSize = float(0.035).mul(float(1).sub(life)).mul(sz).mul(hash(id.mul(1.7)).add(0.5));
     emberMat.scaleNode = vec2(emberSize, emberSize);
     const r = uv().sub(0.5).length();
     const dot = smoothstep(0.5, 0.0, r);
-    emberMat.colorNode = vec4(color(palette.ember).mul(14).mul(float(1).sub(life)).mul(this.strength), 1);
+    emberMat.colorNode = vec4(uniform(new THREE.Color(palette.ember)).mul(14).mul(float(1).sub(life)).mul(this.strength), 1);
     emberMat.opacityNode = dot.mul(smoothstep(1, 0.6, life));
     const embers = new THREE.Sprite(emberMat);
     (embers as any).count = COUNT;

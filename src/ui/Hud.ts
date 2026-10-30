@@ -1,5 +1,6 @@
 import { QUALITY_PRESETS, type QualityName } from '../render/Quality';
 import { controlsHtml } from './StartMenu';
+import { setCompatibilityMode } from './Fatal';
 
 const SENS_KEY = 'ascendant.sensitivity';
 
@@ -94,6 +95,21 @@ export class Hud {
     if (text) this.root.querySelector('.hud-sub')!.textContent = text;
   }
 
+  /** Shown when shaders take long: says the wait is normal and offers the WebGL 2 renderer. */
+  slowLoad(webgpu: boolean): void {
+    if (this.loading.querySelector('.hud-slow')) return;
+    const el = document.createElement('div');
+    el.className = 'hud-slow';
+    el.textContent = 'Your graphics driver is still building shaders. This is only slow the first time.';
+    if (webgpu) {
+      const btn = document.createElement('button');
+      btn.textContent = 'Too slow? Restart in compatibility mode (WebGL 2)';
+      btn.addEventListener('click', () => setCompatibilityMode(true));
+      el.appendChild(btn);
+    }
+    this.loading.appendChild(el);
+  }
+
   ready(): void {
     this.loading.classList.add('done');
     setTimeout(() => this.loading.remove(), 1200);
@@ -112,6 +128,16 @@ export class Hud {
     this.hint.classList.toggle('hidden', locked);
     // keys in play must not type into a focused control (the quality picker jumps on letters)
     if (locked && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }
+
+  /** A short message that fades on its own. */
+  notice(text: string): void {
+    const el = document.createElement('div');
+    el.className = 'hud-notice';
+    el.textContent = text;
+    this.root.appendChild(el);
+    setTimeout(() => el.classList.add('gone'), 4000);
+    setTimeout(() => el.remove(), 5000);
   }
 
   setInfo(text: string): void {

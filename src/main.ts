@@ -8,6 +8,9 @@ import { Showcase } from './dev/Showcase';
 import { PlayerController } from './player/PlayerController';
 import { ThirdPersonCamera } from './player/ThirdPersonCamera';
 import { grading, PostFX } from './render/PostFX';
+import { AsyncPipelines } from './render/AsyncPipelines';
+import { AutoQuality } from './render/AutoQuality';
+import { shareShaders } from './render/instancing';
 import { createRenderer } from './render/Renderer';
 import { initialQuality, QUALITY_PRESETS, saveQuality, type QualityName } from './render/Quality';
 import { TextureLibrary } from './scene/Materials';
@@ -29,11 +32,15 @@ import { installUiSounds, mountAudioPanel } from './ui/AudioPanel';
 async function main(): Promise<void> {
   installErrorHandlers();
   let applyQuality: (q: QualityName) => Promise<void> = async () => {};
+  let autoQuality: AutoQuality | null = null;
   let sensitivity = 1;
   let applySensitivity = (v: number): void => {
     sensitivity = v;
   };
-  const hud = new Hud((q) => void applyQuality(q), (v) => applySensitivity(v));
+  const hud = new Hud((q) => {
+    autoQuality?.stop();
+    void applyQuality(q);
+  }, (v) => applySensitivity(v));
   hud.progress(0.05, 'Starting renderer…');
 
   const params = new URLSearchParams(location.search);
@@ -55,6 +62,9 @@ async function main(): Promise<void> {
   if (!skipMenu) music.play('hymn');
 
   const { renderer, isWebGPU } = await rendering;
+  // shaders compile in parallel in the background and never freeze a frame
+  const pipelines = new AsyncPipelines(renderer);
+  shareShaders(renderer);
   const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 3000);
 
   // textures and god models load behind the title screen
@@ -87,7 +97,7 @@ async function main(): Promise<void> {
     await world.applyQuality(renderer, quality);
     post.build(quality);
     world.bakeLighting(renderer);
-    hud.progress(0.85, 'Preparing shaders (the first load can take a minute)…');
+    hud.progress(0.85, 'Preparing shaders…');
     // Shaders are built per light count, so compile with the lights a match starts
     // with: the fires nearest the spawn, plus the combat effects' spell lights.
     world.update(0, 0, new THREE.Vector3(world.spawn.x, 0, world.spawn.z));
@@ -145,6 +155,13 @@ async function main(): Promise<void> {
   saveQuality(quality.name);
   hud.setQuality(quality.name);
   hud.setInfo(isWebGPU ? 'WebGPU' : 'WebGL 2');
+  // a quality forced in the URL (tests, shared links) stays put
+  if (!params.has('quality')) {
+    autoQuality = new AutoQuality(() => quality.name, (to) => {
+      void applyQuality(to);
+      hud.notice(`Lowered graphics to ${QUALITY_PRESETS[to].label} for a smoother frame rate. You can change it at the bottom right.`);
+    });
+  }
 
   const loop = new Loop();
   loop.addFixed(player);
@@ -153,11 +170,17 @@ async function main(): Promise<void> {
   loop.addFixed(combat);
   void baked;
   const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest', () => !player.grounded);
-  // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
+  // Draw one hidden frame so the shadow and post passes queue their shaders too,
+  // then wait (bounded) for the driver to finish them before revealing the scene.
   player.render(0, 1);
   follow.update(1 / 60);
-  hud.progress(0.9, 'Preparing shaders…');
-  await renderer.compileAsync(world.scene, camera);
+  world.update(0, 0, player.model.root.position);
+  const slow = setTimeout(() => hud.slowLoad(isWebGPU), 15000);
+  await renderer.compileAsync(world.scene, camera, null, (e: ProgressEvent) =>
+    hud.progress(0.86 + (0.04 * e.loaded) / e.total, `Preparing materials ${e.loaded} / ${e.total}…`));
+  post.render();
+  await pipelines.settle(60000, (done, total) => hud.progress(0.9 + (total ? (0.1 * done) / total : 0.1), `Preparing shaders ${done} / ${total}…`));
+  clearTimeout(slow);
   hud.ready();
 
   window.addEventListener('keydown', (e) => {
@@ -179,6 +202,7 @@ async function main(): Promise<void> {
     post.render();
     input.endFrame();
     hud.frame(dt);
+    autoQuality?.frame(dt);
   };
   // `?capture` leaves the loop stopped so automated screenshots can step frames
   // themselves (software GPUs in CI can't keep up with a live loop).
@@ -208,7 +232,7 @@ async function main(): Promise<void> {
   };
 
   // Hooks for automated screenshots and for gameplay code during development.
-  const debug = { grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
+  const debug = { pipelines, grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
   (window as unknown as { __game: typeof debug }).__game = debug;
 }
 
