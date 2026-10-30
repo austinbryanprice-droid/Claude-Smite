@@ -285,8 +285,12 @@ export class CombatGame implements Updatable {
     return hypot(x - this.player.home.x, z - this.player.home.z) < 0.01;
   }
 
-  /** Shows every pooled spell effect and status aura until the returned function is called (see `Vfx.prime`). */
+  /**
+   * Shows every pooled spell effect and status aura until the returned function
+   * is called (see `Vfx.prime`), and builds the training dummies' views.
+   */
   prime(): () => void {
+    this.views.prime(this.sim.units);
     const restore = [this.vfx.prime(), this.status.prime()];
     return () => {
       for (const r of restore) r();
