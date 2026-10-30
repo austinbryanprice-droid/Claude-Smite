@@ -378,7 +378,12 @@ export class Foliage {
   /** Shadow range of the current quality; chunks well beyond it stop casting. */
   shadowDistance = Infinity;
 
-  constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3, private readonly chunk = 80) {
+  /**
+   * `chunk` is the cell size in meters. Every species variant in a cell is its
+   * own draw call in each pass (shadow cascades included), so cells are big:
+   * near the camera instances still switch detail one by one.
+   */
+  constructor(textures: TextureLibrary, private readonly sunDirection: THREE.Vector3, private readonly chunk = 160) {
     this.group.name = 'foliage';
     let seed = 900;
     for (const s of Object.keys(VARIANTS) as SpeciesName[]) {
@@ -495,17 +500,17 @@ export class Foliage {
     const lm = c.lo.instanceMatrix.array as Float32Array;
     const hs = c.hiSeed.array as Float32Array;
     const ls = c.loSeed.array as Float32Array;
+    const src = c.matrices;
     for (let i = 0; i < c.seeds.length; i++) {
-      const x = c.matrices[i * 16 + 12]! - cam.x;
-      const z = c.matrices[i * 16 + 14]! - cam.z;
+      const x = src[i * 16 + 12]! - cam.x;
+      const z = src[i * 16 + 14]! - cam.z;
       const near = mode === 'hi' || (mode === 'mixed' && x * x + z * z < lod2);
-      if (near) {
-        hm.set(c.matrices.subarray(i * 16, i * 16 + 16), nh * 16);
-        hs[nh++] = c.seeds[i]!;
-      } else {
-        lm.set(c.matrices.subarray(i * 16, i * 16 + 16), nl * 16);
-        ls[nl++] = c.seeds[i]!;
-      }
+      // copied by hand: a subarray per instance is garbage on every re-split
+      const dst = near ? hm : lm;
+      const at = (near ? nh : nl) * 16;
+      for (let k = 0; k < 16; k++) dst[at + k] = src[i * 16 + k]!;
+      if (near) hs[nh++] = c.seeds[i]!;
+      else ls[nl++] = c.seeds[i]!;
     }
     c.hi.count = nh;
     c.lo.count = nl;

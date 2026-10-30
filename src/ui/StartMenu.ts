@@ -1,5 +1,6 @@
 import type { GodDef } from '../game/types';
 import { compatibilityMode, setCompatibilityMode } from './Fatal';
+import type { GpuAdvice } from '../render/gpuAdvice';
 import { skillIcon } from './icons';
 import { mountLobby } from '../net/LobbyPanel';
 import type { NetSession } from '../net/Session';
@@ -69,7 +70,13 @@ function save(c: StartChoice): void {
  * The title screen: pick a mode and a god, read the controls, press Play.
  * Shown over the loading screen while textures and models load behind it.
  */
-export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>): Promise<StartChoice> {
+/** What the title screen says about the graphics setup. */
+export interface GraphicsInfo {
+  webgpu: boolean;
+  advice: GpuAdvice | null;
+}
+
+export function showStartMenu(gods: readonly GodDef[], graphics: Promise<GraphicsInfo>): Promise<StartChoice> {
   const prev = load();
   let mode = savedMode();
   let god = gods.some((g) => g.id === prev.god) ? prev.god! : gods[0]!.id;
@@ -139,14 +146,30 @@ export function showStartMenu(gods: readonly GodDef[], webgpu: Promise<boolean>)
   );
 
   const note = root.querySelector<HTMLSpanElement>('.sm-note')!;
-  void webgpu.then((gpu) => {
+  void graphics.then(({ webgpu, advice }) => {
     const forced = compatibilityMode();
-    note.innerHTML = gpu
+    note.innerHTML = webgpu
       ? 'Running on WebGPU. Black screen or glitches? <button class="sm-compat">Use compatibility mode</button>'
       : forced
         ? 'Compatibility mode (WebGL 2). <button class="sm-compat">Switch to WebGPU</button>'
         : 'WebGPU is unavailable, so the game uses WebGL 2. Chrome or Edge on a recent GPU runs best.';
     note.querySelector('.sm-compat')?.addEventListener('click', () => setCompatibilityMode(!forced));
+    if (!advice) return;
+    const warn = document.createElement('div');
+    warn.className = 'sm-warn';
+    warn.textContent = advice.text;
+    if (advice.copy) {
+      // browsers refuse links to their own settings pages, so offer the text instead
+      const copy = document.createElement('button');
+      copy.className = 'sm-compat';
+      copy.textContent = 'Copy flag address';
+      copy.addEventListener('click', () => {
+        void navigator.clipboard?.writeText(advice.copy!).then(() => (copy.textContent = 'Copied: paste it in the address bar'));
+      });
+      warn.appendChild(copy);
+    }
+    // under the title, where it can't be missed
+    root.querySelector('.sm-title')!.after(warn);
   });
 
   return new Promise((resolve) => {
