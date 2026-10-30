@@ -850,8 +850,8 @@ export class Sim {
    * through. A walker heading straight at one slides around its side
    * instead of stalling against it.
    */
-  solid(x: number, z: number, radius: number, feetY: number, from: Point = { x, z }): Point {
-    let r = this.terrain.resolve(x, z, radius, feetY);
+  solid(x: number, z: number, radius: number, feetY: number, from: Point = { x, z }, terrain: SimTerrain = this.terrain): Point {
+    let r = terrain.resolve(x, z, radius, feetY);
     for (const s of this.units) {
       if (!s.alive || !isStructure(s)) continue;
       const min = s.radius + radius;
@@ -862,7 +862,9 @@ export class Sim {
       if (d < 1e-4) {
         dx = from.x - s.x;
         dz = from.z - s.z;
-        d = Math.hypot(dx, dz) || 1;
+        d = Math.hypot(dx, dz);
+        // dead center with nowhere to come from: pick a side
+        if (d < 1e-4) [dx, dz, d] = [1, 0, 1];
       }
       const nx = dx / d;
       const nz = dz / d;
@@ -875,7 +877,7 @@ export class Sim {
       const px = s.x + nx * min - nz * slide;
       const pz = s.z + nz * min + nx * slide;
       const pd = Math.hypot(px - s.x, pz - s.z) || 1;
-      r = this.terrain.resolve(s.x + ((px - s.x) / pd) * min, s.z + ((pz - s.z) / pd) * min, radius, feetY);
+      r = terrain.resolve(s.x + ((px - s.x) / pd) * min, s.z + ((pz - s.z) / pd) * min, radius, feetY);
     }
     return r;
   }
