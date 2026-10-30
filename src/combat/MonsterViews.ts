@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionLocal, sin, smoothstep, time, uv, vec3, vec4 } from '../render/tsl';
+import { abs, float, mix, mx_noise_float, mx_worley_noise_float, normalWorld, positionLocal, sin, smoothstep, time, uniform, uv, vec3, vec4 } from '../render/tsl';
 import type { CampKind } from '../map/ConquestLayout';
 import { BUFF_COLOR } from '../scene/conquest/Props';
 import { MonsterBrain } from '../sim/Jungle';
@@ -73,9 +73,9 @@ function glow(hex: number, strength = 4): THREE.Material {
   const key = hex * 16 + strength;
   let m = glowCache.get(key);
   if (!m) {
-    const c = new THREE.Color(hex);
     const g = new THREE.MeshBasicNodeMaterial();
-    g.colorNode = vec3(c.r, c.g, c.b).mul(float(strength).mul(n(30).mul(0.4).add(0.8)));
+    // uniforms rather than constants, so every glow colour shares one shader
+    g.colorNode = uniform(new THREE.Color(hex)).mul(uniform(strength).mul(n(30).mul(0.4).add(0.8)));
     glowCache.set(key, (m = g));
   }
   return m;

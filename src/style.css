@@ -27,3 +27,7 @@ canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
 .hud-bar { width: min(420px, 70vw); height: 3px; background: rgba(255,255,255,0.12); }
 .hud-bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #b8862e, var(--gold)); transition: width 0.25s; }
 .hud-sub { font-size: 14px; opacity: 0.8; letter-spacing: 0.08em; }
+.hud-notice { position: absolute; bottom: 56px; right: 16px; max-width: 320px; padding: 8px 12px; background: var(--panel); border: 1px solid rgba(231, 194, 122, 0.35); border-radius: 4px; font-size: 13px; transition: opacity 1s; }
+.hud-notice.gone { opacity: 0; }
+.hud-slow { max-width: min(420px, 86vw); font-size: 13px; opacity: 0.75; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: auto; }
+.hud-slow button { font: inherit; color: var(--gold); background: rgba(0,0,0,0.35); border: 1px solid rgba(232,196,110,0.5); padding: 6px 14px; cursor: pointer; }
