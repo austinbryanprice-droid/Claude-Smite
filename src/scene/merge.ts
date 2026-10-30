@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Layers } from '../render/Layers';
 
 /**
  * Bakes every mesh under `group` (except the `keep` subtrees) into one mesh
@@ -27,6 +28,7 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
   };
   for (const c of group.children) visit(c);
   for (const m of remove) m.parent?.remove(m);
+  const baked: THREE.Mesh[] = [];
   for (const [mat, { geos, cast }] of byMat) {
     const withUv = geos.every((g) => g.getAttribute('uv'));
     for (const g of geos) {
@@ -40,10 +42,111 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
     mesh.castShadow = cast;
     mesh.receiveShadow = true;
     group.add(mesh);
+    baked.push(mesh);
+  }
+  castAsOne(baked, ['position'], (geometry, material) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    group.add(mesh);
+    return mesh;
+  });
+}
+
+const standIns = new Map<THREE.Side, THREE.MeshBasicNodeMaterial>();
+
+/** True when a material's shadow is just its mesh's shape: nothing in it moves vertices or cuts holes. */
+function plainShadow(m: THREE.Material): boolean {
+  const n = m as THREE.NodeMaterial;
+  return !m.transparent && m.alphaTest === 0 && !n.alphaTestNode && !n.maskNode && !n.maskShadowNode && !n.positionNode && !n.castShadowNode && !n.castShadowPositionNode;
+}
+
+/**
+ * Has one mesh per side cast the shadows of `meshes` (siblings drawn with the
+ * same transform), on `Layers.SHADOW_ONLY` so only the shadow cascades draw
+ * it: each cascade then draws a structure or a god once instead of once per
+ * material. Meshes whose material shapes its shadow (alpha test, moved
+ * vertices) keep casting their own. `add` makes the stand-in from a geometry
+ * holding `attributes` of the meshes it replaces, and places it; `cache`
+ * shares that geometry between models built alike.
+ */
+function castAsOne(
+  meshes: readonly THREE.Mesh[], attributes: readonly string[],
+  add: (geometry: THREE.BufferGeometry, material: THREE.Material) => THREE.Mesh, cache?: Map<THREE.Side, THREE.BufferGeometry>,
+): void {
+  const bySide = new Map<THREE.Side, THREE.Mesh[]>();
+  for (const m of meshes) {
+    const mat = m.material as THREE.Material;
+    if (!m.castShadow || !m.visible || !plainShadow(mat)) continue;
+    const side = mat.shadowSide ?? mat.side;
+    const list = bySide.get(side);
+    if (list) list.push(m);
+    else bySide.set(side, [m]);
+  }
+  for (const [side, list] of bySide) {
+    if (list.length < 2) continue;
+    let geometry = cache?.get(side);
+    if (!geometry) {
+      const indexed = list.every((m) => m.geometry.index);
+      const geos = list.map((m) => {
+        const src = m.geometry.index && !indexed ? m.geometry.toNonIndexed() : m.geometry;
+        const g = new THREE.BufferGeometry();
+        for (const name of attributes) g.setAttribute(name, src.getAttribute(name).clone());
+        if (indexed) g.setIndex(src.index!.clone());
+        return g;
+      });
+      const merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      geometry = merged;
+      cache?.set(side, geometry);
+    }
+    let material = standIns.get(side);
+    if (!material) standIns.set(side, (material = new THREE.MeshBasicNodeMaterial({ side, colorWrite: false })));
+    const standIn = add(geometry, material);
+    standIn.name = 'shadow';
+    standIn.castShadow = true;
+    standIn.receiveShadow = false;
+    standIn.layers.set(Layers.SHADOW_ONLY);
+    for (const m of list) m.castShadow = false;
+  }
+}
+
+/**
+ * Has one skinned mesh per side cast the shadows of `root`'s skinned meshes
+ * that share a parent, transform and skeleton (see `castAsOne`).
+ */
+export function castSkinnedAsOne(root: THREE.Object3D): void {
+  const groups = new Map<string, THREE.SkinnedMesh[]>();
+  root.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || Array.isArray(m.material) || m.morphTargetInfluences) return;
+    m.updateMatrix();
+    const key = [m.parent!.uuid, m.matrix.elements.join(), m.bindMatrix.elements.join(), m.skeleton.uuid].join('|');
+    const list = groups.get(key);
+    if (list) list.push(m);
+    else groups.set(key, [m]);
+  });
+  for (const list of groups.values()) {
+    const first = list[0]!;
+    castAsOne(list, ['position', 'skinIndex', 'skinWeight'], (geometry, material) => {
+      const s = new THREE.SkinnedMesh(geometry, material);
+      s.position.copy(first.position);
+      s.quaternion.copy(first.quaternion);
+      s.scale.copy(first.scale);
+      s.bind(first.skeleton, first.bindMatrix);
+      // cull against all the meshes it stands in for
+      for (const m of list) {
+        if (!m.boundingSphere && !m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        const b = m.boundingSphere ?? m.geometry.boundingSphere!;
+        if (s.boundingSphere) s.boundingSphere.union(b);
+        else s.boundingSphere = b.clone();
+      }
+      first.parent!.add(s);
+      return s;
+    });
   }
 }
 
 const rigidGeometry = new Map<string, THREE.BufferGeometry[]>();
+const rigidShadows = new Map<string, Map<THREE.Side, THREE.BufferGeometry>>();
 
 /**
  * Turns a rig of rigid parts, posed by moving their pivots, into one skinned
@@ -93,14 +196,24 @@ export function skinRigid(root: THREE.Object3D, key: string, space: THREE.Object
     if (boneOf.has(mesh)) mesh.visible = false;
     else mesh.removeFromParent();
   }
-  groups.forEach((g, i) => {
+  const skinned = groups.map((g, i) => {
     const s = new THREE.SkinnedMesh(geos[i], g.material);
     s.castShadow = g.cast;
     s.receiveShadow = true;
     s.bind(skeleton, bindMatrix);
     s.boundingSphere = bounds.clone();
     root.add(s);
+    return s;
   });
+  let shadows = rigidShadows.get(key);
+  if (!shadows) rigidShadows.set(key, (shadows = new Map()));
+  castAsOne(skinned, ['position', 'skinIndex', 'skinWeight'], (geometry, material) => {
+    const s = new THREE.SkinnedMesh(geometry, material);
+    s.bind(skeleton, bindMatrix);
+    s.boundingSphere = bounds.clone();
+    root.add(s);
+    return s;
+  }, shadows);
 }
 
 function bakeRigid(parts: readonly { mesh: THREE.Mesh; bone: number }[], fromSpace: THREE.Matrix4): THREE.BufferGeometry {

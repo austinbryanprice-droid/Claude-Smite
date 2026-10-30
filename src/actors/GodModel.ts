@@ -3,6 +3,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { godAsset, type GodAsset } from './gods/assets';
 import { godMaterials } from './gods/materials';
 import { SecondaryPhysics } from './gods/Physics';
+import { castSkinnedAsOne } from '../scene/merge';
 import { color, luminance } from '../render/tsl';
 
 /** Locomotion input the model animates from. All values are per frame. */
@@ -184,7 +185,8 @@ export class GodModel {
   private stanceWeight = 1;
   private readonly tmpV = new THREE.Vector3();
 
-  constructor(god: string | object = 'zeus', variant?: string) {
+  /** `shadowStandIn: false` leaves each piece casting its own shadow, for callers that re-dress the model (see `castSkinnedAsOne`). */
+  constructor(god: string | object = 'zeus', variant?: string, { shadowStandIn = true } = {}) {
     this.id = typeof god === 'string' ? god : 'zeus';
     this.asset = godAsset(this.id);
     const scene = cloneSkinned(this.asset.scene) as THREE.Group;
@@ -219,6 +221,7 @@ export class GodModel {
       if (!skeleton) skeleton = mesh.skeleton;
       else if (sameSkeleton(mesh.skeleton, skeleton)) mesh.bind(skeleton, mesh.bindMatrix);
     });
+    if (shadowStandIn) castSkinnedAsOne(scene);
     const bone = (n: string) => this.bones.get(n.replace(/\./g, ''))!;
     this.head = bone('DEF-head');
     this.chest = bone('DEF-spine.003');

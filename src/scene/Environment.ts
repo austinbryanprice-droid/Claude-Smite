@@ -199,13 +199,18 @@ export class Environment {
     const lights = this.cascades();
     if (!lights) return;
     this.frame++;
-    for (let i = 1; i < lights.length; i++) {
+    for (let i = 0; i < lights.length; i++) {
       const shadow = lights[i]!.shadow;
+      const layers = shadow.camera.layers;
+      // shadow stand-ins are for the cascades only, not the camera
+      if (i < FAR_CASCADE) layers.mask = this.camera.layers.mask | (1 << Layers.SHADOW_ONLY);
+      if (i === 0) continue;
       if (shadow.autoUpdate) {
         shadow.autoUpdate = false;
         if (i >= FAR_CASCADE) {
-          shadow.camera.layers.set(Layers.WORLD);
-          shadow.camera.layers.enable(Layers.FAR_SHADOW);
+          layers.set(Layers.WORLD);
+          layers.enable(Layers.FAR_SHADOW);
+          layers.enable(Layers.SHADOW_ONLY);
         }
       }
       const due = i === 1 ? this.frame % 2 === 1 : this.frame % 4 === ((i - FAR_CASCADE) * 2) % 4;
