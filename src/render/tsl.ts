@@ -34,6 +34,7 @@ export const float: any = T.float;
 export const floor: any = T.floor;
 export const fog: any = T.fog;
 export const fract: any = T.fract;
+export const frontFacing: any = T.frontFacing;
 export const hash: any = T.hash;
 export const instanceIndex: any = T.instanceIndex;
 export const int: any = T.int;

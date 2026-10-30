@@ -51,7 +51,7 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
   });
 }
 
-const standIns = new Map<THREE.Side, THREE.MeshBasicNodeMaterial>();
+let standIn: THREE.MeshBasicNodeMaterial | null = null;
 
 /** True when a material's shadow is just its mesh's shape: nothing in it moves vertices or cuts holes. */
 function plainShadow(m: THREE.Material): boolean {
@@ -60,60 +60,71 @@ function plainShadow(m: THREE.Material): boolean {
 }
 
 /**
- * Has one mesh per side cast the shadows of `meshes` (siblings drawn with the
- * same transform), on `Layers.SHADOW_ONLY` so only the shadow cascades draw
- * it: each cascade then draws a structure or a god once instead of once per
+ * Has one mesh cast the shadows of `meshes` (siblings drawn with the same
+ * transform), on `Layers.SHADOW_ONLY` so only the shadow cascades draw it:
+ * each cascade then draws a structure or a god once instead of once per
  * material. Meshes whose material shapes its shadow (alpha test, moved
  * vertices) keep casting their own. `add` makes the stand-in from a geometry
- * holding `attributes` of the meshes it replaces, and places it; `cache`
- * shares that geometry between models built alike.
+ * holding `attributes` of the meshes it replaces, and places it; `shared`
+ * holds that geometry for models built alike.
  */
 function castAsOne(
   meshes: readonly THREE.Mesh[], attributes: readonly string[],
-  add: (geometry: THREE.BufferGeometry, material: THREE.Material) => THREE.Mesh, cache?: Map<THREE.Side, THREE.BufferGeometry>,
+  add: (geometry: THREE.BufferGeometry, material: THREE.Material) => THREE.Mesh, shared?: { geometry?: THREE.BufferGeometry },
 ): void {
-  const bySide = new Map<THREE.Side, THREE.Mesh[]>();
-  for (const m of meshes) {
-    const mat = m.material as THREE.Material;
-    if (!m.castShadow || !m.visible || !plainShadow(mat)) continue;
-    const side = mat.shadowSide ?? mat.side;
-    const list = bySide.get(side);
-    if (list) list.push(m);
-    else bySide.set(side, [m]);
+  const list = meshes.filter((m) => m.castShadow && m.visible && plainShadow(m.material as THREE.Material));
+  if (list.length < 2) return;
+  let geometry = shared?.geometry;
+  if (!geometry) {
+    // (unindexed front-sided meshes, like baked structures, stay unindexed)
+    const indexed = list.some((m) => m.geometry.index || (m.material as THREE.Material).side !== THREE.FrontSide);
+    const geos = list.map((m) => {
+      const g = new THREE.BufferGeometry();
+      for (const name of attributes) g.setAttribute(name, m.geometry.getAttribute(name).clone());
+      if (indexed) g.setIndex(frontFaces(m.geometry, (m.material as THREE.Material).side));
+      return g;
+    });
+    const merged = mergeGeometries(geos, false);
+    if (!merged) return;
+    geometry = merged;
+    if (shared) shared.geometry = geometry;
   }
-  for (const [side, list] of bySide) {
-    if (list.length < 2) continue;
-    let geometry = cache?.get(side);
-    if (!geometry) {
-      const indexed = list.every((m) => m.geometry.index);
-      const geos = list.map((m) => {
-        const src = m.geometry.index && !indexed ? m.geometry.toNonIndexed() : m.geometry;
-        const g = new THREE.BufferGeometry();
-        for (const name of attributes) g.setAttribute(name, src.getAttribute(name).clone());
-        if (indexed) g.setIndex(src.index!.clone());
-        return g;
-      });
-      const merged = mergeGeometries(geos, false);
-      if (!merged) continue;
-      geometry = merged;
-      cache?.set(side, geometry);
-    }
-    let material = standIns.get(side);
-    if (!material) standIns.set(side, (material = new THREE.MeshBasicNodeMaterial({ side, colorWrite: false })));
-    const standIn = add(geometry, material);
-    standIn.name = 'shadow';
-    standIn.castShadow = true;
-    standIn.receiveShadow = false;
-    standIn.layers.set(Layers.SHADOW_ONLY);
-    for (const m of list) m.castShadow = false;
-  }
+  standIn ??= new THREE.MeshBasicNodeMaterial({ colorWrite: false });
+  const mesh = add(geometry, standIn);
+  mesh.name = 'shadow';
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  mesh.layers.set(Layers.SHADOW_ONLY);
+  for (const m of list) m.castShadow = false;
 }
 
 /**
- * Has one skinned mesh per side cast the shadows of `root`'s skinned meshes
- * that share a parent, transform and skeleton (see `castAsOne`).
+ * `geometry`'s triangles wound so that a front-sided mesh casts the shadow a
+ * mesh drawn with `side` casts: a shadow pass draws the back faces of a
+ * front-sided mesh, the front faces of a back-sided one and both of a
+ * double-sided one, so back-sided triangles turn around and double-sided
+ * ones go in both ways.
  */
-export function castSkinnedAsOne(root: THREE.Object3D): void {
+function frontFaces(geometry: THREE.BufferGeometry, side: THREE.Side): number[] {
+  const n = geometry.index ? geometry.index.count : geometry.getAttribute('position').count;
+  const tri: number[] = new Array(n);
+  for (let i = 0; i < n; i++) tri[i] = geometry.index ? geometry.index.getX(i) : i;
+  if (side === THREE.FrontSide) return tri;
+  const flipped: number[] = new Array(n);
+  for (let i = 0; i < n; i += 3) {
+    flipped[i] = tri[i]!;
+    flipped[i + 1] = tri[i + 2]!;
+    flipped[i + 2] = tri[i + 1]!;
+  }
+  return side === THREE.BackSide ? flipped : tri.concat(flipped);
+}
+
+/**
+ * Has one skinned mesh cast the shadows of `root`'s skinned meshes that share
+ * a parent, transform and skeleton (see `castAsOne`). Models cloned from one
+ * source can share the stand-ins' geometry through `shared`.
+ */
+export function castSkinnedAsOne(root: THREE.Object3D, shared?: Map<string, { geometry?: THREE.BufferGeometry }>): void {
   const groups = new Map<string, THREE.SkinnedMesh[]>();
   root.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
@@ -126,6 +137,12 @@ export function castSkinnedAsOne(root: THREE.Object3D): void {
   });
   for (const list of groups.values()) {
     const first = list[0]!;
+    let cache: { geometry?: THREE.BufferGeometry } | undefined;
+    if (shared) {
+      const key = list.map((m) => m.geometry.uuid + (m.castShadow ? '+' : '-')).join();
+      cache = shared.get(key);
+      if (!cache) shared.set(key, (cache = {}));
+    }
     castAsOne(list, ['position', 'skinIndex', 'skinWeight'], (geometry, material) => {
       const s = new THREE.SkinnedMesh(geometry, material);
       s.position.copy(first.position);
@@ -141,12 +158,12 @@ export function castSkinnedAsOne(root: THREE.Object3D): void {
       }
       first.parent!.add(s);
       return s;
-    });
+    }, cache);
   }
 }
 
 const rigidGeometry = new Map<string, THREE.BufferGeometry[]>();
-const rigidShadows = new Map<string, Map<THREE.Side, THREE.BufferGeometry>>();
+const rigidShadows = new Map<string, { geometry?: THREE.BufferGeometry }>();
 
 /**
  * Turns a rig of rigid parts, posed by moving their pivots, into one skinned
@@ -206,7 +223,7 @@ export function skinRigid(root: THREE.Object3D, key: string, space: THREE.Object
     return s;
   });
   let shadows = rigidShadows.get(key);
-  if (!shadows) rigidShadows.set(key, (shadows = new Map()));
+  if (!shadows) rigidShadows.set(key, (shadows = {}));
   castAsOne(skinned, ['position', 'skinIndex', 'skinWeight'], (geometry, material) => {
     const s = new THREE.SkinnedMesh(geometry, material);
     s.bind(skeleton, bindMatrix);
@@ -240,11 +257,12 @@ function bakeRigid(parts: readonly { mesh: THREE.Mesh; bone: number }[], fromSpa
 }
 
 /**
- * Merges skinned meshes that share a material (by name), parent, transform,
- * skeleton and vertex layout into one, so a model built from dozens of pieces
- * (armor plates, straps, gems) draws once per material.
+ * Merges skinned meshes that share a material, parent, transform, skeleton
+ * and vertex layout into one, so a model built from dozens of pieces (armor
+ * plates, straps, gems) draws once per material. Models cloned from one
+ * source can share the merged geometry through `shared`.
  */
-export function mergeSkinned(root: THREE.Object3D): void {
+export function mergeSkinned(root: THREE.Object3D, shared?: Map<string, THREE.BufferGeometry>): void {
   const groups = new Map<string, THREE.SkinnedMesh[]>();
   root.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
@@ -256,7 +274,7 @@ export function mergeSkinned(root: THREE.Object3D): void {
       .join();
     const bones = m.skeleton.bones.map((b) => b.uuid).join();
     m.updateMatrix();
-    const key = [m.material.name, m.parent!.uuid, m.matrix.elements.join(), m.bindMatrix.elements.join(), bones, layout, !!g.index].join('|');
+    const key = [m.material.uuid, m.parent!.uuid, m.matrix.elements.join(), m.bindMatrix.elements.join(), bones, layout, !!g.index].join('|');
     let list = groups.get(key);
     if (!list) groups.set(key, (list = []));
     list.push(m);
@@ -264,16 +282,21 @@ export function mergeSkinned(root: THREE.Object3D): void {
   for (const list of groups.values()) {
     if (list.length < 2) continue;
     const first = list[0]!;
-    const indexed = !!first.geometry.index;
-    const geos = list.map((m) => {
-      const g = new THREE.BufferGeometry();
-      // clone() also de-interleaves, which mergeGeometries needs
-      for (const [name, a] of Object.entries(m.geometry.attributes)) g.setAttribute(name, a.clone() as THREE.BufferAttribute);
-      if (indexed) g.setIndex(m.geometry.index!.clone());
-      return g;
-    });
-    const merged = mergeGeometries(geos, false);
-    if (!merged) continue;
+    const key = list.map((m) => m.geometry.uuid).join();
+    let merged = shared?.get(key) ?? null;
+    if (!merged) {
+      const indexed = !!first.geometry.index;
+      const geos = list.map((m) => {
+        const g = new THREE.BufferGeometry();
+        // clone() also de-interleaves, which mergeGeometries needs
+        for (const [name, a] of Object.entries(m.geometry.attributes)) g.setAttribute(name, a.clone() as THREE.BufferAttribute);
+        if (indexed) g.setIndex(m.geometry.index!.clone());
+        return g;
+      });
+      merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      shared?.set(key, merged);
+    }
     const out = new THREE.SkinnedMesh(merged, first.material);
     out.name = first.name;
     out.position.copy(first.position);
@@ -282,6 +305,11 @@ export function mergeSkinned(root: THREE.Object3D): void {
     out.castShadow = first.castShadow;
     out.receiveShadow = first.receiveShadow;
     out.bind(first.skeleton, first.bindMatrix);
+    // cull against all the meshes it replaces
+    if (list.every((m) => m.boundingSphere)) {
+      out.boundingSphere = first.boundingSphere!.clone();
+      for (const m of list) out.boundingSphere.union(m.boundingSphere!);
+    }
     first.parent!.add(out);
     for (const m of list) m.removeFromParent();
   }
