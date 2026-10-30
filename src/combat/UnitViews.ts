@@ -8,9 +8,9 @@ import { MinionViews } from './MinionViews';
 import { createMonsterView, type MonsterView } from './MonsterViews';
 import { createStructureModel, type StructureModel } from './structures';
 import { MUZZLE_HEIGHT } from './Vfx';
+import { castStaticAsOne } from '../scene/merge';
 import { hypot } from '../core/math';
 
-/** A wooden training post with a straw body and a painted target shield. */
 /** Seconds a fallen god stays on the ground before it is hidden. */
 const GOD_CORPSE = 2.8;
 
@@ -20,8 +20,12 @@ function godSink(deathTime: number): number {
   return t * t * 0.9;
 }
 
-function buildDummy(): THREE.Group {
-  const g = new THREE.Group();
+let dummyLook: Record<'wood' | 'straw' | 'rope' | 'stone' | 'burlap' | 'paint', THREE.MeshStandardNodeMaterial> | null = null;
+const dummyShadow: { geometry?: THREE.BufferGeometry } = {};
+
+/** The training dummy's materials, shared by every dummy so a new one builds no shader. */
+function dummyMaterials(): NonNullable<typeof dummyLook> {
+  if (dummyLook) return dummyLook;
   const wood = new THREE.MeshStandardNodeMaterial({ color: 0x6b4426, roughness: 0.8 });
   wood.colorNode = mix(vec3(0.24, 0.14, 0.07), vec3(0.42, 0.27, 0.14), mx_noise_float(positionLocal.mul(vec3(2, 26, 2))).mul(0.5).add(0.5));
   const straw = new THREE.MeshStandardNodeMaterial({ roughness: 0.95 });
@@ -39,6 +43,19 @@ function buildDummy(): THREE.Group {
   const cream = vec3(0.85, 0.78, 0.6);
   const gold = vec3(0.9, 0.65, 0.2);
   paint.colorNode = mix(mix(cream, red, ring), gold, bull).mul(float(0.85).add(mx_noise_float(positionLocal.mul(30)).mul(0.15)));
+  dummyLook = { wood, straw, rope, stone, burlap, paint };
+  for (const [name, m] of Object.entries(dummyLook)) m.name = `dummy-${name}`;
+  return dummyLook;
+}
+
+/**
+ * A wooden training post with a straw body and a painted target shield.
+ * Every dummy shares its materials and its shadow caster's geometry (the
+ * loading screen draws one, so none builds a shader mid-match).
+ */
+export function buildDummy(): THREE.Group {
+  const g = new THREE.Group();
+  const { wood, straw, rope, stone, burlap, paint } = dummyMaterials();
 
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0) => {
     const m = new THREE.Mesh(geo, mat);
@@ -58,6 +75,8 @@ function buildDummy(): THREE.Group {
   add(new THREE.SphereGeometry(0.25, 14, 10), burlap, 0, 2.12, 0);
   // the target faces +Z (the model's front, like the god model)
   add(new THREE.CylinderGeometry(0.42, 0.42, 0.06, 28), paint, 0, 1.32, 0.36, Math.PI / 2);
+  // its dozen parts cast as one
+  castStaticAsOne(g, dummyShadow);
   return g;
 }
 

@@ -120,6 +120,37 @@ function frontFaces(geometry: THREE.BufferGeometry, side: THREE.Side): number[] 
 }
 
 /**
+ * Has one mesh cast the shadows of `group`'s static meshes, which keep their
+ * own transforms and draws (for parts whose materials read their local
+ * position, so they can't be baked together). Groups built alike share the
+ * stand-in's geometry through `shared`. Call before the group is placed.
+ */
+export function castStaticAsOne(group: THREE.Object3D, shared?: { geometry?: THREE.BufferGeometry }): void {
+  group.updateMatrixWorld(true);
+  const inv = group.matrixWorld.clone().invert();
+  const parts: THREE.Mesh[] = [];
+  group.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && !Array.isArray(m.material) && !(m as THREE.InstancedMesh).isInstancedMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) parts.push(m);
+  });
+  // stand-ins posed in group space; castAsOne only reads them when it has no shared geometry
+  const posed = parts.map((m) => {
+    const p = new THREE.Mesh(shared?.geometry ? m.geometry : m.geometry.clone().applyMatrix4(inv.clone().multiply(m.matrixWorld)), m.material);
+    p.castShadow = m.castShadow;
+    p.visible = m.visible;
+    return p;
+  });
+  let made = false;
+  castAsOne(posed, ['position'], (geometry, material) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    group.add(mesh);
+    made = true;
+    return mesh;
+  }, shared);
+  if (made) posed.forEach((p, i) => (parts[i]!.castShadow = p.castShadow));
+}
+
+/**
  * Has one skinned mesh cast the shadows of `root`'s skinned meshes that share
  * a parent, transform and skeleton (see `castAsOne`). Models cloned from one
  * source can share the stand-ins' geometry through `shared`.
