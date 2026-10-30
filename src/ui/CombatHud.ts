@@ -31,6 +31,9 @@ const CC_LABEL: Partial<Record<CCKind, string>> = {
   intoxicate: 'Intoxicated',
 };
 
+/** Crowd control that only hampers; the rest stops a unit outright. */
+const SOFT_CC = new Set<CCKind>(['slow', 'cripple', 'blind', 'intoxicate']);
+
 interface Bar {
   el: HTMLDivElement;
   hp: HTMLDivElement;
@@ -38,6 +41,9 @@ interface Bar {
   lag: HTMLDivElement;
   lagPct: number;
   shield: HTMLDivElement;
+  /** The crowd control holding this unit, over its name. */
+  cc: HTMLSpanElement;
+  ccText: string;
   level: HTMLSpanElement;
   name: HTMLSpanElement;
   marks: HTMLSpanElement;
@@ -495,12 +501,36 @@ export class CombatHud {
       b.shield.style.width = `${(shield / total) * 100}%`;
       b.level.textContent = u.kind === 'god' ? String(c.level) : '';
       b.marks.textContent = [...u.marks].filter(([k]) => !k.startsWith('buff:')).map(([, m]) => '◆'.repeat(m.stacks)).join('');
+      this.updateBarCC(b, u);
     }
     for (const [u, b] of this.bars) {
       if (seen.has(u)) continue;
       b.el.remove();
       this.bars.delete(u);
     }
+  }
+
+  /** Show what is holding a god or monster: hard crowd control first, then the longest soft one. */
+  private updateBarCC(b: Bar, u: Unit): void {
+    let text = '';
+    let kind = '';
+    if (u !== this.player && (u.kind === 'god' || u.kind === 'monster')) {
+      let best: { kind: CCKind; remaining: number } | null = null;
+      for (const a of u.combatant.cc.active) {
+        if (!CC_LABEL[a.kind]) continue;
+        const hard = !SOFT_CC.has(a.kind);
+        const bestHard = best !== null && !SOFT_CC.has(best.kind);
+        if (!best || (hard && !bestHard) || (hard === bestHard && a.remaining > best.remaining)) best = a;
+      }
+      if (best) {
+        kind = best.kind;
+        text = `${CC_LABEL[best.kind]} ${best.remaining.toFixed(1)}`;
+      }
+    }
+    if (text === b.ccText) return;
+    b.ccText = text;
+    b.cc.textContent = text;
+    b.cc.className = text ? `ch-ob-cc ch-ob-cc-on ch-cc-${kind}` : 'ch-ob-cc';
   }
 
   private makeBar(u: Unit): Bar {
@@ -510,6 +540,7 @@ export class CombatHud {
     const level = el('span', 'ch-ob-level', head);
     const name = el('span', 'ch-ob-name', head, u === this.player ? '' : u.name);
     const marks = el('span', 'ch-ob-marks', head);
+    const cc = el('span', 'ch-ob-cc', root);
     const bar = el('div', 'ch-ob-bar', root);
     const lag = el('div', 'ch-ob-lag', bar);
     const hp = el('div', 'ch-ob-hp', bar);
@@ -517,7 +548,7 @@ export class CombatHud {
     const shield = el('div', 'ch-ob-shield', bar);
     el('div', 'ch-ob-ticks', bar);
     if (u === this.target) root.classList.add('ch-ob-target');
-    const b = { el: root, hp, lag, lagPct: 1, shield, level, name, marks };
+    const b = { el: root, hp, lag, lagPct: 1, shield, level, name, marks, cc, ccText: '' };
     this.bars.set(u, b);
     return b;
   }
