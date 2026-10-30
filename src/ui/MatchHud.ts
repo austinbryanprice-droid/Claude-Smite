@@ -39,6 +39,10 @@ export class MatchHud {
   private readonly end: HTMLDivElement;
   private bannerTime = 0;
   private firstBlood = false;
+  /** Every god's kills since they last died, for streak and shutdown banners. */
+  private readonly streaks = new Map<Unit, number>();
+  /** The player's kills in quick succession (each within 10 s of the last). */
+  private multi = { count: 0, until: 0 };
   private shown = false;
   private pipEls: HTMLElement[] | null = null;
   private mapClock = 0;
@@ -108,10 +112,14 @@ export class MatchHud {
       const who = (u: Unit | null) => (u ? `<b class="mh-${this.rel(u.team)}">${u === this.player ? 'You' : u.name}</b>` : 'the jungle');
       const killer = k && k.kind === 'god' ? who(k) : k ? `<b class="mh-${this.rel(k.team)}">${k.name}</b>` : 'the jungle';
       this.pushFeed(`${killer} <span>slew</span> ${who(v)}`);
-      if (!this.firstBlood && k?.kind === 'god') {
-        this.firstBlood = true;
-        this.announce('First Blood', this.rel(k.team));
-      } else if (v === this.player) this.announce('You have been slain', 'enemy');
+      const ended = this.streaks.get(v) ?? 0;
+      this.streaks.set(v, 0);
+      if (k?.kind === 'god' && k !== v) this.streaks.set(k, (this.streaks.get(k) ?? 0) + 1);
+      const first = !this.firstBlood && k?.kind === 'god';
+      if (first) this.firstBlood = true;
+      if (k === this.player) this.celebrate(first, ended);
+      else if (first) this.announce('First Blood', this.rel(k!.team));
+      else if (v === this.player) this.announce('You have been slain', 'enemy');
     } else if (v.kind === 'monster' && (v.name === 'Treasure Wyrm' || v.name === 'Molten Colossus') && k && k.team !== 'neutral') {
       const ours = k.team === this.player.team;
       const reward = v.name === 'Treasure Wyrm' ? 'XP and favor' : "Colossus's Fury";
@@ -156,10 +164,26 @@ export class MatchHud {
     if (m.winner && !this.shown) this.showEnd(m.winner);
   }
 
-  private announce(text: string, side: 'ally' | 'enemy'): void {
+  private announce(text: string, side: 'ally' | 'enemy' | 'epic', sub = ''): void {
+    // restart the pop even when a banner is already up
+    this.banner.className = 'mh-banner';
+    void this.banner.offsetWidth;
     this.banner.className = `mh-banner show mh-${side}`;
     this.banner.textContent = text;
+    if (sub) el('small', 'mh-banner-sub', this.banner, sub);
     this.bannerTime = 3;
+  }
+
+  /** The player's own kill: the biggest thing it achieved gets the banner, the streak goes underneath. */
+  private celebrate(first: boolean, ended: number): void {
+    const now = this.match.time;
+    this.multi.count = now < this.multi.until ? this.multi.count + 1 : 1;
+    this.multi.until = now + 10;
+    const streak = this.streaks.get(this.player) ?? 0;
+    const multi = ['', '', 'Double Kill', 'Triple Kill', 'Quadruple Kill', 'Ascendant'][Math.min(5, this.multi.count)]!;
+    const title = multi || (first ? 'First Blood' : ended >= 3 ? 'Shutdown' : streak >= 7 ? 'Godlike' : streak === 5 ? 'Unstoppable' : streak === 3 ? 'Rampage' : 'Enemy Slain');
+    const sub = [ended >= 3 ? (title === 'Shutdown' ? `Ended a ${ended} kill streak` : 'Shutdown') : '', streak >= 2 ? `${streak} kill streak` : ''].filter(Boolean).join(' · ');
+    this.announce(title, 'epic', sub);
   }
 
   private pushFeed(html: string): void {
