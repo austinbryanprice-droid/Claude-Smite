@@ -477,7 +477,7 @@ function flashDecal(s: FlashShape): { shape: DecalShape; x: number; z: number; y
 }
 
 /** Number of point lights reserved for spells. Fixed so the light count never changes (which would recompile shaders). */
-const SPELL_LIGHTS = 4;
+export const SPELL_LIGHTS = 4;
 
 /**
  * Draws everything the simulation spawns: projectiles, lingering areas,

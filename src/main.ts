@@ -14,8 +14,10 @@ import { TextureLibrary } from './scene/Materials';
 import { mapFromUrl, World } from './scene/World';
 import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
+import { monsterWarmup } from './combat/MonsterViews';
+import { SPELL_LIGHTS } from './combat/Vfx';
 import { GODS, godById } from './game/gods';
-import { showStartMenu, type StartChoice } from './ui/StartMenu';
+import { savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
 import { installErrorHandlers, showFatal } from './ui/Fatal';
 import { Announcer } from './audio/Announcer';
 import { AudioEngine } from './audio/AudioEngine';
@@ -60,10 +62,58 @@ async function main(): Promise<void> {
   await textures.load((f) => hud.progress(0.05 + f * 0.5, 'Quarrying marble…'));
 
   await preloadGodAssets((f) => hud.progress(0.55 + f * 0.05, 'Summoning the gods…'));
+
+  let quality = QUALITY_PRESETS[initialQuality(isWebGPU)];
+  const resize = () => {
+    const pr = Math.min(window.devicePixelRatio * quality.resolutionScale, quality.maxPixelRatio);
+    renderer.setPixelRatio(pr);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  };
+  window.addEventListener('resize', resize);
+
+  /**
+   * Builds the map, lights it and compiles its shaders, plus every god's (and the
+   * jungle's in Conquest), so pressing Play only has the little that is left to do.
+   */
+  const prepare = async (mode: GameMode) => {
+    hud.progress(0.6, mode === 'conquest' ? 'Raising the battlefield…' : 'Raising the temple…');
+    await new Promise((r) => setTimeout(r, 0));
+    const world = new World(textures, camera, mode);
+    const post = new PostFX(renderer, world.scene, camera);
+    hud.progress(0.8, 'Lighting the braziers…');
+    resize();
+    await world.applyQuality(renderer, quality);
+    post.build(quality);
+    world.bakeLighting(renderer);
+    hud.progress(0.85, 'Preparing shaders (the first load can take a minute)…');
+    // Shaders are built per light count, so compile with the lights a match starts
+    // with: the fires nearest the spawn, plus the combat effects' spell lights.
+    world.update(0, 0, new THREE.Vector3(world.spawn.x, 0, world.spawn.z));
+    const warm = new THREE.Group();
+    for (let i = 0; i < SPELL_LIGHTS; i++) warm.add(new THREE.PointLight(0xffffff, 0, 14, 2));
+    for (const g of GODS) warm.add(new GodModel(g.id).root);
+    if (mode === 'conquest') for (const root of monsterWarmup()) warm.add(root);
+    world.actors.add(warm);
+    await renderer.compileAsync(world.scene, camera);
+    warm.removeFromParent();
+    return { world, post };
+  };
+  // Start on the mode the title screen opens with (the last one played) while
+  // the player picks a god; a different pick builds its own map after Play.
+  const guessMode = skipMenu ? null : savedMode();
+  const guess = guessMode ? prepare(guessMode) : null;
   const choice = await chosen;
-  hud.progress(0.6, choice.mode === 'conquest' ? 'Raising the battlefield…' : 'Raising the temple…');
-  await new Promise((r) => setTimeout(r, 0));
-  const world = new World(textures, camera, choice.mode);
+  const reuse = guess && guessMode === choice.mode;
+  // free the map built for the other mode; three re-uploads anything still shared
+  if (guess && !reuse) {
+    void guess.then(({ world: unused }) => {
+      unused.scene.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      unused.scene.environment?.dispose();
+    });
+  }
+  const { world, post } = reuse ? await guess : await prepare(choice.mode);
 
   const input = new Input(renderer.domElement);
   const god = new GodModel();
@@ -84,18 +134,6 @@ async function main(): Promise<void> {
     follow.update = () => {};
   }
 
-  const post = new PostFX(renderer, world.scene, camera);
-  let quality = QUALITY_PRESETS[initialQuality(isWebGPU)];
-
-  const resize = () => {
-    const pr = Math.min(window.devicePixelRatio * quality.resolutionScale, quality.maxPixelRatio);
-    renderer.setPixelRatio(pr);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-  };
-  window.addEventListener('resize', resize);
-
   applyQuality = async (name: QualityName) => {
     quality = QUALITY_PRESETS[name];
     saveQuality(name);
@@ -104,10 +142,8 @@ async function main(): Promise<void> {
     await world.applyQuality(renderer, quality);
     post.build(quality);
   };
-
-  hud.progress(0.8, 'Lighting the braziers…');
-  await applyQuality(quality.name);
-  world.bakeLighting(renderer);
+  saveQuality(quality.name);
+  hud.setQuality(quality.name);
   hud.setInfo(isWebGPU ? 'WebGPU' : 'WebGL 2');
 
   const loop = new Loop();
@@ -120,7 +156,7 @@ async function main(): Promise<void> {
   // Pre-compile shaders before revealing the scene to avoid first-frame hitches.
   player.render(0, 1);
   follow.update(1 / 60);
-  hud.progress(0.9, 'Preparing shaders (the first load can take a minute)…');
+  hud.progress(0.9, 'Preparing shaders…');
   await renderer.compileAsync(world.scene, camera);
   hud.ready();
 
