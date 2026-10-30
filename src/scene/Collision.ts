@@ -150,6 +150,9 @@ export class CollisionWorld {
    */
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxDist: number, radius = 0.3): number {
     const best = maxDist;
+    // Units can walk through camera-only blockers; when the ray starts inside
+    // one (the player is in a tower), ignore it rather than pin the camera there.
+    const blockers = this.cameraBlockers.filter((c) => !hitsAny([c], ox, oy, oz, 0));
     const steps = Math.ceil(maxDist / 0.25);
     for (let i = 1; i <= steps; i++) {
       const t = (i / steps) * maxDist;
@@ -157,7 +160,7 @@ export class CollisionWorld {
       const y = oy + dy * t;
       const z = oz + dz * t;
       if (y < this.groundAt(x, z) + 0.25) return Math.max(0, t - 0.25);
-      if (hitsAny(this.colliders, x, y, z, radius) || hitsAny(this.cameraBlockers, x, y, z, radius)) return Math.max(0, t - 0.25);
+      if (hitsAny(this.colliders, x, y, z, radius) || hitsAny(blockers, x, y, z, radius)) return Math.max(0, t - 0.25);
     }
     return best;
   }
