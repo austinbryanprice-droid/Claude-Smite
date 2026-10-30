@@ -10,6 +10,7 @@ import type { MaterialLibrary } from './Materials';
 import type { Terrain } from './Terrain';
 import type { MapContent } from './World';
 import { hypot } from '../core/math';
+import { mergeStatic } from './merge';
 
 /**
  * The ruined temple at the center of the arena: a stepped circular platform,
@@ -30,13 +31,19 @@ export class Temple implements MapContent {
     private readonly collision: CollisionWorld,
   ) {
     this.group.name = 'temple';
-    this.buildPlatform();
+    const ground = this.buildPlatform();
     this.buildColumns();
     this.relic = this.buildCenter();
     this.buildGates();
     this.buildLaneWalls();
     this.buildBraziers();
     this.buildBoulders();
+    // ~200 parts in one draw per material and one shadow caster (the
+    // materials are world-space triplanar, so baking moves no texture, and
+    // turned parts keep their light: see `turnedVariant`). The platform's
+    // steps and floor cast no shadow, so they stay apart from the marble
+    // that does.
+    mergeStatic(this.group, [this.relic.group, ...this.fires.map((f) => f.group), ...ground]);
   }
 
   private add(mesh: THREE.Mesh, cast = true): THREE.Mesh {
@@ -46,7 +53,8 @@ export class Temple implements MapContent {
     return mesh;
   }
 
-  private buildPlatform(): void {
+  /** Returns the platform's steps and floor. */
+  private buildPlatform(): THREE.Mesh[] {
     const p = Arena.plaza;
     // Stepped stylobate as one turned profile with small bevels on each nosing.
     const pts: [number, number][] = [[0, -0.6], [p.baseRadius + 0.1, -0.6]];
@@ -70,6 +78,7 @@ export class Temple implements MapContent {
       const step = Math.min(p.stepCount, Math.floor((p.baseRadius - r) / p.stepDepth) + 1);
       return step * p.stepHeight;
     });
+    return [steps, floor];
   }
 
   private buildColumns(): void {

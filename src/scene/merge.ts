@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Layers } from '../render/Layers';
+import { turnedVariant } from './Materials';
 
 /**
  * Bakes every mesh under `group` (except the `keep` subtrees) into one mesh
@@ -11,16 +12,18 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
   group.updateMatrixWorld(true);
   const inv = group.matrixWorld.clone().invert();
   const kept = new Set<THREE.Object3D>(keep);
-  const byMat = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; cast: boolean }>();
+  const byMat = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; places: THREE.Matrix4[]; cast: boolean }>();
   const remove: THREE.Mesh[] = [];
   const visit = (o: THREE.Object3D) => {
     if (kept.has(o)) return;
     const m = o as THREE.Mesh;
     if (m.isMesh && !Array.isArray(m.material) && !(m as THREE.InstancedMesh).isInstancedMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) {
-      const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(inv.clone().multiply(m.matrixWorld));
+      const place = inv.clone().multiply(m.matrixWorld);
+      const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(place);
       let e = byMat.get(m.material);
-      if (!e) byMat.set(m.material, (e = { geos: [], cast: false }));
+      if (!e) byMat.set(m.material, (e = { geos: [], places: [], cast: false }));
       e.geos.push(g);
+      e.places.push(place);
       e.cast ||= m.castShadow;
       remove.push(m);
     }
@@ -29,16 +32,18 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
   for (const c of group.children) visit(c);
   for (const m of remove) m.parent?.remove(m);
   const baked: THREE.Mesh[] = [];
-  for (const [mat, { geos, cast }] of byMat) {
+  for (const [mat, { geos, places, cast }] of byMat) {
     const withUv = geos.every((g) => g.getAttribute('uv'));
     for (const g of geos) {
       for (const name of Object.keys(g.attributes)) {
         if (name !== 'position' && name !== 'normal' && !(withUv && name === 'uv')) g.deleteAttribute(name);
       }
     }
+    const turned = places.some((p) => !lightsAsIs(p)) ? turnedVariant(mat) : null;
+    if (turned) geos.forEach((g, i) => carryTurn(g, places[i]!));
     const merged = mergeGeometries(geos, false);
     if (!merged) continue;
-    const mesh = new THREE.Mesh(merged, mat);
+    const mesh = new THREE.Mesh(merged, turned ?? mat);
     mesh.castShadow = cast;
     mesh.receiveShadow = true;
     group.add(mesh);
@@ -49,6 +54,34 @@ export function mergeStatic(group: THREE.Object3D, keep: THREE.Object3D[] = []):
     group.add(mesh);
     return mesh;
   });
+}
+
+const _q = new THREE.Quaternion();
+const _s = new THREE.Vector3();
+const _p = new THREE.Vector3();
+
+/** True when a part's placement leaves its normals' directions as they are: no rotation, even scale. */
+function lightsAsIs(place: THREE.Matrix4): boolean {
+  place.decompose(_p, _q, _s);
+  return Math.abs(_q.w) > 1 - 1e-7 && Math.abs(_s.x - _s.y) < 1e-6 * _s.x && Math.abs(_s.x - _s.z) < 1e-6 * _s.x;
+}
+
+/** Stores a part's rotation and inverse scale on its vertices, for `turnedVariant`. */
+function carryTurn(g: THREE.BufferGeometry, place: THREE.Matrix4): void {
+  place.decompose(_p, _q, _s);
+  const inv = [1 / Math.abs(_s.x), 1 / Math.abs(_s.y), 1 / Math.abs(_s.z)];
+  const top = Math.max(...inv);
+  const n = g.getAttribute('position').count;
+  const turn = new Int8Array(n * 4);
+  const scale = new Uint8Array(n * 4);
+  const q = [_q.x, _q.y, _q.z, _q.w].map((v) => Math.round(v * 127));
+  const s = inv.map((v) => Math.round((v / top) * 255));
+  for (let i = 0; i < n; i++) {
+    turn.set(q, i * 4);
+    scale.set(s, i * 4);
+  }
+  g.setAttribute('turn', new THREE.BufferAttribute(turn, 4, true));
+  g.setAttribute('turnScale', new THREE.BufferAttribute(scale, 4, true));
 }
 
 let standIn: THREE.MeshBasicNodeMaterial | null = null;
