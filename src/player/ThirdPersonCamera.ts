@@ -47,7 +47,7 @@ export class ThirdPersonCamera {
     // looking up brings the camera in so the ground doesn't swallow it
     let dist = this.distance * THREE.MathUtils.clamp(0.75 + pitch * 0.5, 0.6, 1.2);
     const hit = this.collision.raycast(focus.x, focus.y, focus.z, dir.x, dir.y, dir.z, dist, 0.35);
-    dist = Math.max(1.2, hit);
+    dist = Math.max(0.6, hit);
     // pull in fast, ease back out
     const rate = dist < this.currentDistance ? 30 : 4;
     this.currentDistance += (dist - this.currentDistance) * (1 - Math.exp(-rate * dt));

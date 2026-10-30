@@ -100,15 +100,22 @@ export class ConquestMap implements MapContent {
     let seed = 1;
     for (const t of L.towers) {
       const [ex, ez] = enemyBase(t.team);
-      place(t.id, new TowerModel(this.materials, t.team, teamMats[t.team], seed++), t.at[0], t.at[1], face(t.at[0], t.at[1], ex, ez));
+      const yaw = face(t.at[0], t.at[1], ex, ez);
+      place(t.id, new TowerModel(this.materials, t.team, teamMats[t.team], seed++), t.at[0], t.at[1], yaw);
+      // Structures are solid for the player, and the follow camera stops at
+      // them instead of ending up inside a keep looking at a wall of banner.
+      // The tower's square plinth is 5.6 m across.
+      this.collision.addBox(t.at[0], t.at[1], 2.8, 2.8, yaw);
     }
     for (const p of L.phoenixes) {
       const [ex, ez] = enemyBase(p.team);
       place(p.id, new PhoenixModel(this.materials, p.team, teamMats[p.team]), p.at[0], p.at[1], face(p.at[0], p.at[1], ex, ez));
+      this.collision.addCircle(p.at[0], p.at[1], L.radii.phoenix);
     }
     for (const b of L.bases) {
       const [ex, ez] = enemyBase(b.team);
       place(`${b.team}-titan`, new TitanModel(this.materials, b.team, teamMats[b.team]), b.titan[0], b.titan[1], face(b.titan[0], b.titan[1], ex, ez));
+      this.collision.addCircle(b.titan[0], b.titan[1], L.radii.titan);
       const f = new Fountain(this.materials, b.team, L.radii.fountain, teamMats[b.team]);
       f.group.position.set(b.fountain[0], this.terrain.heightAt(b.fountain[0], b.fountain[1]), b.fountain[1]);
       this.fountains.push(f);
