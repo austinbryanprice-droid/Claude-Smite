@@ -60,7 +60,9 @@ export function zap(r: Rand, len: number, freq: number, opts: { chaos?: number; 
   const nz = white(r);
   const hp = new Biquad('highpass', 2500, 0.7);
   const snap = new Biquad('bandpass', 3200, 0.8);
-  const body = new Biquad('bandpass', Math.min(1400, freq * 3), 1.1);
+  const body = new Biquad('bandpass', Math.min(900, freq * 1.6), 1.1);
+  // the arc's thump: each spark also kicks the air low down
+  const low = new Biquad('lowpass', 170, 0.8);
   const chaos = opts.chaos ?? 0.5;
   let phase = 0;
   let jitter = 1;
@@ -84,7 +86,7 @@ export function zap(r: Rand, len: number, freq: number, opts: { chaos?: number; 
     }
     const s = hp.run(nz()) * (opts.hiss ?? 0.5) * perc(t, 0.001, len * 0.7) * 0.6;
     const env = perc(t, 0.001, len);
-    out[i] = drive(snap.run(x) * 2.2 + body.run(x) * 1.6 + x * 0.35 + s, 1.8) * env * (opts.gain ?? 1);
+    out[i] = drive(snap.run(x) * 1.8 + body.run(x) * 2 + low.run(x) * 5 + x * 0.3 + s, 1.8) * env * (opts.gain ?? 1);
   }
   return out;
 }
