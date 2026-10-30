@@ -47,6 +47,9 @@ export class PostFX {
   ) {
     this.pipeline = new THREE.RenderPipeline(renderer);
     this.pipeline.outputColorTransform = false;
+    // Every pass that draws the scene (the main pass and each shadow cascade)
+    // would walk the whole scene graph to update matrices; once a frame is enough.
+    scene.matrixWorldAutoUpdate = false;
   }
 
   build(q: QualitySettings): void {
@@ -130,6 +133,7 @@ export class PostFX {
       this.bloomNode.radius.value = grading.bloomRadius.value;
       this.bloomNode.threshold.value = grading.bloomThreshold.value;
     }
+    this.scene.updateMatrixWorld();
     this.pipeline.render();
   }
 }
