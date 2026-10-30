@@ -107,7 +107,12 @@ export class GameAudio {
         else if (e.target.kind === 'god' && this.dist(e.target) < 30) this.heat = Math.min(1.5, this.heat + 0.05);
         if (e.target.kind === 'god' && e.target.alive && e.amount >= e.target.combatant.stats.maxHealth * 0.07) this.voice(e.target, 'hurt', 0.75, 3, 0.9);
         if (!e.ability && e.source) this.onBasicHit(e.source, e.target, e.crit);
-        else if (e.ability && e.target === me) this.engine.play('hit.flesh', { gain: 0.35, vary: 0.1 }, 2, 0.15);
+        else if (e.ability && e.target === me) this.engine.play('hit.flesh', { gain: 0.45, vary: 0.1 }, 2, 0.15);
+        // your skill landing on an enemy god or boss: a thwack that cuts through the fight, harder for bigger chunks
+        else if (e.ability && e.source === me && e.target.team !== me.team && (e.target.kind === 'god' || e.target.kind === 'monster')) {
+          const chunk = Math.min(1, e.amount / Math.max(1, e.target.combatant.stats.maxHealth) / 0.15);
+          if (e.target.kind === 'god' || chunk > 0.3) this.engine.play('hit.confirm', { gain: 0.35 + 0.35 * chunk, vary: 0.06 }, 4, 0.07);
+        }
         if (e.target.kind === 'titan' && e.target.team === me.team && this.time - this.titanWarnAt > 40) {
           this.titanWarnAt = this.time;
           this.herald.say('Our Titan is under attack!', 'bad', 3);

@@ -6,7 +6,7 @@
 
 import { ahr, Biquad, buf, crackle, dcBlock, declick, fill, glide, loopable, normalize, Osc, perc, pink, RATE, seeded as rngFor, tail, wander, white, type Rand } from './dsp';
 import {
-  chime, chirp, choir, clang, debris, filter, fire, knock, layer, puff, roar, rumble, sand, shape, shimmer, thump, twang, vowel, VOWELS, whoosh, zap,
+  chime, chirp, choir, clang, debris, filter, fire, impact, knock, layer, puff, roar, rumble, sand, shape, shimmer, thump, thunder, twang, vowel, VOWELS, whoosh, zap,
 } from './gestures';
 import { CREATURE_SOUNDS } from './creatures';
 import { VOICE_SOUNDS } from './voices';
@@ -33,10 +33,7 @@ const step = (r: Rand, tone: number, soft: number, weight: number): Float32Array
 };
 
 const hitFlesh = (r: Rand, weight: number): Float32Array =>
-  layer(
-    [thump(r, 0.22 * weight, 150, 60, { click: 0.6, noise: 0.5, drive: 2.5 }), 1],
-    [filter(puff(r, 0.12, { tone: 1600 }), 'highpass', 300), 0.6],
-  );
+  layer([impact(r, weight, { tone: 140 + r() * 30, crunch: 0.6 }), 1], [filter(puff(r, 0.12, { tone: 1600 }), 'highpass', 300), 0.35]);
 
 export const SOUNDS: Record<string, Recipe> = {
   // -- footsteps
@@ -73,14 +70,17 @@ export const SOUNDS: Record<string, Recipe> = {
   'travel.magic': { loop: true, peak: 0.35, make: (r) => shimmer(r, 1.2, 520, { rise: 1, peak: 0.5 }) },
 
   // -- hits
-  'hit.flesh': { variants: 4, peak: 0.7, make: (r) => hitFlesh(r, 1) },
-  'hit.blade': { variants: 4, peak: 0.7, make: (r) => layer([hitFlesh(r, 0.8), 0.9], [clang(r, 0.25, 2400 + r() * 900, { decay: 0.15, gain: 0.35 }), 1], [whoosh(r, 0.08, 4000, 2000, { q: 1 }), 0.6]) },
-  'hit.blunt': { variants: 4, peak: 0.85, make: (r) => layer([thump(r, 0.35, 120, 45, { click: 0.9, noise: 0.6, drive: 3 }), 1], [clang(r, 0.3, 700 + r() * 200, { decay: 0.2, gain: 0.3, bright: 0.4 }), 1]) },
-  'hit.zap': { variants: 4, peak: 0.7, make: (r) => layer([zap(r, 0.16, 520 + r() * 200, { chaos: 0.7, hiss: 1 }), 1], [thump(r, 0.16, 140, 60, { click: 0.4 }), 0.6]) },
-  'hit.sand': { variants: 3, peak: 0.65, make: (r) => layer([sand(r, 0.25, { tone: 3000, peak: 0.1 }), 1], [thump(r, 0.18, 130, 50, { click: 0.3, noise: 0.4 }), 0.7]) },
-  'hit.structure': { variants: 4, peak: 0.6, make: (r) => layer([knock(r, 0.2, 500 + r() * 300), 1], [knock(r, 0.12, 1400), 0.5, 0.01], [debris(r, 0.4, { density: 15, gain: 0.25, tone: 1300 }), 1], [thump(r, 0.3, 90, 45, { click: 0.3, noise: 0.4 }), 0.7]) },
-  'hit.crit': { variants: 2, peak: 0.6, make: (r) => layer([clang(r, 0.6, 1500, { decay: 0.4, gain: 0.6 }), 1], [whoosh(r, 0.15, 6000, 3000, { q: 0.8 }), 0.8], [thump(r, 0.25, 130, 50, { click: 0.8, drive: 2.5 }), 1]) },
-  'hit.monster': { variants: 3, peak: 0.7, make: (r) => layer([hitFlesh(r, 1.2), 1], [vowel(r, 0.2, (t) => glide(300, 200, t, 0.2), VOWELS.eh, { breath: 0.5, growl: 0.2, gain: 0.3 }), 1]) },
+  'hit.flesh': { variants: 4, peak: 0.8, make: (r) => hitFlesh(r, 1) },
+  'hit.blade': { variants: 4, peak: 0.8, make: (r) => layer([hitFlesh(r, 0.85), 1], [clang(r, 0.35, 2400 + r() * 900, { decay: 0.2, gain: 0.35 }), 0.8], [whoosh(r, 0.08, 4000, 2000, { q: 1 }), 0.5]) },
+  'hit.blunt': { variants: 4, peak: 0.9, make: (r) => layer([impact(r, 1.4, { tone: 115 + r() * 20, crunch: 0.5, sub: 1.2 }), 1], [clang(r, 0.35, 700 + r() * 200, { decay: 0.25, gain: 0.3, bright: 0.4 }), 0.7], [debris(r, 0.3, { density: 12, gain: 0.25, tone: 900 }), 0.5, 0.02]) },
+  // Zeus's basic is a small bolt: the blow, the arc's sparks and a bark of thunder
+  'hit.zap': { variants: 4, peak: 0.85, make: (r) => layer([impact(r, 0.9, { tone: 160, crunch: 0.4 }), 0.9], [zap(r, 0.18, 420 + r() * 200, { chaos: 0.8, hiss: 1 }), 0.7], [thunder(r, 0.3, { crack: 1.4, rumble: 0.15 }), 0.55]) },
+  'hit.sand': { variants: 3, peak: 0.8, make: (r) => layer([impact(r, 0.9, { tone: 135, crunch: 0.3, snap: 0.6 }), 1], [sand(r, 0.3, { tone: 3000, peak: 0.1 }), 0.8]) },
+  'hit.structure': { variants: 4, peak: 0.75, make: (r) => layer([impact(r, 1.1, { tone: 95, crunch: 0.9, sub: 0.8 }), 0.8], [knock(r, 0.2, 500 + r() * 300), 1], [knock(r, 0.12, 1400), 0.5, 0.01], [debris(r, 0.4, { density: 15, gain: 0.25, tone: 1300 }), 1]) },
+  'hit.crit': { variants: 2, peak: 0.85, make: (r) => layer([impact(r, 1.7, { tone: 120, crunch: 1, sub: 1.3, room: 0.25 }), 1], [clang(r, 0.6, 1500, { decay: 0.4, gain: 0.6 }), 0.6], [whoosh(r, 0.15, 6000, 3000, { q: 0.8 }), 0.5]) },
+  'hit.monster': { variants: 3, peak: 0.8, make: (r) => layer([hitFlesh(r, 1.2), 1], [vowel(r, 0.2, (t) => glide(300, 200, t, 0.2), VOWELS.eh, { breath: 0.5, growl: 0.2, gain: 0.3 }), 1]) },
+  // your skill connecting with an enemy god: a tight, bright thwack that cuts through a fight
+  'hit.confirm': { variants: 3, peak: 0.7, make: (r) => layer([impact(r, 0.7, { tone: 190 + r() * 20, crunch: 0.8, snap: 1.4, sub: 0.6, room: 0.1 }), 1], [knock(r, 0.05, 2900 + r() * 300), 0.4]) },
 
   // -- minions
   'minion.death': { variants: 4, peak: 0.6, make: (r) => layer([vowel(r, 0.32, (t) => glide(190 + r() * 40, 110, t, 0.3), VOWELS.oh, { breath: 0.3, gain: 0.7, env: (t) => perc(t, 0.01, 0.3) }), 0.8], [debris(r, 0.5, { density: 12, gain: 0.5, tone: 1900 }), 1, 0.12], [thump(r, 0.2, 110, 50), 0.5, 0.25]) },
@@ -88,7 +88,7 @@ export const SOUNDS: Record<string, Recipe> = {
 
   // -- structures
   'tower.shot': { variants: 2, peak: 0.85, make: (r) => towerShot(r) },
-  'tower.hit': { variants: 3, peak: 0.85, make: (r) => layer([thump(r, 0.5, 110, 40, { click: 0.6, noise: 0.8, drive: 2.5 }), 1], [zap(r, 0.25, 420, { chaos: 0.6, hiss: 1, gain: 0.5 }), 1], [filter(whoosh(r, 0.4, 3000, 600, { q: 0.6 }), 'highpass', 500), 0.5]) },
+  'tower.hit': { variants: 3, peak: 0.9, make: (r) => layer([impact(r, 1.6, { tone: 105, crunch: 0.6, sub: 1.3, room: 0.25 }), 1], [zap(r, 0.25, 420, { chaos: 0.6, hiss: 1, gain: 0.5 }), 1], [filter(whoosh(r, 0.4, 3000, 600, { q: 0.6 }), 'highpass', 500), 0.5]) },
   'titan.slam': { peak: 0.95, make: (r) => layer([thump(r, 1.4, 55, 22, { click: 0.6, noise: 1, drive: 3 }), 1], [rumble(r, 2.2, { tone: 120 }), 0.8], [debris(r, 1.6, { density: 30, gain: 0.5, tone: 700 }), 1, 0.05]) },
   'titan.windup': { peak: 0.8, make: (r) => layer([roar(r, 1.2, 55, { open: 0.7 }), 1], [rumble(r, 1.2, { tone: 90, attack: 0.6 }), 0.8]) },
   'structure.collapse': { peak: 0.95, make: (r) => layer([thump(r, 1.2, 60, 25, { click: 0.4, noise: 1, drive: 2.5 }), 1], [rumble(r, 4, { tone: 180 }), 1], [debris(r, 3.6, { density: 45, gain: 0.7, tone: 800 }), 1, 0.1], [clang(r, 2.5, 180, { decay: 1.8, gain: 0.25, bright: 0.4 }), 1, 0.05]) },
