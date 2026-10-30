@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { rng } from '../../core/random';
 import { baseOf, ConquestLayout as L } from '../../map/ConquestLayout';
 import type { QualitySettings } from '../../render/Quality';
-import type { CollisionWorld } from '../Collision';
+import type { Collider, CollisionWorld } from '../Collision';
 import { Fountain } from '../structures/Fountain';
 import { PhoenixModel } from '../structures/PhoenixModel';
 import { TitanModel } from '../structures/TitanModel';
@@ -63,6 +63,7 @@ export class ConquestMap implements MapContent {
    * map places them and calls their `update` every frame.
    */
   readonly structures = new Map<string, StructureModel>();
+  private readonly cameraBlockers: { model: StructureModel; collider: Collider; ground: number }[] = [];
   private readonly fountains: Fountain[] = [];
   private readonly props: ConquestProps;
 
@@ -101,27 +102,38 @@ export class ConquestMap implements MapContent {
     for (const t of L.towers) {
       const [ex, ez] = enemyBase(t.team);
       const yaw = face(t.at[0], t.at[1], ex, ez);
-      place(t.id, new TowerModel(this.materials, t.team, teamMats[t.team], seed++), t.at[0], t.at[1], yaw);
-      // Structures are solid for the player, and the follow camera stops at
-      // them instead of ending up inside a keep looking at a wall of banner.
-      // The tower's square plinth is 5.6 m across.
-      this.collision.addBox(t.at[0], t.at[1], 2.8, 2.8, yaw);
+      const model = new TowerModel(this.materials, t.team, teamMats[t.team], seed++);
+      place(t.id, model, t.at[0], t.at[1], yaw);
+      // the square plinth is 5.6 m across
+      this.blockCamera(model, { kind: 'box', x: t.at[0], z: t.at[1], hx: 2.8, hz: 2.8, yaw, top: Infinity });
     }
     for (const p of L.phoenixes) {
       const [ex, ez] = enemyBase(p.team);
-      place(p.id, new PhoenixModel(this.materials, p.team, teamMats[p.team]), p.at[0], p.at[1], face(p.at[0], p.at[1], ex, ez));
-      this.collision.addCircle(p.at[0], p.at[1], L.radii.phoenix);
+      const model = new PhoenixModel(this.materials, p.team, teamMats[p.team]);
+      place(p.id, model, p.at[0], p.at[1], face(p.at[0], p.at[1], ex, ez));
+      this.blockCamera(model, { kind: 'circle', x: p.at[0], z: p.at[1], r: L.radii.phoenix, top: Infinity });
     }
     for (const b of L.bases) {
       const [ex, ez] = enemyBase(b.team);
-      place(`${b.team}-titan`, new TitanModel(this.materials, b.team, teamMats[b.team]), b.titan[0], b.titan[1], face(b.titan[0], b.titan[1], ex, ez));
-      this.collision.addCircle(b.titan[0], b.titan[1], L.radii.titan);
+      const titan = new TitanModel(this.materials, b.team, teamMats[b.team]);
+      place(`${b.team}-titan`, titan, b.titan[0], b.titan[1], face(b.titan[0], b.titan[1], ex, ez));
+      this.blockCamera(titan, { kind: 'circle', x: b.titan[0], z: b.titan[1], r: L.radii.titan, top: Infinity });
       const f = new Fountain(this.materials, b.team, L.radii.fountain, teamMats[b.team]);
       f.group.position.set(b.fountain[0], this.terrain.heightAt(b.fountain[0], b.fountain[1]), b.fountain[1]);
       this.fountains.push(f);
       this.fires.push(...f.fires);
       this.group.add(f.group);
     }
+  }
+
+  /**
+   * Keeps the follow camera out of a structure, which otherwise ends up inside
+   * a keep looking at a wall of banner whenever one is behind the player.
+   * Camera only: units and shots already treat structures in the sim.
+   */
+  private blockCamera(model: StructureModel, collider: Collider): void {
+    this.collision.addCameraBlocker(collider);
+    this.cameraBlockers.push({ model, collider, ground: model.root.position.y });
   }
 
   /** Dims a buff camp's crystal while its buff is taken; camp ids come from `ConquestLayout.camps`. */
@@ -210,6 +222,7 @@ export class ConquestMap implements MapContent {
   update(dt: number, t: number, camera: THREE.Camera): void {
     for (const f of this.fires) f.update(t);
     for (const s of this.structures.values()) s.update(dt, t);
+    for (const { model, collider, ground } of this.cameraBlockers) collider.top = ground + model.solidTop;
     this.foliage.update(camera);
   }
 }

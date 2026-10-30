@@ -26,6 +26,8 @@ function feather(length: number, width: number): THREE.BufferGeometry {
 export class PhoenixModel implements StructureModel {
   readonly root = new THREE.Group();
   readonly height = 9.4;
+  /** The pedestal outlives the bird. */
+  readonly solidTop = Infinity;
   readonly muzzle = new THREE.Object3D();
   private readonly bird = new THREE.Group();
   private readonly wings: THREE.Group[] = [];
