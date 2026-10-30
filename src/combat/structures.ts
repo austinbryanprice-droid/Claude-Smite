@@ -107,7 +107,7 @@ class PillarStructure implements StructureModel {
     this.gem.position.y = top;
     this.intact.add(this.gem);
     // protective dome while shielded
-    const sm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const sm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
     const sc = new THREE.Color(TEAM[team].glow);
     const rim = mx_noise_float(positionLocal.mul(1.2).add(vec3(0, time.mul(0.6), 0))).mul(0.5).add(0.5);
     sm.colorNode = color(sc).mul(rim.mul(0.5).add(0.25)).mul(this.shieldOn);
@@ -170,7 +170,7 @@ class TitanStructure implements StructureModel {
     this.root.add(this.model.root);
     // the statue's armor in the team's metal (this instance only)
     this.model.tintMetal(TEAM[team].trim);
-    const sm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const sm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
     sm.colorNode = color(new THREE.Color(TEAM[team].glow)).mul(float(0.35)).mul(this.shieldOn);
     this.halo = new THREE.Mesh(new THREE.SphereGeometry(7, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.4, 1), sm);
     this.root.add(this.halo);

@@ -81,7 +81,9 @@ function bannerMaterial(style: TeamStyle): THREE.MeshStandardNodeMaterial {
 
 /** Translucent fresnel dome shown while a structure can't be damaged. */
 export function shieldMesh(radius: number, height: number, glow: number): THREE.Mesh {
-  const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  // (like every additive glow: with no depth writes, one pass over both faces
+  // adds up the same as three's default back-then-front pair of draws)
+  const mat =new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
   const viewDir = normalize(positionView.negate());
   const fres = pow(float(1).sub(abs(dot(normalView, viewDir))), float(2.5));
   const bands = sin(positionLocal.y.mul(5).sub(time.mul(2.5))).mul(0.5).add(0.5);

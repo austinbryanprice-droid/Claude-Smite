@@ -37,7 +37,7 @@ export class ArcView {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     this.geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     this.geometry.setAttribute('heat', new THREE.BufferAttribute(this.heat, 1));
-    const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
     const across = abs(uv().y.sub(0.5)).mul(2);
     const filament = smoothstep(1, 0.15, across);
     const heat = attribute('heat', 'float');

@@ -291,7 +291,7 @@ class Pillar {
   private readonly beam: THREE.Mesh;
 
   constructor() {
-    const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, forceSinglePass: true });
     const v = uv().y;
     const fade = float(1).sub(this.age.div(this.life)).clamp(0, 1);
     // bright at the foot, streaked as it climbs
