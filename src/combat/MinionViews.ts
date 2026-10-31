@@ -289,6 +289,30 @@ export class MinionViews {
     }
   }
 
+  /**
+   * Shows one of each part while the loader prepares shaders: the batches are
+   * hidden until the first wave, which otherwise built ~40 shaders mid-match
+   * (each a hitch on WebGL 2). Returns the undo.
+   */
+  prime(): () => void {
+    const shown: { mesh: THREE.BatchedMesh; id: number }[] = [];
+    for (const b of this.batches.values()) {
+      for (const part of PARTS) {
+        for (const { mesh, ids } of b.slots[part]) {
+          mesh.visible = true;
+          mesh.setVisibleAt(ids[0]!, true);
+          shown.push({ mesh, id: ids[0]! });
+        }
+      }
+    }
+    return () => {
+      for (const { mesh, id } of shown) {
+        mesh.setVisibleAt(id, false);
+        mesh.visible = false;
+      }
+    };
+  }
+
   hit(u: Unit, amount: number): void {
     const p = this.poses.get(u);
     if (p) p.flinchVel += Math.min(8, 2 + amount / 25);

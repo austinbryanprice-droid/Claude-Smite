@@ -23,7 +23,7 @@ import { CombatGame } from './combat/CombatGame';
 import { monsterWarmup } from './combat/MonsterViews';
 import { GODS, godById } from './game/gods';
 import { savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
-import { installErrorHandlers, showFatal } from './ui/Fatal';
+import { compatibilityMode, installErrorHandlers, showFatal } from './ui/Fatal';
 import { playIntro } from './ui/Intro';
 import { Announcer } from './audio/Announcer';
 import { AudioEngine } from './audio/AudioEngine';
@@ -205,7 +205,6 @@ async function main(): Promise<void> {
     await world.applyQuality(renderer, quality);
     post.build(quality);
   };
-  saveQuality(quality.name);
   hud.setQuality(quality.name);
   hud.setInfo(`${isWebGPU ? 'WebGPU' : 'WebGL 2'}${gpu ? ` · ${gpu}` : ''}`);
   const advice = params.has('capture') ? null : slowGpu;
@@ -252,7 +251,7 @@ async function main(): Promise<void> {
   pipelines.limitShaderBuilds(params.has('capture') ? Infinity : 4);
   hud.report = () => perf.report({
     gpu,
-    backend: isWebGPU ? 'WebGPU' : 'WebGL 2',
+    backend: isWebGPU ? 'WebGPU' : `WebGL 2 (${compatibilityMode() ? 'compatibility switch on' : 'gpu' in navigator ? 'WebGPU failed to start' : 'no WebGPU in this browser'})`,
     quality: quality.label,
     renderScale,
     autoDrops,

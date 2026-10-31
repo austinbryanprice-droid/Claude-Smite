@@ -1,6 +1,11 @@
 import './start.css';
 
-const COMPAT_KEY = 'ascendant.webgl';
+/**
+ * Renamed when WebGPU's missing god bodies were fixed (#114): players who
+ * switched to WebGL 2 because of that bug get WebGPU again, and the error card
+ * still offers the switch if WebGPU really fails on their machine.
+ */
+const COMPAT_KEY = 'ascendant.webgl.v2';
 
 /** True when the player asked for the WebGL 2 renderer (URL `?webgl` or the saved compatibility switch). */
 export function compatibilityMode(): boolean {

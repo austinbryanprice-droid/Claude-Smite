@@ -122,6 +122,8 @@ class PillarStructure implements StructureModel {
       b.rotation.set(i * 0.4, a, i * 0.2);
     }
     this.rubble.visible = false;
+    // shown while the loader prepares shaders, so a falling tower doesn't build them mid-match
+    this.rubble.userData.shownLater = true;
     this.root.add(this.intact, this.rubble);
   }
 
