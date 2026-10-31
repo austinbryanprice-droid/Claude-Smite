@@ -4,10 +4,10 @@
 
 /**
  * A god on the temple plaza unleashing its ultimate, then a skill, on an enemy
- * god, while the camera circles from the hero's front round to the side.
+ * god, the camera swinging from behind the hero's shoulder round to its side.
  */
 function hero(god, foe, opts = {}) {
-  const cfg = JSON.stringify({ god, foe, slots: opts.slots ?? [[0.15, 4], [1.25, 0]], a0: opts.a0 ?? 1.95, a1: opts.a1 ?? 1.3 });
+  const cfg = JSON.stringify({ god, foe, slots: opts.slots ?? [[0.15, 4], [1.25, 0]], a0: opts.a0 ?? 1.2, a1: opts.a1 ?? 1.6 });
   return {
     url: `map=arena&god=${god}&quality=high`,
     frames: opts.frames ?? 66,
@@ -28,9 +28,15 @@ function hero(god, foe, opts = {}) {
       const k = Math.min(1, t / 2.2);
       const e = k * k * (3 - 2 * k);
       const a = cfg.a0 + (cfg.a1 - cfg.a0) * e;
-      const r = 7.4 - 1.2 * e;
-      const cx = 0, cz = 12.2;
-      s.look(cx + Math.sin(a) * r, gy + 1.9 - 0.3 * e, cz + Math.cos(a) * r, cx, gy + 1.15, cz, 48);
+      const r = 6.6 - 0.9 * e;
+      // aim between the two gods, following leaps and blinks without a jerk
+      const mx = (hero.x + foe.x) / 2, mz = (hero.z + foe.z) / 2 + 1.2;
+      if (!s.vars.m) s.vars.m = { x: mx, z: mz };
+      const k2 = Math.min(1, dt * 3);
+      s.vars.m.x += (mx - s.vars.m.x) * k2;
+      s.vars.m.z += (mz - s.vars.m.z) * k2;
+      const cx = s.vars.m.x, cz = s.vars.m.z;
+      s.look(cx + Math.sin(a) * r, gy + 1.75 - 0.25 * e, cz + Math.cos(a) * r, cx, gy + 1.3, cz, 48);
     }`,
   };
 }
@@ -73,6 +79,7 @@ function conquest(find, opts = {}) {
         s.vars.f.z += (z - s.vars.f.z) * k;
       }
       const f = s.vars.f;
+      if (!f) return;
       const a = c.a0 + c.sweep * (t / 2.2);
       const cx = f.x + Math.sin(a) * c.r, cz = f.z + Math.cos(a) * c.r;
       const gy = s.vars.gy;
@@ -150,15 +157,25 @@ export const SHOTS = {
   cqJungle: conquest(`(us, gods) => {
     const m = us.find((u) => u.kind === 'monster' && u.radius <= 2.2 && u.combatant.health < u.combatant.stats.maxHealth * 0.85 && gods.some((g) => Math.hypot(g.x - u.x, g.z - u.z) < 7));
     return m ? [m, ...gods.filter((g) => Math.hypot(g.x - m.x, g.z - m.z) < 7)] : null;
-  }`, { skip: 10, limit: 200, frames: 66, cam: { r: 9, h: 4, a0: 0.8, sweep: 0.4 } }),
+  }`, { skip: 10, limit: 200, frames: 66, cam: { r: 11, h: 6.5, a0: -2.3, sweep: 0.4 } }),
   cqWyrm: conquest(`(us, gods) => {
     const m = us.find((u) => u.name === 'Treasure Wyrm' && u.combatant.health < u.combatant.stats.maxHealth * 0.95 && gods.filter((g) => Math.hypot(g.x - u.x, g.z - u.z) < 14).length >= 2);
     return m ? [m, m, ...gods.filter((g) => Math.hypot(g.x - m.x, g.z - m.z) < 14)] : null;
   }`, { skip: 118, limit: 600, frames: 66, cam: { r: 16, h: 6, a0: 2.0, sweep: 0.4 } }),
+  // the bots rarely take the Colossus on their own, so two level-20 gods walk up to it
   cqColossus: conquest(`(us, gods) => {
-    const m = us.find((u) => u.name === 'Molten Colossus' && u.combatant.health < u.combatant.stats.maxHealth * 0.95 && gods.filter((g) => Math.hypot(g.x - u.x, g.z - u.z) < 15).length >= 2);
-    return m ? [m, m, ...gods.filter((g) => Math.hypot(g.x - m.x, g.z - m.z) < 15)] : null;
-  }`, { skip: 298, limit: 700, frames: 66, cam: { r: 18, h: 7, a0: -0.8, sweep: 0.4 } }),
+    const m = us.find((u) => u.name === 'Molten Colossus');
+    if (!m) return null;
+    if (!s.vars.staged) {
+      s.vars.staged = true;
+      s.god('thor', 'order', m.x + 6, m.z + 4, 0, { aggression: 0.9, aggro: 25, leash: 40 });
+      s.god('zeus', 'order', m.x + 8, m.z - 4, 0, { aggression: 0.9, aggro: 25, leash: 40 });
+      s.god('anubis', 'order', m.x + 9, m.z + 1, 0, { aggression: 0.9, aggro: 25, leash: 40 });
+      return null;
+    }
+    const near = gods.filter((g) => Math.hypot(g.x - m.x, g.z - m.z) < 15);
+    return m.combatant.health < m.combatant.stats.maxHealth * 0.97 && near.length >= 2 ? [m, m, ...near] : null;
+  }`, { skip: 300, limit: 120, frames: 66, cam: { r: 18, h: 7, a0: 1.6, sweep: 0.4 } }),
   cqFight: conquest(`(us, gods) => {
     for (const a of gods) {
       const near = gods.filter((g) => Math.hypot(g.x - a.x, g.z - a.z) < 16);

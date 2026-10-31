@@ -51,7 +51,7 @@ if (full) {
     '-y', '-loglevel', 'error',
     '-framerate', String(FPS), '-i', `${dir}%05d.jpg`,
     '-i', here('out/score.wav'),
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+    '-c:v', 'libx264', '-preset', 'slow', '-crf', '27', '-tune', 'film', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
     '-vf', 'scale=1920:1080:flags=lanczos',
     '-c:a', 'aac', '-b:a', '160k',
     '-movflags', '+faststart', '-shortest',

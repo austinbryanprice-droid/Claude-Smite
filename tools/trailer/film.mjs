@@ -26,6 +26,16 @@ const names = (args[0] ?? Object.keys(SHOTS).join(',')).split(',');
 
 const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--disable-gpu-watchdog'] });
 for (const name of names) {
+  try {
+    await film(name);
+  } catch (e) {
+    // one bad shot shouldn't cost the rest of the queue
+    console.log(name, 'failed:', e.message);
+  }
+}
+await browser.close();
+
+async function film(name) {
   const shot = SHOTS[name];
   if (!shot) throw new Error(`no shot ${name}`);
   const dir = new URL(`out/frames/${name}/`, import.meta.url);
@@ -66,4 +76,3 @@ for (const name of names) {
   console.log(name, 'done', `${Math.round((Date.now() - t0) / 1000)} s`);
   await page.close();
 }
-await browser.close();
