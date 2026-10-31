@@ -269,6 +269,7 @@ export class Combatant {
       const s = statsAtLevel(this.god, this.level);
       addStats(s, this.bonuses.stats);
       for (const m of this.mods) s[m.stat] += m.amount;
+      addStats(s, this.perks);
       if (this.stacks.count > 0) {
         const k = this.hasKeystone('stackingDamage');
         if (k) s.damageBonus += k.perStackPct * this.stacks.count;
@@ -319,6 +320,14 @@ export class Combatant {
   addTimedMod(stat: StatKey, amount: number, duration: number): void {
     if (!this.alive) return;
     this.mods.push({ stat, amount, remaining: duration });
+    this.invalidate();
+  }
+
+  /** Permanent bonuses that outlive death (Temple Siege boons). */
+  private readonly perks: Partial<Stats> = {};
+
+  addPerk(stat: StatKey, amount: number): void {
+    this.perks[stat] = (this.perks[stat] ?? 0) + amount;
     this.invalidate();
   }
 

@@ -296,6 +296,12 @@ export class CombatGame implements Updatable {
     this.hud.toast('Hold the temple plaza. Press K to spend your skill points.');
   }
 
+  /** Takes a Siege boon (from its key or a click on its card). */
+  private takeBoon(i: number): void {
+    const b = this.siege?.choose(i);
+    if (b) this.hud.toast(`${b.name}: ${b.text}`);
+  }
+
   /** Temple Siege: the player and two bot allies hold the plaza against endless monster waves. */
   private startSiege(mine: GodDef): void {
     this.siege = new Siege(this.sim, godById('zeus')!);
@@ -316,7 +322,7 @@ export class CombatGame implements Updatable {
       u.combatant.mana = u.combatant.stats.maxMana;
     }
     this.warmup(this.deps.world.actors);
-    this.siegeHud = new SiegeHud(this.siege);
+    this.siegeHud = new SiegeHud(this.siege, (i) => this.takeBoon(i));
     this.plazaRing = new GroundDecal(this.groundAt);
     this.plazaRing.setStyle('zone');
     this.plazaRing.place({ type: 'ring', radius: SIEGE.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
@@ -434,6 +440,10 @@ export class CombatGame implements Updatable {
     this.updateReticle();
 
     if (input.wasPressed('KeyK')) this.toggleMenu();
+    if (this.siege?.offer) {
+      const pick = ['KeyZ', 'KeyX', 'KeyC'].findIndex((k) => input.wasPressed(k));
+      if (pick >= 0) this.takeBoon(pick);
+    }
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
 
     this.basicHeld = false;

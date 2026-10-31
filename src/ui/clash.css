@@ -27,3 +27,11 @@
 body:has(.clash-bar) .hud-panel { top: auto; bottom: 12px; right: 12px; }
 .siege-wave { min-width: 74px; font-size: 18px; font-weight: 700; color: #ffe08a; text-shadow: 0 2px 4px #000; }
 .siege .clash-num { min-width: 44px; font-size: 16px; }
+.siege-boons { position: absolute; top: 92px; left: 50%; transform: translateX(-50%); display: none; flex-wrap: wrap; justify-content: center; gap: 10px; width: min(92vw, 720px); pointer-events: auto; }
+.siege-boons.show { display: flex; animation: clash-in 0.4s ease-out; }
+.siege-boons-title { width: 100%; text-align: center; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85; text-shadow: 0 1px 3px #000; }
+.siege-boon { position: relative; flex: 1 1 180px; max-width: 220px; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 10px 40px; background: linear-gradient(180deg, rgba(40, 30, 14, 0.85), rgba(12, 9, 6, 0.92)); border: 1px solid rgba(231, 194, 122, 0.55); border-radius: 6px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); }
+.siege-boon:hover { border-color: #ffe08a; box-shadow: 0 0 14px rgba(255, 210, 110, 0.45); }
+.siege-boon kbd { position: absolute; left: 10px; top: 10px; width: 22px; height: 22px; display: grid; place-items: center; font: 700 13px system-ui, sans-serif; color: #1a120a; background: linear-gradient(180deg, #ffe7a8, #d9a23a); border-radius: 4px; }
+.siege-boon b { font-size: 15px; color: #ffe08a; }
+.siege-boon span { font: 13px system-ui, sans-serif; color: #f2e6cc; opacity: 0.9; }

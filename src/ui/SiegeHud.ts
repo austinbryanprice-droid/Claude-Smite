@@ -23,7 +23,13 @@ export class SiegeHud {
   private shownEnd = false;
   private lastText = '';
 
-  constructor(private readonly siege: Siege) {
+  private readonly cards: HTMLElement;
+  private shownOffer: unknown = null;
+
+  constructor(
+    private readonly siege: Siege,
+    onPick: (i: number) => void,
+  ) {
     this.root.className = 'clash siege';
     this.root.innerHTML = `
       <div class="clash-bar">
@@ -32,6 +38,7 @@ export class SiegeHud {
         <div class="clash-goal">CORRUPTION</div>
       </div>
       <div class="clash-state"></div>
+      <div class="siege-boons"></div>
       <div class="clash-end lost"><div class="clash-end-title">The temple falls</div><div class="clash-end-score"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
     this.wave = this.root.querySelector('.siege-wave')!;
@@ -39,6 +46,11 @@ export class SiegeHud {
     this.num = this.root.querySelector('.clash-num')!;
     this.state = this.root.querySelector('.clash-state')!;
     this.end = this.root.querySelector('.clash-end')!;
+    this.cards = this.root.querySelector('.siege-boons')!;
+    this.cards.addEventListener('click', (e) => {
+      const card = (e.target as HTMLElement).closest<HTMLElement>('.siege-boon');
+      if (card) onPick(Number(card.dataset.i));
+    });
     this.root.querySelector('.clash-again')!.addEventListener('click', () => location.reload());
   }
 
@@ -58,6 +70,16 @@ export class SiegeHud {
       this.state.textContent = text;
       this.state.dataset.state = s.phase === 'fight' && s.onPlaza ? 'chaos' : s.phase === 'break' ? 'order' : '';
     }
+    if (s.offer !== this.shownOffer) {
+      this.shownOffer = s.offer;
+      this.cards.innerHTML = s.offer
+        ? `<div class="siege-boons-title">Choose a boon for your team</div>` +
+          s.offer
+            .map((b, i) => `<div class="siege-boon" data-i="${i}"><kbd>${'ZXC'[i]}</kbd><b>${b.name}</b><span>${b.text}</span></div>`)
+            .join('')
+        : '';
+      this.cards.classList.toggle('show', !!s.offer);
+    }
     if (s.phase === 'fallen' && !this.shownEnd) {
       this.shownEnd = true;
       const held = s.held;
@@ -70,7 +92,7 @@ export class SiegeHud {
         }
       }
       this.end.querySelector('.clash-end-score')!.textContent =
-        `You held ${held} ${held === 1 ? 'wave' : 'waves'} · ${s.kills} monsters slain · ${record ? 'new best!' : `best ${this.best}`}`;
+        `You held ${held} ${held === 1 ? 'wave' : 'waves'} · ${s.kills} monsters slain · ${s.boons.length} boons · ${record ? 'new best!' : `best ${this.best}`}`;
       this.end.classList.add('show');
       document.exitPointerLock?.();
     }

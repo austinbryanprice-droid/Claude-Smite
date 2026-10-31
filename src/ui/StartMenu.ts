@@ -26,7 +26,7 @@ const STORAGE_KEY = 'ascendant.start';
 const MODES: { id: GameMode; name: string; text: string }[] = [
   { id: 'conquest', name: 'Conquest', text: '5v5 against bots. Destroy the enemy Titan to win. About 15–20 minutes.' },
   { id: 'clash', name: 'Temple Clash', text: '3v3 king of the hill. Hold the temple plaza and take down gods. First to 100. About 5 minutes.' },
-  { id: 'siege', name: 'Temple Siege', text: 'You and two bots hold the temple against endless monster waves, with a boss every fifth. How long can you last?' },
+  { id: 'siege', name: 'Temple Siege', text: 'You and two bots hold the temple against endless monster waves, with a boss every fifth. Pick a team boon after each wave. How long can you last?' },
   { id: 'arena', name: 'Training ground', text: 'Training posts and one enemy Thor. Swap gods and levels freely with K.' },
 ];
 
@@ -41,6 +41,7 @@ export const CONTROLS: [string, string][] = [
   ['1  2  3', 'Skills: press to aim, press again or click to cast, right click cancels'],
   ['4 or R', 'Ultimate (unlocks at level 5)'],
   ['B', 'Recall to the fountain'],
+  ['Z  X  C', 'Temple Siege: pick a team boon between waves'],
   ['K', 'Skills & trees: spend points; swap skills at the fountain'],
   ['Tab (hold)', 'Scoreboard'],
   ['Wheel', 'Camera zoom'],
