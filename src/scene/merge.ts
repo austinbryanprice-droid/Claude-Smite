@@ -378,3 +378,27 @@ export function mergeSkinned(root: THREE.Object3D, shared?: Map<string, THREE.Bu
     for (const m of list) m.removeFromParent();
   }
 }
+
+/**
+ * Packs a geometry's per-vertex scalars (float attributes of one value each)
+ * into one interleaved vertex buffer. WebGPU allows only 8 vertex buffers per
+ * draw, as most GPUs offer no more: past that a pipeline fails and the mesh
+ * silently never draws (WebGL allows 16, so it looks fine there). The
+ * attributes keep their names, so materials read them unchanged.
+ */
+export function packScalars(geo: THREE.BufferGeometry): void {
+  const names = Object.keys(geo.attributes).filter((n) => {
+    const a = geo.getAttribute(n) as THREE.BufferAttribute;
+    return a.itemSize === 1 && !(a as unknown as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute && !(a as THREE.InstancedBufferAttribute).isInstancedBufferAttribute && a.array instanceof Float32Array;
+  });
+  if (names.length < 2) return;
+  const count = geo.getAttribute('position').count;
+  const stride = names.length;
+  const data = new Float32Array(count * stride);
+  names.forEach((n, k) => {
+    const src = geo.getAttribute(n).array as Float32Array;
+    for (let i = 0; i < count; i++) data[i * stride + k] = src[i]!;
+  });
+  const buffer = new THREE.InterleavedBuffer(data, stride);
+  names.forEach((n, k) => geo.setAttribute(n, new THREE.InterleavedBufferAttribute(buffer, 1, k)));
+}

@@ -5,7 +5,7 @@ import { lathe } from '../Architecture';
 import type { MaterialLibrary } from '../Materials';
 import { agedMarble, clamp01, crackedStone, ease, mergeStatic, Rubble, shieldMesh, showWear, TEAM_STYLE, TeamMaterials, wearUniforms } from './common';
 import type { StructureModel } from './TowerModel';
-import { castSkinnedAsOne, mergeSkinned } from '../merge';
+import { castSkinnedAsOne, mergeSkinned, packScalars } from '../merge';
 
 /** Seconds from `attack()` to the moment the slam lands. */
 export const TITAN_HIT_DELAY = 0.35;
@@ -73,6 +73,9 @@ export class TitanModel implements StructureModel {
     });
     // skin, hair, eyes and the rest are all marble now: one draw per new material
     mergeSkinned(this.statue.root);
+    this.statue.root.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) packScalars((o as THREE.Mesh).geometry);
+    });
     this.statue.root.scale.setScalar(SCALE);
     this.body.position.y = DAIS_TOP;
     this.body.add(this.statue.root);

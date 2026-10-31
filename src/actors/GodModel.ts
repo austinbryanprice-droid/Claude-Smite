@@ -3,7 +3,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { godAsset, type GodAsset } from './gods/assets';
 import { combinedMaterials, COMBINED, godMaterials } from './gods/materials';
 import { SecondaryPhysics } from './gods/Physics';
-import { castSkinnedAsOne, mergeSkinned } from '../scene/merge';
+import { castSkinnedAsOne, mergeSkinned, packScalars } from '../scene/merge';
 import { color, luminance } from '../render/tsl';
 
 /** Locomotion input the model animates from. All values are per frame. */
@@ -331,6 +331,9 @@ export class GodModel {
       }
     }
     mergeSkinned(scene, combinedPieces);
+    scene.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) packScalars((o as THREE.Mesh).geometry);
+    });
   }
 
   /**

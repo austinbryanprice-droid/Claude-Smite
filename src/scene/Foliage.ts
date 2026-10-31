@@ -9,6 +9,7 @@ import type { TextureLibrary } from './Materials';
 import { hypot } from '../core/math';
 import { placedGeometry, placeInstances } from '../render/shared';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { packScalars } from './merge';
 
 /**
  * Procedural trees, bushes and ferns. Each species is grown on the CPU into a
@@ -227,9 +228,14 @@ function oneMesh(trunk: THREE.BufferGeometry | null, leaves: THREE.BufferGeometr
     g.setAttribute('leaf', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position!.count).fill(v), 1));
     return g;
   };
-  if (!trunk) return flag(leaves, 1);
+  // packed: with the instance data, separate scalars pass WebGPU's 8 vertex buffers
+  if (!trunk) {
+    packScalars(flag(leaves, 1));
+    return leaves;
+  }
   const g = mergeGeometries([flag(trunk, 0), flag(leaves, 1)])!;
   g.computeBoundingSphere();
+  packScalars(g);
   return g;
 }
 
