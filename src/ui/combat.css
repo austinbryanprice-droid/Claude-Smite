@@ -158,3 +158,4 @@
 .ch-charges { position: absolute; right: 4px; top: 4px; display: flex; gap: 3px; z-index: 2; }
 .ch-charges i { width: 7px; height: 7px; border-radius: 50%; background: rgba(10, 8, 6, 0.7); box-shadow: 0 0 0 1px rgba(255, 227, 163, 0.7); }
 .ch-charges i.on { background: #ffe3a3; box-shadow: 0 0 6px rgba(255, 220, 140, 0.9); }
+.ch-ob-champion .ch-ob-name { color: #ffd77a; text-shadow: 0 0 6px rgba(255, 190, 70, 0.8); font-weight: 600; }

@@ -1,4 +1,4 @@
-import { SIEGE, type Siege } from '../sim/Siege';
+import { CHAMPION, SIEGE, type Siege } from '../sim/Siege';
 import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
 import type { Unit } from '../sim/Unit';
 import { addResult } from './records';
@@ -61,9 +61,9 @@ export class SiegeHud {
     const text =
       s.phase === 'break'
         ? `Wave ${s.wave + 1}${(s.wave + 1) % 5 === 0 ? ' brings a boss' : ''} in ${Math.ceil(s.timer)}`
-        : s.onPlaza
+        : (s.onPlaza
           ? `${s.onPlaza} on the plaza! ${s.monsters.length} left`
-          : `${s.monsters.length} monsters left`;
+          : `${s.monsters.length} monsters left`) + (s.spoils > 0 ? ` · Champion's spoils: +${Math.round(CHAMPION.damage * 100)}% damage ${Math.ceil(s.spoils)}` : s.champion?.alive ? ' · a Champion leads this wave' : '');
     if (text !== this.lastText) {
       this.lastText = text;
       this.state.textContent = text;

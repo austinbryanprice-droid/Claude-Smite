@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { zeus } from '../game/gods';
 import { godUnit, monsterUnit } from './factory';
-import { BOONS, CURSES, FIRST_CURSE, monsterType, Siege, SIEGE, waveRoster } from './Siege';
+import { BOONS, CHAMPION, CURSES, FIRST_CURSE, monsterType, Siege, SIEGE, waveRoster } from './Siege';
 import { Sim, type SimTerrain } from './Sim';
 
 const flat: SimTerrain = { groundAt: () => 0, resolve: (x, z) => ({ x, z }) };
@@ -113,5 +113,28 @@ describe('Temple Siege', () => {
     const t = siege.monsters.filter((u) => monsterType(u) === 'thornback');
     expect(t.length).toBe(2 * waveRoster(1).filter((x) => x === 'thornback').length);
     expect(t[0]!.combatant.stats.maxHealth).toBeLessThan(300);
+  });
+
+  it('from wave 6 a Champion leads each wave, and killing it gives the team its spoils', () => {
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    const god = godUnit(zeus, 'order', { x: 0, z: 8, yaw: 0 });
+    sim.add(god);
+    siege.wave = CHAMPION.from - 1;
+    siege.phase = 'break';
+    siege.timer = 0.05;
+    run(sim, siege, 0.1);
+    expect(siege.wave).toBe(CHAMPION.from);
+    const champ = siege.champion!;
+    expect(champ.name).toBe('Champion Warden');
+    const plain = monsterUnit(zeus, 'warden', { x: 0, z: 0, yaw: 0 }, 0);
+    expect(champ.combatant.stats.maxHealth).toBeGreaterThan(plain.combatant.stats.maxHealth * 2);
+    god.combatant.health = 100;
+    champ.combatant.takeDamage(1e9);
+    run(sim, siege, 0.1);
+    expect(siege.champion).toBeNull();
+    expect(siege.spoils).toBeGreaterThan(CHAMPION.time - 1);
+    expect(god.combatant.stats.damageBonus).toBeCloseTo(CHAMPION.damage, 5);
+    expect(god.combatant.health).toBeGreaterThan(100);
   });
 });

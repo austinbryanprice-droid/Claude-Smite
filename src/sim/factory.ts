@@ -120,13 +120,13 @@ const MONSTERS: Record<MonsterType, { name: string; health: number; power: numbe
 };
 
 /** A jungle monster; camps that grow back later in the match are tougher. */
-export function monsterUnit(base: GodDef, type: MonsterType, at: { x: number; z: number; yaw: number }, minutes: number): Unit {
+export function monsterUnit(base: GodDef, type: MonsterType, at: { x: number; z: number; yaw: number }, minutes: number, title = ''): Unit {
   const m = MONSTERS[type];
   const grow = 1 + Math.min(1.2, minutes * 0.06);
   const def = variant(
     base,
     `monster:${type}`,
-    m.name,
+    title ? `${title} ${m.name}` : m.name,
     {
       maxHealth: Math.round(m.health * grow),
       attackPower: m.power * grow,

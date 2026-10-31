@@ -665,6 +665,18 @@ export function monsterWarmup(): THREE.Object3D[] {
 }
 
 export function createMonsterView(u: Unit): MonsterView {
+  const v = createView(u);
+  if (u.name.startsWith('Champion ')) {
+    // Temple Siege Champions stand taller than the rest of the horde (a Warden
+    // is already a giant, so it grows less and doesn't swallow the camera)
+    const k = u.tag.endsWith('warden') ? 1.18 : 1.35;
+    v.root.scale.setScalar(k);
+    v.height *= k;
+  }
+  return v;
+}
+
+function createView(u: Unit): MonsterView {
   const type = u.tag.split(':')[1];
   if (type === 'warden') return giant({ glow: BUFF_GLOW[campKindOf(u)] ?? 0xffffff, stone: mats().stone, scale: 1 });
   if (type === 'moltenColossus') return giant({ glow: 0xff6a1a, stone: lavaStone(), scale: 2.1, molten: true });

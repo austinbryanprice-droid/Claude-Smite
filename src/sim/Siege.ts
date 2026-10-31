@@ -69,6 +69,13 @@ const isBossType = (t: string): boolean => t === 'treasureWyrm' || t === 'molten
 /** A siege monster's type: the end of its tag, which reads like a jungle camp's (`siege-<kind>-<id>:<type>`). */
 export const monsterType = (u: Unit): string => u.tag.split(':').pop()!;
 
+/**
+ * From wave 6 the toughest monster of each wave (a Warden, else an Alpha) comes
+ * as a Champion: bigger and much tougher. Killing it gives the team its spoils:
+ * more damage for a while, and a heal.
+ */
+export const CHAMPION = { from: 6, health: 2.6, power: 1.3, damage: 0.12, time: 25, heal: 0.25 } as const;
+
 /** Wardens glow in the four buff colors in turn, as they do on their altars. */
 const WARDEN_GLOWS = ['might', 'wisdom', 'swiftness', 'insight'] as const;
 
@@ -183,6 +190,10 @@ export class Siege {
   /** Monsters on the plaza right now. */
   onPlaza = 0;
   kills = 0;
+  /** This wave's Champion, while it stands. */
+  champion: Unit | null = null;
+  /** Seconds left on the Champion's spoils (0 when none). */
+  spoils = 0;
   /** The three boons on offer during a break, until one is chosen. */
   offer: Boon[] | null = null;
   /** Boons taken this run, in order. */
@@ -207,10 +218,24 @@ export class Siege {
     if (e.type !== 'death') return;
     if (e.unit.kind === 'god') e.unit.combatant.respawnTimer = Math.min(e.unit.combatant.respawnTimer, SIEGE.respawn * (this.phase === 'fight' ? (this.curse?.respawn ?? 1) : 1));
     else if (e.unit.kind === 'monster' && this.monsters.includes(e.unit)) this.kills++;
+    if (e.unit === this.champion) this.claimSpoils();
+  }
+
+  /** The Champion fell: every god on the team hits harder for a while and is healed. */
+  private claimSpoils(): void {
+    this.champion = null;
+    this.spoils = CHAMPION.time;
+    for (const g of this.sim.units) {
+      if (g.kind !== 'god' || g.team === 'neutral' || !g.alive) continue;
+      const c = g.combatant;
+      c.refreshTimedMod('damageBonus', CHAMPION.damage, CHAMPION.time);
+      c.heal(c.stats.maxHealth * CHAMPION.heal);
+    }
   }
 
   step(dt: number): void {
     if (this.phase === 'fallen') return;
+    this.spoils = Math.max(0, this.spoils - dt);
     for (let i = this.monsters.length - 1; i >= 0; i--) if (!this.monsters[i]!.alive) this.monsters.splice(i, 1);
     let rate = 0;
     this.onPlaza = 0;
@@ -262,6 +287,8 @@ export class Siege {
     }
     const minutes = waveMinutes(this.wave);
     const scale = waveScale(this.wave);
+    const champ = this.wave >= CHAMPION.from ? Math.max(roster.lastIndexOf('warden'), roster.indexOf('thornbackAlpha')) : -1;
+    this.champion = null;
     roster.forEach((type, i) => {
       // early waves come from the north gate only, then from both
       const gate = SIEGE.gates[this.wave >= 3 ? i % 2 : 0]!;
@@ -269,9 +296,14 @@ export class Siege {
       const spread = isBossType(type) ? 0 : ((i >> 1) % 6) - 2.5;
       const x = gate.x + spread * 2.2;
       const z = gate.z + (gate.z > 0 ? -1 : 1) * (Math.floor(i / 12) * 2.5);
-      const u = monsterUnit(this.base, type, { x, z, yaw }, minutes);
+      const u = monsterUnit(this.base, type, { x, z, yaw }, minutes, i === champ ? 'Champion' : '');
       const c = u.combatant;
       let hp = isBossType(type) && this.wave === 5 ? FIRST_BOSS_HEALTH : scale;
+      if (i === champ) {
+        hp *= CHAMPION.health;
+        c.refreshTimedMod('attackPower', c.stats.attackPower * (CHAMPION.power - 1), 1e9);
+        this.champion = u;
+      }
       if (curse?.swarm && type === 'thornback') hp *= curse.swarm.health;
       if (hp !== 1) c.refreshTimedMod('maxHealth', c.stats.maxHealth * (hp - 1), 1e9);
       if (scale > 1) c.refreshTimedMod('attackPower', c.stats.attackPower * (scale - 1), 1e9);
