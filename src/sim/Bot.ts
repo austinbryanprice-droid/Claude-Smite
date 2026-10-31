@@ -1,4 +1,5 @@
 import { SLOT_COUNT, ULTIMATE_SLOT } from '../game/loadout';
+import { botBuildOrder } from '../game/trees';
 
 const ALL_SLOTS = Array.from({ length: SLOT_COUNT }, (_, i) => i);
 import type { Sim } from './Sim';
@@ -48,16 +49,27 @@ export class GodBot implements Brain {
   private strafe = 1;
   private strafeTimer = 0;
   private retreating = false;
+  /** Talent order: each bot commits to one playstyle tree, chosen by its id. */
+  private readonly build: string[];
 
   constructor(
     private readonly sim: Sim,
     private readonly u: Unit,
     readonly options: BotOptions,
-  ) {}
+  ) {
+    this.build = botBuildOrder(u.combatant.god, u.combatant.uid);
+  }
+
+  /** Spend any new tree points along the build, one at a time. */
+  private spendPoints(): void {
+    const c = this.u.combatant;
+    while (c.unspentPoints > 0 && this.build.some((id) => c.allocate(id) === null));
+  }
 
   update(dt: number): void {
     const { u, sim } = this;
     u.move = null;
+    if (u.combatant.unspentPoints > 0) this.spendPoints();
     if (!u.alive || u.forced) return;
     const c = u.combatant;
     const hp = c.health / c.stats.maxHealth;

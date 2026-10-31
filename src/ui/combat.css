@@ -155,3 +155,6 @@
 .ch-hitdirs { position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 3; }
 .ch-hitdir { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
 .ch-hitdir::before { content: ''; position: absolute; left: -70px; top: -150px; width: 140px; height: 60px; border-radius: 50%; border-top: 7px solid rgba(255, 50, 30, 0.95); filter: drop-shadow(0 0 6px rgba(255, 30, 10, 0.8)); }
+.ch-charges { position: absolute; right: 4px; top: 4px; display: flex; gap: 3px; z-index: 2; }
+.ch-charges i { width: 7px; height: 7px; border-radius: 50%; background: rgba(10, 8, 6, 0.7); box-shadow: 0 0 0 1px rgba(255, 227, 163, 0.7); }
+.ch-charges i.on { background: #ffe3a3; box-shadow: 0 0 6px rgba(255, 220, 140, 0.9); }

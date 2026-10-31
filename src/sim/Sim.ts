@@ -784,8 +784,29 @@ export class Sim {
       else this.revealed.delete(t);
     }
     this.passives.step();
+    this.auraTimer -= dt;
+    if (this.auraTimer <= 0) {
+      this.auraTimer = 0.5;
+      this.stepAuras();
+    }
     for (const f of this.flashes) f.age += dt;
     removeWhere(this.flashes, (f) => f.age >= f.life);
+  }
+
+  private auraTimer = 0;
+
+  /** Protection auras from tree keystones: allied gods nearby hold the bonus while they stay close. */
+  private stepAuras(): void {
+    for (const u of this.units) {
+      if (u.kind !== 'god' || !u.alive) continue;
+      const k = u.combatant.hasKeystone('auraProtection');
+      if (!k) continue;
+      for (const a of this.units) {
+        if (a.kind !== 'god' || !a.alive || a.team !== u.team || hypot(a.x - u.x, a.z - u.z) > k.radius) continue;
+        a.combatant.refreshTimedMod('physicalProtection', k.amount, 0.75);
+        a.combatant.refreshTimedMod('magicalProtection', k.amount, 0.75);
+      }
+    }
   }
 
   private stepUnit(u: Unit, dt: number): void {

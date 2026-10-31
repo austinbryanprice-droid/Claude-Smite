@@ -1,5 +1,5 @@
 import type { GodDef } from '../types';
-import { buff, cc, dmg, heal, keystone, mod, move, node, shield, slow, stat, tree } from './author';
+import { augment, buff, cc, debuff, dmg, heal, keystone, mod, move, node, shield, slow, stat, tree } from './author';
 
 export const thor: GodDef = {
   id: 'thor',
@@ -166,41 +166,41 @@ export const thor: GodDef = {
     },
   ],
   trees: [
-    tree('mjolnir', 'Mjolnir', 'Burst damage and penetration', [
+    tree('mjolnir', 'Godslayer', 'Burst assassin: stun, break armor, and every takedown hands your skills back', [
       node('might', 'Hammer Arm', 1, 3, '+8 Strength per rank.', stat('strength', 8)),
       node('edge', 'Rune Edge', 1, 3, '+3 physical penetration per rank.', stat('physicalPenFlat', 3)),
       node('crit', 'Lightning Strikes', 1, 3, '+4% critical strike chance per rank.', stat('critChance', 0.04)),
-      node('throw', 'Returning Strike', 2, 2, 'Hammer Throw deals 15% more damage per rank.', mod('thor.hammer-throw', 'damagePct', 0.15)),
-      node('slam', 'Shattering Slam', 2, 2, 'Mjolnir Slam stuns 20% longer per rank.', mod('thor.mjolnir-slam', 'ccDurationPct', 0.2)),
-      node('anvil', 'Heavier Anvil', 2, 2, 'Anvil of Dawn deals 12% more damage per rank.', mod('thor.anvil-of-dawn', 'damagePct', 0.12)),
+      node('throw', 'Heavy Hammer', 2, 1, 'Hammer Throw slows enemies by 35% on the way out and back.', augment('thor.hammer-throw', slow(0.35, 1.5))),
+      node('slam', 'Shattering Slam', 2, 1, 'Mjolnir Slam cracks armor: -15 physical protection for 4 s.', augment('thor.mjolnir-slam', debuff('physicalProtection', 15, 4))),
+      node('anvil', 'Skybreaker Leap', 2, 1, 'Tempest Leap stuns where you land for 0.6 s.', augment('thor.tempest-leap', cc('stun', 0.6))),
       node('fury', 'Thunderous Fury', 3, 3, '+4% damage per rank.', stat('damageBonus', 0.04)),
       node('break', 'Armor Breaker', 3, 3, '+4% physical penetration per rank.', stat('physicalPenPct', 0.04)),
-      node('wide', 'Wide Arc', 3, 3, 'Mjolnir Slam and Berserker Spin are 8% larger per rank.', mod('thor.mjolnir-slam', 'radiusPct', 0.08), mod('thor.berserker-spin', 'radiusPct', 0.08)),
-      node('execute', "Odin's Son", 4, 1, 'Your damage instantly kills gods below 8% health.', keystone({ type: 'executeBelow', healthPct: 0.08 })),
+      node('wide', 'Wide Arc', 3, 3, 'Mjolnir Slam, Berserker Spin and Worldbreaker are 8% larger per rank.', mod('thor.mjolnir-slam', 'radiusPct', 0.08), mod('thor.berserker-spin', 'radiusPct', 0.08), mod('thor.worldbreaker', 'radiusPct', 0.08)),
+      node('execute', "Odin's Son", 4, 1, 'God takedowns finish your skill cooldowns and make you 30% faster for 3 s.', keystone({ type: 'resetOnTakedown' }), keystone({ type: 'speedOnTakedown', pct: 0.3, duration: 3 })),
     ]),
-    tree('thunderer', 'Thunderer', 'Mobility, attack speed and ganking', [
+    tree('thunderer', 'Thunderer', 'Skirmisher: double leaps and dashes, and basic attacks that recharge them', [
       node('tempo', 'Battle Rhythm', 1, 3, '+6% attack speed per rank.', stat('bonusAttackSpeed', 0.06)),
       node('stride', 'Storm Stride', 1, 3, '+3% movement speed per rank.', stat('bonusMoveSpeed', 0.03)),
       node('haste', 'Quick Hands', 1, 3, '+3% cooldown reduction per rank.', stat('cooldownReduction', 0.03)),
-      node('leap', 'Long Leap', 2, 2, 'Tempest Leap cools down 12% faster and reaches 10% farther per rank.', mod('thor.tempest-leap', 'cooldownPct', 0.12), mod('thor.tempest-leap', 'rangePct', 0.1)),
-      node('dash', 'Blitz', 2, 2, 'Lightning Dash cools down 12% faster per rank.', mod('thor.lightning-dash', 'cooldownPct', 0.12)),
-      node('spin', 'Cyclone Spin', 2, 2, 'Berserker Spin hits once more per rank.', mod('thor.berserker-spin', 'extraHits', 1)),
+      node('leap', 'Double Leap', 2, 1, 'Tempest Leap holds two charges.', mod('thor.tempest-leap', 'charges', 1)),
+      node('dash', 'Blitz', 2, 1, 'Lightning Dash holds two charges.', mod('thor.lightning-dash', 'charges', 1)),
+      node('spin', 'Storm Fury', 2, 1, 'Call of Asgard also makes you 25% faster while it lasts.', augment('thor.call-of-asgard', buff('bonusMoveSpeed', 0.25, 5))),
       node('chain', 'Binding Chain', 3, 3, 'Storm Chain roots 12% longer per rank.', mod('thor.storm-chain', 'ccDurationPct', 0.12)),
       node('drain', 'Blood of Giants', 3, 3, '+3% lifesteal per rank.', stat('lifesteal', 0.03)),
       node('ult', 'Restless Storm', 3, 3, 'Your ultimate cools down 6% faster per rank.', mod('thor.anvil-of-dawn', 'cooldownPct', 0.06), mod('thor.worldbreaker', 'cooldownPct', 0.06), mod('thor.thunder-god', 'cooldownPct', 0.06)),
-      node('hunt', 'The Hunt', 4, 1, 'Takedowns refund 40% of your ultimate cooldown.', keystone({ type: 'ultimateRefundOnTakedown', pct: 0.4 })),
+      node('hunt', 'Thunder Rhythm', 4, 1, 'Every basic attack that lands takes 0.4 s off your skill cooldowns, and the basic after a skill hits 30% harder.', keystone({ type: 'basicsCutCooldowns', seconds: 0.4 }), keystone({ type: 'empoweredBasicAfterSkill', damagePct: 0.3 })),
     ]),
-    tree('jotun-slayer', 'Jotun-Slayer', 'Durability and sustained fights', [
+    tree('jotun-slayer', 'Jotun-Slayer', 'Brawler: drag them in, outlast them, and hit hardest when nearly dead', [
       node('vigor', 'Giant-Killer Blood', 1, 3, '+70 health per rank.', stat('maxHealth', 70)),
       node('ward', 'Iron Mail', 1, 3, '+5 physical protection per rank.', stat('physicalProtection', 5)),
       node('veil', 'Rune Ward', 1, 3, '+5 magical protection per rank.', stat('magicalProtection', 5)),
-      node('guard', 'Unbroken Guard', 2, 2, 'Thunder Guard shields 15% more per rank.', mod('thor.thunder-guard', 'damagePct', 0.15)),
-      node('asgard', 'Call of Valor', 2, 2, 'Call of Asgard cools down 12% faster per rank.', mod('thor.call-of-asgard', 'cooldownPct', 0.12)),
-      node('regen', 'Mead of Heroes', 2, 2, '+1.5 health regen per rank.', stat('healthRegen', 1.5)),
+      node('guard', 'Unbroken Guard', 2, 1, 'Thunder Guard also heals you.', augment('thor.thunder-guard', heal([50, 70, 90, 110, 130], 'strength', 0.3))),
+      node('asgard', 'Tether Chain', 2, 1, 'Storm Chain drags the enemy it roots to you.', augment('thor.storm-chain', cc('pull', 0.4))),
+      node('regen', 'Spinning Fortress', 2, 1, 'Berserker Spin cuts the damage you take by 20% while you whirl.', augment('thor.berserker-spin', buff('damageReduction', 0.2, 2))),
       node('resolve', 'Unyielding', 3, 3, '+8% crowd control reduction per rank.', stat('ccReduction', 0.08)),
       node('hide', 'Troll Hide', 3, 3, '+3% damage reduction per rank.', stat('damageReduction', 0.03)),
-      node('god', 'Endless Thunder', 3, 3, 'Thunder God deals 5% more damage and heals 5% more per rank.', mod('thor.thunder-god', 'damagePct', 0.05)),
-      node('bloodlust', 'Bloodlust', 4, 1, 'Abilities heal you for 15% of the damage they deal.', keystone({ type: 'abilityLifesteal', pct: 0.15 })),
+      node('god', 'Mead of Heroes', 3, 3, '+1.5 health regen per rank.', stat('healthRegen', 1.5)),
+      node('bloodlust', 'Berserker Blood', 4, 1, 'Below half health you deal 20% more damage and gain 15% lifesteal. Abilities heal you for 8% of their damage.', keystone({ type: 'bloodrage', belowPct: 0.5, damagePct: 0.2, lifesteal: 0.15 }), keystone({ type: 'abilityLifesteal', pct: 0.08 })),
     ]),
   ],
   defaultLoadout: ['thor.hammer-throw', 'thor.tempest-leap', 'thor.mjolnir-slam', 'thor.anvil-of-dawn'],

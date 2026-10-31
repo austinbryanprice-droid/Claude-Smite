@@ -161,6 +161,8 @@ describe('skill trees', () => {
     expect(key.requires).toBe('tempest.wide');
     for (const n of tempest.filter((n) => n.tier < 3)) while (z.allocate(n.id) === null);
     while (z.allocate('tempest.fury') === null);
+    expect(z.allocate(key.id)).toBe('tierLocked'); // 15 of 18
+    while (z.allocate('tempest.pierce') === null);
     expect(z.allocate(key.id)).toBe('needsPrereq');
     while (z.allocate('tempest.wide') === null);
     expect(z.allocate(key.id)).toBeNull();
@@ -186,7 +188,6 @@ describe('skill trees', () => {
     z.gainXp(xpFor(20));
     const base = z.resolve(0).extraBounces;
     for (const id of ['tempest.force', 'tempest.focus']) for (let i = 0; i < 3; i++) z.allocate(id);
-    z.allocate('tempest.arcs');
     z.allocate('tempest.arcs');
     expect(z.resolve(0).extraBounces).toBe(base + 2);
   });
@@ -407,5 +408,103 @@ describe('3 + 1 action bar', () => {
     expect(slotForCode('Digit4')).toBe(3);
     expect(slotForCode('KeyR')).toBe(3);
     expect(slotForCode('Digit5')).toBe(-1);
+  });
+});
+
+describe('playstyle trees', () => {
+  /** A level-20 god with the named nodes maxed, in order (tier gates permitting). */
+  function built(god: typeof zeus, ids: string[]): Combatant {
+    const c = new Combatant(god, 'order');
+    c.gainXp(xpFor(20));
+    c.gainFavor(1e9);
+    for (const id of ids) while (c.allocate(id) === null);
+    return c;
+  }
+  const path = (god: typeof zeus, tree: number, extra: string[] = []) => {
+    const t = god.trees[tree]!;
+    const key = t.nodes.find((n) => n.tier === 4)!;
+    return [...t.nodes.filter((n) => n.tier < 4 && n.id !== key.requires).map((n) => n.id), key.requires!, ...extra, key.id];
+  };
+
+  it('augments add effects to a skill', () => {
+    const z = built(zeus, ['aegis.vigor', 'aegis.ward', 'aegis.step']);
+    const step = z.loadout.indexOf('zeus.storm-step');
+    expect(z.resolve(step).hits.some((e) => e.kind === 'cc' && e.cc === 'stun')).toBe(true);
+    expect(new Combatant(zeus, 'order').resolve(step).hits.some((e) => e.kind === 'cc')).toBe(false);
+  });
+
+  it('extra charges let a skill be cast twice in a row, then recharge one at a time', () => {
+    const z = built(zeus, ['sky-father.might', 'sky-father.tempo', 'sky-father.presence']);
+    const step = z.loadout.indexOf('zeus.storm-step');
+    expect(z.chargesOf(step)).toEqual({ ready: 2, max: 2 });
+    expect(z.cast(step).ok).toBe(true);
+    expect(z.canCast(step)).toBeNull();
+    expect(z.cast(step).ok).toBe(true);
+    expect(z.canCast(step)).toBe('cooldown');
+    z.mana = z.stats.maxMana;
+    z.update(z.rechargeOf(step) + 0.01);
+    expect(z.chargesOf(step).ready).toBe(1);
+    expect(z.canCast(step)).toBeNull();
+  });
+
+  it('a full budget buys one keystone, never two', () => {
+    const z = built(zeus, [...path(zeus, 0), ...path(zeus, 1)]);
+    const keys = zeus.trees.map((t) => t.nodes.find((n) => n.tier === 4)!.id);
+    expect(z.allocation[keys[0]!]).toBe(1);
+    expect(z.allocation[keys[1]!]).toBeUndefined();
+  });
+
+  it('Living Conduit: basic attacks bring skills back sooner', () => {
+    const z = built(zeus, path(zeus, 1));
+    const enemy = new Combatant(thor, 'chaos');
+    z.cast(0);
+    const before = z.cooldownOf(0);
+    z.basicAttack(enemy, () => 1);
+    expect(z.cooldownOf(0)).toBeCloseTo(before - 0.5, 5);
+  });
+
+  it("Odin's Son: takedowns finish skill cooldowns", () => {
+    const t = built(thor, path(thor, 0));
+    t.cast(0);
+    expect(t.cooldownOf(0)).toBeGreaterThan(0);
+    t.onTakedown();
+    expect(t.cooldownOf(0)).toBe(0);
+  });
+
+  it('Berserker Blood: more damage below half health', () => {
+    const t = built(thor, path(thor, 2));
+    const calm = t.stats.damageBonus;
+    t.takeDamage(t.health * 0.7);
+    expect(t.stats.damageBonus).toBeCloseTo(calm + 0.2, 5);
+    t.heal(1e6);
+    expect(t.stats.damageBonus).toBeCloseTo(calm, 5);
+  });
+
+  it('Master of Lies: casting refunds mana', () => {
+    const l = built(loki, path(loki, 2));
+    const plain = new Combatant(loki, 'order');
+    plain.gainXp(xpFor(20));
+    l.mana = plain.mana = 200;
+    l.cast(0);
+    plain.cast(0);
+    expect(l.mana).toBeGreaterThan(plain.mana);
+  });
+});
+
+describe('bot builds', () => {
+  it('commit to one tree and reach its keystone with a full budget', async () => {
+    const { botBuildOrder } = await import('./trees');
+    for (const god of [zeus, thor, odin, loki, anubis]) {
+      for (let main = 0; main < 3; main++) {
+        const c = new Combatant(god, 'order');
+        c.gainXp(xpFor(20));
+        c.gainFavor(1e9);
+        const order = botBuildOrder(god, main);
+        while (c.unspentPoints > 0 && order.some((id) => c.allocate(id) === null));
+        expect(c.unspentPoints).toBe(0);
+        const key = god.trees[main]!.nodes.find((n) => n.tier === 4)!;
+        expect(c.allocation[key.id], `${god.name} ${main}`).toBe(1);
+      }
+    }
   });
 });

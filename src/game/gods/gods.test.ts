@@ -39,7 +39,7 @@ describe.each(GODS.map((g) => [g.name, g] as const))('%s data', (_, god) => {
     const ids = new Set(god.skills.map((s) => s.id));
     for (const tree of god.trees)
       for (const node of tree.nodes)
-        for (const e of node.effects) if (e.type === 'skill') expect(ids.has(e.skill), `${node.id} -> ${e.skill}`).toBe(true);
+        for (const e of node.effects) if (e.type === 'skill' || e.type === 'augment') expect(ids.has(e.skill), `${node.id} -> ${e.skill}`).toBe(true);
   });
 
   it('fills a 3-3-3-1 talent grid, with each keystone gated on a tier-3 node', () => {
@@ -47,6 +47,19 @@ describe.each(GODS.map((g) => [g.name, g] as const))('%s data', (_, god) => {
       expect([1, 2, 3, 4].map((t) => tree.nodes.filter((n) => n.tier === t).length)).toEqual([3, 3, 3, 1]);
       const key = tree.nodes.find((n) => n.tier === 4)!;
       expect(tree.nodes.find((n) => n.id === key.requires)?.tier).toBe(3);
+    }
+  });
+
+  it('lets a full budget buy only one keystone', () => {
+    expect(2 * (TIER_REQUIREMENT[4] + 1)).toBeGreaterThan(35);
+  });
+
+  it('gives every tree at least two nodes that change how a skill behaves', () => {
+    for (const tree of god.trees) {
+      const changes = tree.nodes.filter((n) =>
+        n.effects.some((e) => e.type === 'augment' || (e.type === 'skill' && (e.field === 'charges' || e.field === 'extraBounces'))),
+      );
+      expect(changes.length, tree.name).toBeGreaterThanOrEqual(2);
     }
   });
 

@@ -1,5 +1,5 @@
 import type { GodDef } from '../types';
-import { buff, cc, debuff, dmg, keystone, mark, mod, move, node, shield, slow, stat, tree } from './author';
+import { augment, buff, cc, debuff, dmg, keystone, mark, mod, move, node, shield, slow, stat, tree } from './author';
 
 export const zeus: GodDef = {
   id: 'zeus',
@@ -172,41 +172,41 @@ export const zeus: GodDef = {
     },
   ],
   trees: [
-    tree('tempest', 'Tempest', 'Ability damage and storm effects', [
+    tree('tempest', 'Stormcaller', 'Artillery mage: bigger storms from far away, and two Skyfall Storms', [
       node('force', 'Storm Force', 1, 3, '+8 Intelligence per rank.', stat('intelligence', 8)),
       node('focus', 'Charged Focus', 1, 3, '+3 magical penetration per rank.', stat('magicalPenFlat', 3)),
       node('flow', 'Mana Flow', 1, 3, '+30 mana and +0.3 mana regen per rank.', stat('maxMana', 30), stat('manaRegen', 0.3)),
-      node('arcs', 'Forking Arcs', 2, 2, 'Arc Bolt bounces once more per rank.', mod('zeus.arc-bolt', 'extraBounces', 1)),
-      node('downpour', 'Downpour', 2, 2, 'Skyfall Storm hits once more per rank.', mod('zeus.skyfall-storm', 'extraHits', 1)),
-      node('orb', 'Living Orb', 2, 2, 'Ball Lightning deals 12% more damage per rank.', mod('zeus.ball-lightning', 'damagePct', 0.12)),
+      node('arcs', 'Forking Arcs', 2, 1, 'Arc Bolt bounces 2 more times and leaves an extra Charge on each enemy.', mod('zeus.arc-bolt', 'extraBounces', 2), augment('zeus.arc-bolt', mark('charge', 5, 1))),
+      node('downpour', 'Eye of the Storm', 2, 1, 'Cyclone roots enemies caught in it for 0.6 s.', augment('zeus.cyclone', cc('root', 0.6))),
+      node('orb', 'Living Orb', 2, 1, 'Ball Lightning lives twice as long and slows what it shocks.', mod('zeus.ball-lightning', 'extraHits', 6), augment('zeus.ball-lightning', slow(0.2, 1))),
       node('fury', 'Fury of the Sky', 3, 3, '+4% damage per rank.', stat('damageBonus', 0.04)),
-      node('wide', 'Wide Front', 3, 3, 'Skyfall Storm and Cyclone are 8% larger per rank.', mod('zeus.skyfall-storm', 'radiusPct', 0.08), mod('zeus.cyclone', 'radiusPct', 0.08)),
+      node('wide', 'Wide Front', 3, 3, 'Skyfall Storm, Cyclone and Ball Lightning are 8% larger and reach 8% farther per rank.', mod('zeus.skyfall-storm', 'radiusPct', 0.08), mod('zeus.cyclone', 'radiusPct', 0.08), mod('zeus.ball-lightning', 'radiusPct', 0.08), mod('zeus.skyfall-storm', 'rangePct', 0.08), mod('zeus.cyclone', 'rangePct', 0.08)),
       node('pierce', 'Piercing Light', 3, 3, '+4% magical penetration per rank.', stat('magicalPenPct', 0.04)),
-      node('wrath', 'Wrath of Olympus', 4, 1, 'Ability hits stack +3% damage for 6 s, up to 5 times.', keystone({ type: 'stackingDamage', perStackPct: 0.03, maxStacks: 5, duration: 6 })),
+      node('wrath', 'Twin Tempests', 4, 1, 'Skyfall Storm holds two charges. Ability hits stack +3% damage for 6 s, up to 5 times.', mod('zeus.skyfall-storm', 'charges', 1), keystone({ type: 'stackingDamage', perStackPct: 0.03, maxStacks: 5, duration: 6 })),
     ]),
-    tree('sky-father', 'Sky Father', 'Basic attacks, attack speed and Charges', [
+    tree('sky-father', 'Thunder Duelist', 'Up close with basic attacks: every hit you land brings your skills back sooner', [
       node('might', 'Thunder Arm', 1, 3, '+6 Strength per rank.', stat('strength', 6)),
       node('tempo', 'Quickened Strikes', 1, 3, '+6% attack speed per rank.', stat('bonusAttackSpeed', 0.06)),
       node('reach', 'Far Sight', 1, 3, '+3% critical strike chance per rank.', stat('critChance', 0.03)),
-      node('presence', 'Rolling Thunder', 2, 2, 'Thundering Presence costs 15% less and cools down 10% faster per rank.', mod('zeus.thundering-presence', 'costPct', 0.15), mod('zeus.thundering-presence', 'cooldownPct', 0.1)),
-      node('discharge', 'Overload', 2, 2, 'Static Discharge stuns 20% longer per rank.', mod('zeus.static-discharge', 'ccDurationPct', 0.2)),
-      node('wrath', 'Kingly Wrath', 2, 2, 'Wrath Mark deals 15% more damage per rank.', mod('zeus.wrath-mark', 'damagePct', 0.15)),
+      node('presence', 'Twin Steps', 2, 1, 'Storm Step holds two charges: blink in, then blink out.', mod('zeus.storm-step', 'charges', 1)),
+      node('discharge', 'Crackling Presence', 2, 1, 'Thundering Presence also gives 12% lifesteal while it lasts.', augment('zeus.thundering-presence', buff('lifesteal', 0.12, 4))),
+      node('wrath', 'Overload', 2, 1, 'Static Discharge stuns 40% longer and slows everything it touches.', mod('zeus.static-discharge', 'ccDurationPct', 0.4), augment('zeus.static-discharge', slow(0.3, 1.5))),
       node('drain', 'Divine Drain', 3, 3, '+3% lifesteal per rank.', stat('lifesteal', 0.03)),
       node('swift', 'Swift Judgment', 3, 3, '+3% movement speed per rank.', stat('bonusMoveSpeed', 0.03)),
       node('pen', 'Breaking Point', 3, 3, '+3 magical penetration per rank.', stat('magicalPenFlat', 3)),
-      node('verdict', 'Final Verdict', 4, 1, 'After casting a skill, your next basic attack deals 40% more damage.', keystone({ type: 'empoweredBasicAfterSkill', damagePct: 0.4 })),
+      node('verdict', 'Living Conduit', 4, 1, 'Every basic attack that lands takes 0.5 s off your skill cooldowns, and the basic after a skill hits 30% harder.', keystone({ type: 'basicsCutCooldowns', seconds: 0.5 }), keystone({ type: 'empoweredBasicAfterSkill', damagePct: 0.3 })),
     ]),
-    tree('aegis', 'Olympian Aegis', 'Health, protections and sustain', [
+    tree('aegis', 'Olympian Aegis', 'Front-line storm: stun on engage, shield the team, and refuse to fall', [
       node('vigor', 'Titan Blood', 1, 3, '+60 health per rank.', stat('maxHealth', 60)),
       node('ward', 'Bronze Ward', 1, 3, '+5 physical protection per rank.', stat('physicalProtection', 5)),
       node('veil', 'Storm Veil', 1, 3, '+5 magical protection per rank.', stat('magicalProtection', 5)),
-      node('clouds', 'Thick Clouds', 2, 2, 'Aegis of Clouds shields 15% more per rank.', mod('zeus.aegis-of-clouds', 'damagePct', 0.15), mod('zeus.aegis-of-clouds', 'cooldownPct', 0.1)),
-      node('step', 'Lightning Reflexes', 2, 2, 'Storm Step cools down 12% faster per rank.', mod('zeus.storm-step', 'cooldownPct', 0.12)),
-      node('regen', 'Ambrosia', 2, 2, '+1.5 health regen per rank.', stat('healthRegen', 1.5)),
+      node('clouds', 'Storm Front', 2, 1, 'Aegis of Clouds also makes you 25% faster for 3 s.', augment('zeus.aegis-of-clouds', buff('bonusMoveSpeed', 0.25, 3))),
+      node('step', 'Thunderclap Step', 2, 1, 'Storm Step stuns every enemy you blink through for 0.6 s.', augment('zeus.storm-step', cc('stun', 0.6))),
+      node('regen', 'Silencing Mark', 2, 1, 'Wrath Mark also silences for 1 s.', augment('zeus.wrath-mark', cc('silence', 1))),
       node('resolve', 'Immortal Resolve', 3, 3, '+8% crowd control reduction per rank.', stat('ccReduction', 0.08)),
       node('haste', 'Divine Haste', 3, 3, '+4% cooldown reduction per rank.', stat('cooldownReduction', 0.04)),
       node('hide', 'Hardened Hide', 3, 3, '+3% damage reduction per rank.', stat('damageReduction', 0.03)),
-      node('throne', 'Unshakable Throne', 4, 1, 'When hard crowd controlled, gain a shield of 15% max health (20 s cooldown).', keystone({ type: 'shieldOnHardCC', maxHealthPct: 0.15, cooldown: 20 })),
+      node('throne', 'Unshakable Throne', 4, 1, 'When hard crowd controlled, gain a shield of 15% max health (20 s cooldown). Allied gods within 8 m gain 12 protections.', keystone({ type: 'shieldOnHardCC', maxHealthPct: 0.15, cooldown: 20 }), keystone({ type: 'auraProtection', amount: 12, radius: 8 })),
     ]),
   ],
   defaultLoadout: ['zeus.arc-bolt', 'zeus.static-discharge', 'zeus.storm-step', 'zeus.skyfall-storm'],

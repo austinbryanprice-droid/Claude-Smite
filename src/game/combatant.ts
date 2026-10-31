@@ -70,6 +70,8 @@ export interface CombatantNet {
   respawnTimer: number;
   basicCooldown: number;
   cooldowns: [string, number][];
+  /** Charges in use per skill id, for skills with extra charges. */
+  spent?: [string, number][];
   cc: ActiveCC[];
   mods: TimedMod[];
   shields: Shield[];
@@ -99,12 +101,18 @@ export class Combatant {
    * skill out and back in at the fountain never resets its cooldown.
    */
   private cooldowns = new Map<string, number>();
+  /** Charges in use per skill id (skills with extra charges from a tree). */
+  private spent = new Map<string, number>();
+  /** The cooldown each charge takes to come back, per skill id. */
+  private chargeCd = new Map<string, number>();
+  /** Below the Bloodrage keystone's health line. */
+  private raging = false;
   basicCooldown = 0;
   readonly cc = new CCState();
 
   private mods: TimedMod[] = [];
   private shields: Shield[] = [];
-  private bonuses: TreeBonuses = { stats: {}, skills: {}, keystones: [] };
+  private bonuses: TreeBonuses = { stats: {}, skills: {}, keystones: [], augments: {} };
   private cached: Stats | null = null;
   private stacks = { count: 0, remaining: 0 };
   private hardCCShieldCooldown = 0;
@@ -210,6 +218,7 @@ export class Combatant {
       respawnTimer: this.respawnTimer,
       basicCooldown: this.basicCooldown,
       cooldowns: [...this.cooldowns],
+      spent: [...this.spent],
       cc: this.cc.active,
       mods: this.mods,
       shields: this.shields,
@@ -227,6 +236,7 @@ export class Combatant {
     this.respawnTimer = s.respawnTimer;
     this.basicCooldown = s.basicCooldown;
     this.cooldowns = new Map(s.cooldowns);
+    this.spent = new Map(s.spent ?? []);
     this.cc.active = s.cc;
     this.mods = s.mods;
     this.shields = s.shields;
@@ -244,6 +254,7 @@ export class Combatant {
     this.allocation = alloc;
     this.bonuses = treeBonuses(this.trees, alloc);
     this.growResources(before);
+    this.checkRage();
   }
 
   hasKeystone<T extends Keystone['type']>(type: T): Extract<Keystone, { type: T }> | undefined {
@@ -261,6 +272,13 @@ export class Combatant {
       if (this.stacks.count > 0) {
         const k = this.hasKeystone('stackingDamage');
         if (k) s.damageBonus += k.perStackPct * this.stacks.count;
+      }
+      if (this.raging) {
+        const k = this.hasKeystone('bloodrage');
+        if (k) {
+          s.damageBonus += k.damagePct;
+          s.lifesteal += k.lifesteal;
+        }
       }
       this.cached = finalizeStats(s);
     }
@@ -335,7 +353,57 @@ export class Combatant {
   /** Seconds until the skill in a slot is ready. */
   cooldownOf(slot: number): number {
     const id = this.loadout[slot];
+    if (id === undefined) return 0;
+    const max = this.maxCharges(id);
+    if (max > 1 && (this.spent.get(id) ?? 0) < max) return 0;
+    return this.cooldowns.get(id) ?? 0;
+  }
+
+  /** Seconds until the next charge of a slot's skill comes back, even while others are ready. */
+  rechargeOf(slot: number): number {
+    const id = this.loadout[slot];
     return id === undefined ? 0 : (this.cooldowns.get(id) ?? 0);
+  }
+
+  maxCharges(skillId: string): number {
+    return 1 + Math.max(0, Math.floor(this.bonuses.skills[skillId]?.charges ?? 0));
+  }
+
+  /** Charges ready and the most it holds, for skills a tree gave extra charges. */
+  chargesOf(slot: number): { ready: number; max: number } {
+    const id = this.loadout[slot];
+    if (id === undefined) return { ready: 0, max: 1 };
+    const max = this.maxCharges(id);
+    if (max === 1) return { ready: this.cooldowns.has(id) ? 0 : 1, max };
+    return { ready: Math.max(0, max - (this.spent.get(id) ?? 0)), max };
+  }
+
+  /** Take seconds off a running cooldown; a finished one brings back a charge. */
+  private tickCooldown(id: string, dt: number): void {
+    const c = this.cooldowns.get(id);
+    if (c === undefined) return;
+    if (c > dt) {
+      this.cooldowns.set(id, c - dt);
+      return;
+    }
+    this.cooldowns.delete(id);
+    const spent = (this.spent.get(id) ?? 0) - 1;
+    if (spent > 0) {
+      this.spent.set(id, spent);
+      this.cooldowns.set(id, this.chargeCd.get(id) ?? 0);
+    } else this.spent.delete(id);
+  }
+
+  /** Take seconds (Infinity: all of it) off every equipped regular skill's cooldown. */
+  cutRegularCooldowns(seconds: number): void {
+    for (let slot = 0; slot < this.loadout.length; slot++) {
+      const skill = this.skillInSlot(slot);
+      if (!skill || skill.kind !== 'regular') continue;
+      if (seconds === Infinity) {
+        this.cooldowns.delete(skill.id);
+        this.spent.delete(skill.id);
+      } else this.tickCooldown(skill.id, seconds);
+    }
   }
 
   resolveCost(slot: number): number {
@@ -357,9 +425,21 @@ export class Combatant {
   cast(slot: number): { ok: true; cast: ResolvedSkill } | { ok: false; error: CastError } {
     const error = this.canCast(slot);
     if (error) return { ok: false, error };
-    this.mana -= this.resolveCost(slot);
-    this.cooldowns.set(this.loadout[slot]!, this.resolveCooldown(slot));
+    const cost = this.resolveCost(slot);
+    this.mana -= cost;
+    const id = this.loadout[slot]!;
+    const cd = this.resolveCooldown(slot);
+    if (this.maxCharges(id) > 1) {
+      this.spent.set(id, (this.spent.get(id) ?? 0) + 1);
+      this.chargeCd.set(id, cd);
+      if (!this.cooldowns.has(id)) this.cooldowns.set(id, cd);
+    } else this.cooldowns.set(id, cd);
     if (this.hasKeystone('empoweredBasicAfterSkill')) this.empoweredBasic = true;
+    const surge = this.hasKeystone('manaSurge');
+    if (surge) {
+      this.mana = Math.min(this.stats.maxMana, this.mana + cost * surge.refundPct);
+      this.heal(this.stats.maxHealth * surge.healMaxHealthPct);
+    }
     return { ok: true, cast: this.resolve(slot) };
   }
 
@@ -369,7 +449,8 @@ export class Combatant {
     const rank = Math.max(1, this.skillRankInSlot(slot));
     const mods = this.bonuses.skills[skill.id] ?? emptySkillMods();
     const s = this.stats;
-    const hits: ResolvedEffect[] = skill.effects.map((e): ResolvedEffect => {
+    const effects = [...skill.effects, ...(this.bonuses.augments[skill.id] ?? [])];
+    const hits: ResolvedEffect[] = effects.map((e): ResolvedEffect => {
       switch (e.kind) {
         case 'damage':
           return {
@@ -487,7 +568,10 @@ export class Combatant {
 
   landBasic(target: Combatant, shot: BasicShot): DamageResult | null {
     if (target.team === this.team || !target.alive) return null;
-    return this.dealDamage(target, shot.raw, this.god.basicAttack.damageType, false, shot.crit);
+    const result = this.dealDamage(target, shot.raw, this.god.basicAttack.damageType, false, shot.crit);
+    const cut = this.hasKeystone('basicsCutCooldowns');
+    if (cut) this.cutRegularCooldowns(cut.seconds);
+    return result;
   }
 
   dealDamage(target: Combatant, raw: number, type: DamageType, fromAbility: boolean, crit = false): DamageResult {
@@ -525,6 +609,7 @@ export class Combatant {
     this.shields = this.shields.filter((s) => s.amount > 0);
     this.health -= rest;
     this.cc.onDamaged();
+    this.checkRage();
     if (this.health <= 0) {
       this.die();
       source?.onTakedown();
@@ -536,6 +621,17 @@ export class Combatant {
   heal(amount: number): void {
     if (!this.alive) return;
     this.health = Math.min(this.stats.maxHealth, this.health + amount);
+    this.checkRage();
+  }
+
+  /** Bloodrage turns on and off as health crosses its line. */
+  private checkRage(): void {
+    const k = this.hasKeystone('bloodrage');
+    const raging = !!k && this.alive && this.health < this.stats.maxHealth * k.belowPct;
+    if (raging !== this.raging) {
+      this.raging = raging;
+      this.invalidate();
+    }
   }
 
   receiveCC(kind: CCKind, duration: number, magnitude = 0, source?: string): number {
@@ -558,10 +654,12 @@ export class Combatant {
     }
     const speed = this.hasKeystone('speedOnTakedown');
     if (speed) this.addTimedMod('bonusMoveSpeed', speed.pct, speed.duration);
+    if (this.hasKeystone('resetOnTakedown')) this.cutRegularCooldowns(Infinity);
   }
 
   private die(): void {
     this.alive = false;
+    this.raging = false;
     this.health = 0;
     this.shields = [];
     this.mods = [];
@@ -585,10 +683,7 @@ export class Combatant {
 
   update(dt: number): void {
     // Cooldowns keep running while dead so a respawn doesn't extend them.
-    for (const [id, c] of this.cooldowns) {
-      if (c <= dt) this.cooldowns.delete(id);
-      else this.cooldowns.set(id, c - dt);
-    }
+    for (const id of [...this.cooldowns.keys()]) this.tickCooldown(id, dt);
     if (!this.alive) {
       this.respawnTimer -= dt;
       if (this.respawnTimer <= 0) this.respawn();

@@ -156,7 +156,9 @@ export type SkillModField =
   | 'rangePct'
   | 'ccDurationPct'
   | 'extraHits'
-  | 'extraBounces';
+  | 'extraBounces'
+  /** Extra charges: the skill can be cast this many more times back to back. */
+  | 'charges';
 
 export type Keystone =
   | { type: 'ultimateRefundOnTakedown'; pct: number }
@@ -166,12 +168,22 @@ export type Keystone =
   | { type: 'empoweredBasicAfterSkill'; damagePct: number }
   | { type: 'stackingDamage'; perStackPct: number; maxStacks: number; duration: number }
   | { type: 'auraProtection'; amount: number; radius: number }
-  | { type: 'speedOnTakedown'; pct: number; duration: number };
+  | { type: 'speedOnTakedown'; pct: number; duration: number }
+  /** Each basic attack that lands takes this many seconds off your regular skills' cooldowns. */
+  | { type: 'basicsCutCooldowns'; seconds: number }
+  /** A god takedown (kill or assist) finishes your regular skills' cooldowns. */
+  | { type: 'resetOnTakedown' }
+  /** Below this health fraction you deal more damage and gain lifesteal. */
+  | { type: 'bloodrage'; belowPct: number; damagePct: number; lifesteal: number }
+  /** Each skill cast restores this fraction of its mana cost and heals you for a share of max health. */
+  | { type: 'manaSurge'; refundPct: number; healMaxHealthPct: number };
 
 export type NodeEffect =
   | { type: 'stat'; stat: StatKey; perRank: number }
   | { type: 'skill'; skill: string; field: SkillModField; perRank: number }
-  | { type: 'keystone'; keystone: Keystone };
+  | { type: 'keystone'; keystone: Keystone }
+  /** Changes what a skill does: these effects are added to every cast of it. */
+  | { type: 'augment'; skill: string; effects: readonly Effect[] };
 
 export interface TreeNode {
   id: string;

@@ -89,6 +89,8 @@ export const mod = (skill: string, field: SkillModField, perRank: number): NodeE
   perRank,
 });
 export const keystone = (k: Keystone): NodeEffect => ({ type: 'keystone', keystone: k });
+/** Add effects to a skill: the node changes what the skill does, not just its numbers. */
+export const augment = (skill: string, ...effects: Effect[]): NodeEffect => ({ type: 'augment', skill, effects });
 
 export function node(
   id: string,

@@ -180,6 +180,10 @@ const KEYSTONE_GLYPHS: Record<Keystone['type'], Glyph> = {
   abilityLifesteal: 'drop',
   speedOnTakedown: 'wings',
   ultimateRefundOnTakedown: 'hourglass',
+  basicsCutCooldowns: 'spin',
+  resetOnTakedown: 'skull',
+  bloodrage: 'heart',
+  manaSurge: 'orb',
 };
 
 /**
@@ -188,7 +192,7 @@ const KEYSTONE_GLYPHS: Record<Keystone['type'], Glyph> = {
  */
 export function talentIcon(godId: string, node: TreeNode, skills: readonly SkillDef[], accent: string): string {
   const first = node.effects[0];
-  if (first?.type === 'skill') {
+  if (first?.type === 'skill' || first?.type === 'augment') {
     const skill = skills.find((s) => s.id === first.skill);
     if (skill) return skillIcon(godId, { ...skill, kind: 'regular' });
   }

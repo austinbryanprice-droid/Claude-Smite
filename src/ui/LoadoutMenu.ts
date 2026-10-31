@@ -224,11 +224,13 @@ export class LoadoutMenu {
       r === n.maxRank ? 'max' : '',
       learnable ? 'learnable' : '',
       tier === 4 ? 'key' : '',
+      changesSkill(n) ? 'aug' : '',
       n.requires ? `arrow${prereqMet(c.trees, c.allocation, n) ? ' arrow-on' : ''}` : '',
     ].join(' ');
     return `<button class="${cls}" style="grid-row:${tier};grid-column:${col}" data-act="node" data-v="${n.id}" data-tip="n:${n.id}" aria-label="${n.name} ${r} of ${n.maxRank}">
       ${talentIcon(c.god.id, n, c.god.skills, TREE_ACCENTS[c.god.trees.indexOf(tree)] ?? TREE_ACCENTS[0])}
       <span class="lm-rank">${r}/${n.maxRank}</span>
+      ${changesSkill(n) && tier !== 4 ? '<span class="lm-aug" title="Changes how the skill works">&#10022;</span>' : ''}
     </button>`;
   }
 
@@ -306,4 +308,9 @@ export class LoadoutMenu {
         : `<div class="lm-tip-hint">${c.inBase ? `Click to equip in ${SLOT_KEYS[this.selectedSlot]}` : 'Swap at the fountain'}</div>`,
     ].join('');
   }
+}
+
+/** A talent that changes what a skill does (new effects or charges), not just its numbers. */
+function changesSkill(n: TreeNode): boolean {
+  return n.effects.some((e) => e.type === 'augment' || (e.type === 'skill' && e.field === 'charges'));
 }
