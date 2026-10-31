@@ -63,7 +63,8 @@ export class SiegeHud {
         ? `Wave ${s.wave + 1}${(s.wave + 1) % 5 === 0 ? ' brings a boss' : ''} in ${Math.ceil(s.timer)}`
         : (s.onPlaza
           ? `${s.onPlaza} on the plaza! ${s.monsters.length} left`
-          : `${s.monsters.length} monsters left`) + (s.spoils > 0 ? ` · Champion's spoils: +${Math.round(CHAMPION.damage * 100)}% damage ${Math.ceil(s.spoils)}` : s.champion?.alive ? ' · a Champion leads this wave' : '');
+          : `${s.monsters.length} monsters left`) + (s.spoils > 0 ? ` · Champion's spoils: +${Math.round(CHAMPION.damage * 100)}% damage ${Math.ceil(s.spoils)}` : s.champion?.alive ? ' · a Champion leads this wave' : '') +
+          (s.gilded ? ` · catch the Gilded Thornback! ${Math.ceil(s.gildedLeft)}` : '');
     if (text !== this.lastText) {
       this.lastText = text;
       this.state.textContent = text;
@@ -78,7 +79,7 @@ export class SiegeHud {
     if (s.offer !== this.shownOffer) {
       this.shownOffer = s.offer;
       this.cards.innerHTML = s.offer
-        ? `<div class="siege-boons-title">Choose a boon for your team</div>` +
+        ? `<div class="siege-boons-title">Choose a boon for your team${s.bonusBoons > 0 ? ' · the Gilded Thornback brings another' : ''}</div>` +
           s.offer
             .map((b, i) => `<div class="siege-boon" data-i="${i}"><kbd>${'ZXC'[i]}</kbd><b>${b.name}</b><span>${b.text}</span></div>`)
             .join('')

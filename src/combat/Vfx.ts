@@ -900,7 +900,7 @@ export class CombatVfx {
 /** Wardens burn in their buff's color; everything else uses its usual palette. */
 function monsterPalette(u: Unit): GodPalette {
   const p = paletteOf(u);
-  if (u.tag.endsWith('treasureWyrm')) return { ...p, vfx: 0xffc83a, core: 0xfff6d0 };
+  if (u.tag.endsWith('treasureWyrm') || u.tag.endsWith('gildedThornback')) return { ...p, vfx: 0xffc83a, core: 0xfff6d0 };
   if (u.tag.endsWith('moltenColossus')) return { ...p, vfx: 0xff4a10, core: 0xffd080 };
   if (u.tag.endsWith('thornSpitter')) return { ...p, vfx: ACID, core: 0xe8ffc0 };
   if (u.kind !== 'monster' || !u.tag.endsWith('warden')) return p;

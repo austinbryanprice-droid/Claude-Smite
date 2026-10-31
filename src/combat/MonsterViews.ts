@@ -26,6 +26,7 @@ import { hypot } from '../core/math';
 export const BUFF_GLOW: Partial<Record<string, number>> = { ...BUFF_COLOR, fury: 0xff6a1a };
 
 const AMBER = 0xffa53a;
+export const GILDED_GLOW = 0xffd25a;
 /** The Thornspitter's acid: its sacs, eyes and spit. */
 export const ACID = 0x8cff3a;
 
@@ -61,6 +62,8 @@ function buildShared() {
   bone.colorNode = mix(vec3(0.82, 0.76, 0.6), vec3(1, 0.62, 0.22), tip);
   bone.emissiveNode = vec3(1, 0.45, 0.1).mul(tip.mul(tip).mul(2.2));
   const hoof = new THREE.MeshStandardNodeMaterial({ color: 0x1b1410, roughness: 0.5 });
+  // the Gilded Thornback's coat: the same plain material as the hooves, so no new shader
+  const gold = new THREE.MeshStandardNodeMaterial({ color: 0xe0a93a, metalness: 1, roughness: 0.3 });
   // weathered stone with moss on every upward face
   const stone = new THREE.MeshStandardNodeMaterial({ roughness: 0.88 });
   // object space, so the stone's pattern stays on the Warden as it walks and swings
@@ -69,7 +72,7 @@ function buildShared() {
   const rockCol = mix(vec3(0.16, 0.16, 0.19), vec3(0.38, 0.35, 0.32), grain);
   stone.colorNode = mix(rockCol, mix(vec3(0.17, 0.3, 0.07), vec3(0.32, 0.46, 0.12), n(9)), moss.mul(0.92));
   stone.roughnessNode = float(0.95).sub(moss.mul(0.1));
-  return { fur, hide, bone, hoof, stone };
+  return { fur, hide, bone, hoof, stone, gold };
 }
 
 function mats() {
@@ -143,11 +146,13 @@ function pivot(parent: THREE.Object3D, x: number, y: number, z: number): THREE.G
 // ---------------------------------------------------------------------------
 // Thornback
 
-function thornback(alpha: boolean, spitter = false): MonsterView {
-  const m = mats();
+function thornback(alpha: boolean, spitter = false, gilded = false): MonsterView {
+  const base = mats();
+  // the Gilded Thornback: a coat of gold and glowing golden spines
+  const m = gilded ? { ...base, fur: base.gold, bone: glow(GILDED_GLOW, 2.5) } : base;
   const root = new THREE.Group();
-  const s = alpha ? 1.8 : spitter ? 1.1 : 1.25;
-  const eye = spitter ? ACID : AMBER;
+  const s = alpha ? 1.8 : spitter ? 1.1 : gilded ? 1.15 : 1.25;
+  const eye = spitter ? ACID : gilded ? GILDED_GLOW : AMBER;
   const rig = pivot(root, 0, 0, 0);
   rig.scale.setScalar(s);
   const body = pivot(rig, 0, 0.72, 0);
@@ -213,7 +218,7 @@ function thornback(alpha: boolean, spitter = false): MonsterView {
     mesh(leg, geo('tb-hoof', () => new THREE.CylinderGeometry(0.07, 0.085, 0.08, 10)), m.hoof, 0, -0.56, 0.03);
     legs.push(leg);
   }
-  skinRigid(root, alpha ? 'thornback-alpha' : spitter ? 'thornback-spitter' : 'thornback', rig, sacs, bounds(1.25 * s));
+  skinRigid(root, alpha ? 'thornback-alpha' : spitter ? 'thornback-spitter' : gilded ? 'thornback-gilded' : 'thornback', rig, sacs, bounds(1.25 * s));
   const sacSize = sacs.map((o) => o.scale.x);
 
   let phase = Math.random() * 10;
@@ -658,6 +663,7 @@ export function monsterWarmup(): THREE.Object3D[] {
     thornback(false),
     thornback(true),
     thornback(false, true),
+    thornback(false, false, true),
     ...buffs.map((b) => giant({ glow: BUFF_GLOW[b] ?? 0xffffff, stone: mats().stone, scale: 1 })),
     giant({ glow: 0xff6a1a, stone: lavaStone(), scale: 2.1, molten: true }),
     wyrm(),
@@ -681,5 +687,5 @@ function createView(u: Unit): MonsterView {
   if (type === 'warden') return giant({ glow: BUFF_GLOW[campKindOf(u)] ?? 0xffffff, stone: mats().stone, scale: 1 });
   if (type === 'moltenColossus') return giant({ glow: 0xff6a1a, stone: lavaStone(), scale: 2.1, molten: true });
   if (type === 'treasureWyrm') return wyrm();
-  return thornback(type === 'thornbackAlpha', type === 'thornSpitter');
+  return thornback(type === 'thornbackAlpha', type === 'thornSpitter', type === 'gildedThornback');
 }

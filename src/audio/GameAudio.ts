@@ -619,7 +619,7 @@ export class GameAudio {
   }
 
   /** Last seen state of Temple Siege and Temple Clash, so the herald calls each change once. */
-  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '', spoils: 0, relic: false };
+  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '', spoils: 0, relic: false, gilded: false };
 
   /** The herald calls the beats of Temple Siege (waves, bosses, the temple in danger) and Temple Clash (the blessing, the result). */
   private watchModes(): void {
@@ -639,6 +639,13 @@ export class GameAudio {
       }
       if (siege.spoils > seen.spoils + 1) this.herald.say('The champion has fallen! Its strength is yours.', 'good', 3);
       seen.spoils = siege.spoils;
+      const gilded = siege.gilded !== null;
+      if (gilded && !seen.gilded) this.herald.say('A Gilded Thornback! Catch it before it escapes!', 'epic', 2);
+      if (!gilded && seen.gilded) {
+        const caught = siege.gildedFate === 'caught';
+        this.herald.say(caught ? 'The golden beast falls! Another boon awaits.' : 'The Gilded Thornback got away.', caught ? 'good' : 'bad', caught ? 3 : 1);
+      }
+      seen.gilded = gilded;
       const danger = siege.corruption >= 70;
       if (danger && !seen.danger && siege.phase !== 'fallen') this.herald.say('The temple is falling! Clear the plaza!', 'bad', 4);
       // calm again well below the line, so a hovering bar doesn't repeat the warning

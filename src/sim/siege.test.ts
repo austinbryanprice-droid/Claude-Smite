@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { zeus } from '../game/gods';
 import { godUnit, monsterUnit } from './factory';
-import { BOONS, CHAMPION, CURSES, FIRST_CURSE, monsterType, Siege, SIEGE, waveRoster } from './Siege';
+import { BOONS, CHAMPION, CURSES, FIRST_CURSE, GILDED, gildedWave, monsterType, Siege, SIEGE, waveRoster } from './Siege';
 import { Sim, type SimTerrain } from './Sim';
 
 const flat: SimTerrain = { groundAt: () => 0, resolve: (x, z) => ({ x, z }) };
@@ -136,5 +136,53 @@ describe('Temple Siege', () => {
     expect(siege.spoils).toBeGreaterThan(CHAMPION.time - 1);
     expect(god.combatant.stats.damageBonus).toBeCloseTo(CHAMPION.damage, 5);
     expect(god.combatant.health).toBeGreaterThan(100);
+  });
+
+  it('slips a Gilded Thornback into some waves: it runs, escapes in time, and caught it gives a second boon', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 10, 13].filter(gildedWave)).toEqual([4, 7, 13]);
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    const god = sim.add(godUnit(zeus, 'order', { x: 0, z: 0, yaw: 0 }));
+    siege.wave = GILDED.from - 1;
+    run(sim, siege, SIEGE.firstWave + 0.1);
+    expect(siege.wave).toBe(GILDED.from);
+    const g = siege.gilded!;
+    expect(g).not.toBeNull();
+    expect(monsterType(g)).toBe('gildedThornback');
+    expect(siege.monsters).not.toContain(g);
+    // it runs from a god standing next to it
+    sim.teleport(god, g.x + 3, g.z);
+    const d0 = Math.hypot(g.x - god.x, g.z - god.z);
+    run(sim, siege, 1);
+    expect(Math.hypot(g.x - god.x, g.z - god.z)).toBeGreaterThan(d0);
+    // left alone it gets away (the wave's other monsters are held off the plaza meanwhile)
+    for (let i = 0; i < GILDED.escape * 30; i++) {
+      siege.corruption = 0;
+      siege.step(1 / 30);
+      sim.step(1 / 30);
+    }
+    expect(siege.gilded).toBeNull();
+    expect(siege.gildedFate).toBe('escaped');
+    expect(sim.units).not.toContain(g);
+  });
+
+  it('a caught Gilded Thornback means two boon picks after the wave', () => {
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    sim.add(godUnit(zeus, 'order', { x: 0, z: 0, yaw: 0 }));
+    siege.wave = GILDED.from - 1;
+    run(sim, siege, SIEGE.firstWave + 0.1);
+    siege.gilded!.combatant.takeDamage(1e9);
+    run(sim, siege, 0.1);
+    expect(siege.gildedFate).toBe('caught');
+    for (const m of siege.monsters) m.combatant.takeDamage(1e9);
+    run(sim, siege, 0.2);
+    expect(siege.phase).toBe('break');
+    const first = siege.choose(0)!;
+    expect(siege.offer).not.toBeNull();
+    expect(siege.offer).not.toContain(first);
+    siege.choose(0);
+    expect(siege.offer).toBeNull();
+    expect(siege.boons.length).toBe(2);
   });
 });
