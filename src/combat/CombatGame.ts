@@ -39,6 +39,7 @@ import { Duel, DUEL } from '../sim/Duel';
 import { DuelHud } from '../ui/DuelHud';
 import { Scoreboard } from '../sim/Scoreboard';
 import { difficultyPerks, type Difficulty } from '../game/difficulty';
+import { setXpDifficulty } from '../ui/ascension';
 import { Coach } from '../ui/Coach';
 
 
@@ -343,6 +344,7 @@ export class CombatGame implements Updatable {
   private applyDifficulty(): void {
     this.difficultyApplied = true;
     const d = this.deps.difficulty ?? 'normal';
+    setXpDifficulty(this.deps.net ? 'normal' : d);
     if (d === 'normal' || this.deps.net) return;
     const perks = difficultyPerks(d, !!this.siege);
     for (const u of this.sim.units) {
