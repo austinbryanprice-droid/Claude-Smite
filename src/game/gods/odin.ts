@@ -207,5 +207,5 @@ export const odin: GodDef = {
       node('shield', 'Valkyrie Shield', 4, 1, 'When hard crowd controlled, gain a shield of 15% max health (20 s cooldown).', keystone({ type: 'shieldOnHardCC', maxHealthPct: 0.15, cooldown: 20 })),
     ]),
   ],
-  defaultLoadout: ['odin.spear-thrust', 'odin.ravens', 'odin.lunge', 'odin.war-cry', 'odin.ring-of-spears'],
+  defaultLoadout: ['odin.spear-thrust', 'odin.ravens', 'odin.lunge', 'odin.ring-of-spears'],
 };

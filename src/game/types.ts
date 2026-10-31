@@ -208,6 +208,6 @@ export interface GodDef {
   /** The full pool: regular skills and ultimates. */
   skills: readonly SkillDef[];
   trees: readonly [SkillTree, SkillTree, SkillTree];
-  /** Four regular skill ids then the ultimate-slot skill id. */
-  defaultLoadout: readonly [string, string, string, string, string];
+  /** Three regular skill ids then the ultimate-slot skill id. */
+  defaultLoadout: readonly [string, string, string, string];
 }

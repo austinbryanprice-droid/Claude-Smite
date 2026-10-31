@@ -1,5 +1,5 @@
 import type { Combatant } from '../game/combatant';
-import { SLOT_KEYS, ULTIMATE_SLOT, type LoadoutError } from '../game/loadout';
+import { SLOT_COUNT, SLOT_KEYS, ULTIMATE_SLOT, type LoadoutError } from '../game/loadout';
 import { MAX_LEVEL, MAX_TREE_POINTS, ranked } from '../game/progression';
 import { pointsInTree, pointsSpent, prereqMet, TIER_REQUIREMENT, type AllocationError } from '../game/trees';
 import type { GodDef, SkillDef, SkillTree, TreeNode } from '../game/types';
@@ -17,7 +17,7 @@ const ERRORS: Record<AllocationError | LoadoutError | 'notInBase', string> = {
   wrongSize: 'Invalid loadout.',
   unknownSkill: 'Unknown skill.',
   duplicate: 'That skill is already equipped.',
-  ultimateInRegularSlot: 'Ultimates only go in the R slot.',
+  ultimateInRegularSlot: 'Ultimates only go in the ultimate slot (4).',
   notInBase: 'Only in base. Recall with B.',
 };
 
@@ -175,10 +175,10 @@ export class LoadoutMenu {
         <div class="lm-loadout">
           <div class="lm-group">
             <h3>Loadout</h3>
-            <div class="lm-slots">${[0, 1, 2, 3, 4].map((i) => this.slotHtml(c, i)).join('')}</div>
+            <div class="lm-slots">${Array.from({ length: SLOT_COUNT }, (_, i) => i).map((i) => this.slotHtml(c, i)).join('')}</div>
           </div>
           <div class="lm-group lm-pool-group">
-            <h3>${this.selectedSlot === ULTIMATE_SLOT ? 'R slot: any skill' : `${SLOT_KEYS[this.selectedSlot]} slot: regular skills`}${base ? '' : ' <em>swap at the fountain</em>'}</h3>
+            <h3>${this.selectedSlot === ULTIMATE_SLOT ? 'Ultimate slot (4): any skill' : `${SLOT_KEYS[this.selectedSlot]} slot: regular skills`}${base ? '' : ' <em>swap at the fountain</em>'}</h3>
             <div class="lm-pool">${pool.map((s) => this.poolHtml(c, s)).join('')}</div>
           </div>
         </div>

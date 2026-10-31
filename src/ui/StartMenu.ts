@@ -1,3 +1,4 @@
+import { SLOT_KEYS } from '../game/loadout';
 import type { GodDef } from '../game/types';
 import { compatibilityMode, setCompatibilityMode } from './Fatal';
 import type { GpuAdvice } from '../render/gpuAdvice';
@@ -30,8 +31,8 @@ export const CONTROLS: [string, string][] = [
   ['W A S D', 'Move'],
   ['Mouse', 'Aim (the camera follows)'],
   ['Left click', 'Basic attack'],
-  ['1  2  3  4', 'Skills: press to aim, press again or click to cast, right click cancels'],
-  ['R', 'Ultimate (unlocks at level 5)'],
+  ['1  2  3', 'Skills: press to aim, press again or click to cast, right click cancels'],
+  ['4 or R', 'Ultimate (unlocks at level 5)'],
   ['B', 'Recall to the fountain'],
   ['K', 'Skills & trees: spend points; swap skills at the fountain'],
   ['Tab (hold)', 'Scoreboard'],
@@ -159,7 +160,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
     root.querySelectorAll<HTMLButtonElement>('.sm-god').forEach((b) => b.classList.toggle('on', b.dataset.god === god));
     const def = gods.find((g) => g.id === god)!;
     const skills = def.defaultLoadout.map((id) => def.skills.find((s) => s.id === id)!);
-    const keys = ['1', '2', '3', '4', 'R'];
+    const keys = SLOT_KEYS;
     detail.innerHTML = `
       <div class="sm-name">${def.name} <span>${def.title} &middot; ${def.pantheon}</span></div>
       <div class="sm-passive"><b>${def.passive.name}</b> (passive): ${def.passive.description}</div>

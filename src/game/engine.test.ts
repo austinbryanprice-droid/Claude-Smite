@@ -86,7 +86,7 @@ describe('progression', () => {
 describe('loadout rules', () => {
   it('allows a regular skill in the ultimate slot', () => {
     const l = [...zeus.defaultLoadout];
-    l[4] = 'zeus.cyclone';
+    l[3] = 'zeus.cyclone';
     expect(validateLoadout(zeus, l)).toBeNull();
   });
 
@@ -206,9 +206,9 @@ describe('combatant', () => {
 
   it('locks the ultimate until level 5', () => {
     const t = new Combatant(thor, 'order');
-    expect(t.canCast(4)).toBe('locked');
+    expect(t.canCast(3)).toBe('locked');
     t.gainXp(xpFor(5));
-    expect(t.canCast(4)).toBeNull();
+    expect(t.canCast(3)).toBeNull();
   });
 
   it('deals mitigated skill damage and kills', () => {
@@ -235,14 +235,14 @@ describe('combatant', () => {
   it('keeps cooldowns when a skill is swapped out and back in', () => {
     const z = new Combatant(zeus, 'order');
     z.gainXp(xpFor(5));
-    expect(z.cast(4).ok).toBe(true);
-    expect(z.swap(4, 'zeus.skyfall-storm')).toBeNull();
-    expect(z.canCast(4)).toBe('cooldown');
-    z.swap(4, 'zeus.olympian-spear');
-    z.swap(4, 'zeus.skyfall-storm');
-    expect(z.canCast(4)).toBe('cooldown');
-    z.update(z.cooldownOf(4) + 0.01);
-    expect(z.cooldownOf(4)).toBe(0);
+    expect(z.cast(3).ok).toBe(true);
+    expect(z.swap(3, 'zeus.skyfall-storm')).toBeNull();
+    expect(z.canCast(3)).toBe('cooldown');
+    z.swap(3, 'zeus.olympian-spear');
+    z.swap(3, 'zeus.skyfall-storm');
+    expect(z.canCast(3)).toBe('cooldown');
+    z.update(z.cooldownOf(3) + 0.01);
+    expect(z.cooldownOf(3)).toBe(0);
   });
 
   it('only grants the hard-CC keystone shield for hard CC', () => {
@@ -262,12 +262,12 @@ describe('combatant', () => {
   it('keeps cooldowns ticking while dead', () => {
     const z = new Combatant(zeus, 'order');
     z.gainXp(xpFor(20));
-    z.cast(4);
-    const cd = z.cooldownOf(4);
+    z.cast(3);
+    const cd = z.cooldownOf(3);
     z.takeDamage(1e6);
     z.update(z.respawnTimer + 0.1);
     expect(z.alive).toBe(true);
-    expect(z.cooldownOf(4)).toBeLessThan(cd - 50);
+    expect(z.cooldownOf(3)).toBeLessThan(cd - 50);
   });
 
   it('does not carry debuffs from a lethal hit into the next life', () => {
@@ -325,7 +325,7 @@ describe('combatant', () => {
     const z = new Combatant(zeus, 'chaos');
     a.gainXp(xpFor(5));
     z.health = z.stats.maxHealth = 1e6;
-    const r = a.cast(4); // Sandstorm
+    const r = a.cast(3); // Sandstorm
     if (!r.ok) throw new Error(r.error);
     a.applySkillTo(r.cast, z);
     z.update(1);
@@ -383,5 +383,29 @@ describe('combatant', () => {
     expect(z.alive).toBe(true);
     expect(z.inBase).toBe(true);
     expect(z.health).toBe(z.stats.maxHealth);
+  });
+});
+
+describe('3 + 1 action bar', () => {
+  it('gives every god three regular skills and an ultimate by default', async () => {
+    const { GODS } = await import('./gods');
+    for (const g of GODS) {
+      expect(g.defaultLoadout).toHaveLength(4);
+      expect(g.defaultLoadout.slice(0, 3).every((id) => g.skills.find((s) => s.id === id)?.kind === 'regular')).toBe(true);
+    }
+  });
+
+  it('brings an old five-slot build to the new shape', async () => {
+    const { normalizeLoadout } = await import('./loadout');
+    const old = ['zeus.cyclone', 'zeus.arc-bolt', 'zeus.storm-step', 'zeus.wrath-mark', 'zeus.olympian-spear'];
+    expect(normalizeLoadout(zeus, old)).toEqual(['zeus.cyclone', 'zeus.arc-bolt', 'zeus.storm-step', 'zeus.olympian-spear']);
+    expect(new Combatant(zeus, 'order', old).loadout).toHaveLength(4);
+  });
+
+  it('casts the ultimate from 4 or R', async () => {
+    const { slotForCode } = await import('./loadout');
+    expect(slotForCode('Digit4')).toBe(3);
+    expect(slotForCode('KeyR')).toBe(3);
+    expect(slotForCode('Digit5')).toBe(-1);
   });
 });

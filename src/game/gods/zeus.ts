@@ -209,6 +209,6 @@ export const zeus: GodDef = {
       node('throne', 'Unshakable Throne', 4, 1, 'When hard crowd controlled, gain a shield of 15% max health (20 s cooldown).', keystone({ type: 'shieldOnHardCC', maxHealthPct: 0.15, cooldown: 20 })),
     ]),
   ],
-  defaultLoadout: ['zeus.arc-bolt', 'zeus.thundering-presence', 'zeus.static-discharge', 'zeus.storm-step', 'zeus.skyfall-storm'],
+  defaultLoadout: ['zeus.arc-bolt', 'zeus.static-discharge', 'zeus.storm-step', 'zeus.skyfall-storm'],
 };
 
