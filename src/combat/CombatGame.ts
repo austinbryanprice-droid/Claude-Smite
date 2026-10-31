@@ -476,7 +476,9 @@ export class CombatGame implements Updatable {
       const state = this.clash.plaza;
       const [main, core] =
         state === 'contested' ? [0xffe08a, 0xffffff] : state === 'neutral' ? [0xd9a845, 0xfff0c0] : state === this.player.team ? [0x4fb2ff, 0xe6f4ff] : [0xff3524, 0xffe0c8];
-      this.plazaRing.setColors(main, core);
+      // during the blessing the ring's core flickers gold
+      const blessed = this.clash.blessing > 0 && Math.sin(time * 8) > 0;
+      this.plazaRing.setColors(main, blessed ? 0xffd34a : core);
     }
     if (this.match?.winner) this.hud.setVisible(false);
     this.vfx.player = this.player;

@@ -25,7 +25,7 @@ const STORAGE_KEY = 'ascendant.start';
 
 const MODES: { id: GameMode; name: string; text: string }[] = [
   { id: 'conquest', name: 'Conquest', text: '5v5 against bots. Destroy the enemy Titan to win. About 15–20 minutes.' },
-  { id: 'clash', name: 'Temple Clash', text: '3v3 king of the hill. Hold the temple plaza and take down gods. First to 100. About 5 minutes.' },
+  { id: 'clash', name: 'Temple Clash', text: '3v3 king of the hill. Hold the temple plaza and take down gods; the temple\'s blessing doubles points now and then. First to 115. About 4 minutes.' },
   { id: 'siege', name: 'Temple Siege', text: 'You and two bots hold the temple against endless monster waves, with a boss every fifth. Pick a team boon after each wave. How long can you last?' },
   { id: 'arena', name: 'Training ground', text: 'Training posts and one enemy Thor. Swap gods and levels freely with K.' },
 ];

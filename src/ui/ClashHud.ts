@@ -16,6 +16,8 @@ export class ClashHud {
   private readonly num: Record<Side, HTMLElement>;
   private readonly state: HTMLElement;
   private readonly end: HTMLElement;
+  private readonly bless: HTMLElement;
+  private lastBless = '';
   private shownEnd = false;
   private lastPlaza = '';
 
@@ -31,6 +33,7 @@ export class ClashHud {
         <div class="clash-side foe"><div class="clash-track"><div class="clash-fill"></div></div><span class="clash-num"></span></div>
       </div>
       <div class="clash-state"></div>
+      <div class="clash-bless"></div>
       <div class="clash-end"><div class="clash-end-title"></div><div class="clash-end-score"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
     const ally = this.root.querySelector('.ally')!;
@@ -40,6 +43,7 @@ export class ClashHud {
     this.num = { [mine]: ally.querySelector('.clash-num')!, [enemy]: foe.querySelector('.clash-num')! } as Record<Side, HTMLElement>;
     this.state = this.root.querySelector('.clash-state')!;
     this.end = this.root.querySelector('.clash-end')!;
+    this.bless = this.root.querySelector('.clash-bless')!;
     this.root.querySelector('.clash-again')!.addEventListener('click', () => location.reload());
   }
 
@@ -54,6 +58,14 @@ export class ClashHud {
       this.lastPlaza = plaza;
       this.state.textContent = PLAZA_TEXT[plaza]!;
       this.state.dataset.state = plaza;
+    }
+    const b = c.blessing;
+    const bless = b > 0 ? `Temple's blessing: double points · ${Math.ceil(b)}` : c.blessingIn <= 10 ? `Blessing in ${Math.ceil(c.blessingIn)}` : '';
+    if (bless !== this.lastBless) {
+      this.lastBless = bless;
+      this.bless.textContent = bless;
+      this.bless.classList.toggle('on', b > 0);
+      this.bless.classList.toggle('show', bless !== '');
     }
     if (c.winner && !this.shownEnd) {
       this.shownEnd = true;
