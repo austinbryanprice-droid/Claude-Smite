@@ -71,3 +71,4 @@ body:has(.mh-map) .hud-panel { top: auto; bottom: 12px; right: 12px; }
 .help-report-note { font-size: 12px; opacity: 0.75; }
 .help-report-text { width: 100%; height: 140px; margin-top: 8px; font: 11px/1.35 ui-monospace, Consolas, monospace; color: #f4ead8; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(231, 194, 122, 0.35); border-radius: 4px; resize: vertical; }
 .help-actions button { font: inherit; color: inherit; cursor: pointer; padding: 8px 16px; background: rgba(231, 194, 122, 0.15); border: 1px solid rgba(231, 194, 122, 0.5); border-radius: 4px; }
+.sm-rec { font-style: normal; font-size: 12px; letter-spacing: 0.06em; color: #ffd27a; opacity: 0.95; }
