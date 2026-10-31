@@ -134,6 +134,35 @@ export const BOONS: readonly Boon[] = [
   { id: 'purify', name: 'Purifying Flame', text: 'Cleanse 40 corruption now', cleanse: 40 },
 ];
 
+/**
+ * Curses: from wave 4 each wave comes with a twist, announced during the break
+ * before it, so the team can pick a boon that answers it.
+ */
+export interface Curse {
+  id: string;
+  name: string;
+  text: string;
+  /** Stat changes on every monster of the wave, as fractions of its own stat (or flat for fractions). */
+  scale?: Partial<Record<'moveSpeed' | 'attackSpeed' | 'physicalProtection' | 'magicalProtection', number>>;
+  flat?: Partial<Record<'lifesteal' | 'healthRegen', number>>;
+  /** Swarm: this many times the thornbacks, each this much of the health. */
+  swarm?: { count: number; health: number };
+  /** Gods' respawns are this much slower during the wave. */
+  respawn?: number;
+}
+
+export const CURSES: readonly Curse[] = [
+  { id: 'swift', name: 'Swift Horde', text: 'Monsters move 30% faster', scale: { moveSpeed: 0.3 } },
+  { id: 'frenzied', name: 'Frenzied', text: 'Monsters attack 35% faster', scale: { attackSpeed: 0.35 } },
+  { id: 'ironhide', name: 'Ironhide', text: 'Monsters have 50% more protection', scale: { physicalProtection: 0.5, magicalProtection: 0.5 } },
+  { id: 'vampiric', name: 'Vampiric', text: 'Monsters heal for 25% of their damage', flat: { lifesteal: 0.25 } },
+  { id: 'swarm', name: 'Swarm', text: 'Twice the thornbacks, each a little frailer', swarm: { count: 2, health: 0.6 } },
+  { id: 'dread', name: 'Dread Night', text: 'Fallen gods take twice as long to return', respawn: 2 },
+];
+
+/** The first wave that carries a curse. */
+export const FIRST_CURSE = 4;
+
 export type SiegePhase = 'break' | 'fight' | 'fallen';
 
 export class Siege {
@@ -152,6 +181,8 @@ export class Siege {
   /** Boons taken this run, in order. */
   readonly boons: Boon[] = [];
   private corruptScale = 1;
+  /** The curse on the coming wave (during a break) or the current one (during a fight). */
+  curse: Curse | null = null;
 
   constructor(
     private readonly sim: Sim,
@@ -167,7 +198,7 @@ export class Siege {
 
   private on(e: SimEvent): void {
     if (e.type !== 'death') return;
-    if (e.unit.kind === 'god') e.unit.combatant.respawnTimer = Math.min(e.unit.combatant.respawnTimer, SIEGE.respawn);
+    if (e.unit.kind === 'god') e.unit.combatant.respawnTimer = Math.min(e.unit.combatant.respawnTimer, SIEGE.respawn * (this.phase === 'fight' ? (this.curse?.respawn ?? 1) : 1));
     else if (e.unit.kind === 'monster' && this.monsters.includes(e.unit)) this.kills++;
   }
 
@@ -214,7 +245,14 @@ export class Siege {
     if (this.offer) this.choose(0);
     this.wave++;
     this.phase = 'fight';
-    const roster = waveRoster(this.wave);
+    const curse = this.curse;
+    let roster = waveRoster(this.wave);
+    if (curse?.swarm) {
+      // capped, so a late swarm stays a crowd rather than a slideshow
+      const n = roster.filter((t) => t === 'thornback').length;
+      const extra = Math.min(n * (curse.swarm.count - 1), 18 - n);
+      roster = [...Array<MonsterType>(extra).fill('thornback'), ...roster];
+    }
     const minutes = waveMinutes(this.wave);
     const scale = waveScale(this.wave);
     roster.forEach((type, i) => {
@@ -226,9 +264,12 @@ export class Siege {
       const z = gate.z + (gate.z > 0 ? -1 : 1) * (Math.floor(i / 12) * 2.5);
       const u = monsterUnit(this.base, type, { x, z, yaw }, minutes);
       const c = u.combatant;
-      const hp = isBossType(type) && this.wave === 5 ? FIRST_BOSS_HEALTH : scale;
+      let hp = isBossType(type) && this.wave === 5 ? FIRST_BOSS_HEALTH : scale;
+      if (curse?.swarm && type === 'thornback') hp *= curse.swarm.health;
       if (hp !== 1) c.refreshTimedMod('maxHealth', c.stats.maxHealth * (hp - 1), 1e9);
       if (scale > 1) c.refreshTimedMod('attackPower', c.stats.attackPower * (scale - 1), 1e9);
+      for (const [k, f] of Object.entries(curse?.scale ?? {}) as [StatKey, number][]) c.refreshTimedMod(k, c.stats[k] * f, 1e9);
+      for (const [k, v] of Object.entries(curse?.flat ?? {}) as [StatKey, number][]) c.refreshTimedMod(k, k === 'healthRegen' ? c.stats.maxHealth * v : v, 1e9);
       c.health = c.stats.maxHealth;
       u.tag = type;
       // each monster has its own spot on the plaza, so the horde spreads out over it
@@ -244,10 +285,18 @@ export class Siege {
     });
   }
 
+  /** Curses never repeat back to back. */
+  private rollCurse(n: number): Curse | null {
+    if (n < FIRST_CURSE) return null;
+    const pool = CURSES.filter((c) => c !== this.curse);
+    return pool[Math.floor(this.sim.rng() * pool.length)]!;
+  }
+
   private clearWave(): void {
     this.phase = 'break';
     this.timer = SIEGE.breakTime;
     this.corruption = Math.max(0, this.corruption - SIEGE.waveCleanse);
+    this.curse = this.rollCurse(this.wave + 1);
     const pool = [...BOONS].filter((b) => !(b.cleanse && this.corruption < 10));
     this.offer = [];
     while (this.offer.length < 3 && pool.length) this.offer.push(pool.splice(Math.floor(this.sim.rng() * pool.length), 1)[0]!);
