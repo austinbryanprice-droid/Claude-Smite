@@ -57,6 +57,10 @@ export const SOUNDS: Record<string, Recipe> = {
   'basic.minion.melee': { variants: 3, peak: 0.55, make: (r) => whoosh(r, 0.2, 700, 1900, { q: 1.6, peak: 0.6 }) },
   'basic.minion.archer': { variants: 3, peak: 0.55, make: (r) => layer([twang(r, 0.35, 180 + r() * 40), 0.8], [whoosh(r, 0.15, 2500, 1500, { q: 2 }), 0.4, 0.02]) },
   'basic.minion.brute': { variants: 2, peak: 0.75, make: (r) => whoosh(r, 0.42, 220, 600, { q: 1, peak: 0.7, gain: 1.4 }) },
+  // the Thornspitter: a wet hacking cough, then the glob of acid flying off
+  'basic.spitter': { variants: 3, peak: 0.55, make: (r) => layer([vowel(r, 0.14, (t) => glide(300, 520, t, 0.14), VOWELS.ah, { breath: 0.7, growl: 0.1, gain: 0.4 }), 1], [puff(r, 0.12, { tone: 1400 }), 0.8, 0.08], [whoosh(r, 0.22, 1800, 900, { q: 1.5 }), 0.5, 0.1]) },
+  // acid landing: a splat and a short sizzle
+  'hit.acid': { variants: 2, peak: 0.5, make: (r) => layer([puff(r, 0.1, { tone: 900 }), 0.7], [sand(r, 0.35, { tone: 3000, peak: 0.5 }), 0.8, 0.03]) },
   'basic.monster': { variants: 3, peak: 0.6, make: (r) => layer([whoosh(r, 0.22, 500, 1200, { q: 1 }), 1], [vowel(r, 0.25, (t) => glide(220, 150, t, 0.25), VOWELS.ah, { breath: 0.5, growl: 0.2, gain: 0.5 }), 1]) },
   'basic.warden': { variants: 2, peak: 0.85, make: (r) => layer([whoosh(r, 0.45, 160, 500, { q: 0.8, peak: 0.75, gain: 1.4 }), 1], [roar(r, 0.5, 90), 0.5]) },
   'basic.wyrm': { variants: 2, peak: 0.9, make: (r) => layer([roar(r, 0.7, 120, { open: 1.2 }), 0.8], [whoosh(r, 0.5, 200, 700, { q: 0.8, peak: 0.7, gain: 1.2 }), 1]) },
