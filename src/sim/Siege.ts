@@ -58,8 +58,10 @@ export function waveRoster(n: number): MonsterType[] {
 /** How grown a wave's monsters are, as jungle minutes (camps get tougher with time). */
 export const waveMinutes = (n: number): number => (n - 1) * 1.8;
 
-/** Beyond the jungle's growth cap, later waves still get tougher. */
-export const waveHealth = (n: number): number => 1 + Math.max(0, n - 12) * 0.12;
+/** Beyond the jungle's growth, later waves get tougher still: health and damage both. */
+export const waveScale = (n: number): number => 1 + Math.max(0, n - 8) * 0.15;
+/** The first boss arrives before the team has its keystones, so it comes in lighter. */
+const FIRST_BOSS_HEALTH = 0.7;
 
 const isBossType = (t: string): boolean => t === 'treasureWyrm' || t === 'moltenColossus';
 
@@ -162,7 +164,7 @@ export class Siege {
     this.phase = 'fight';
     const roster = waveRoster(this.wave);
     const minutes = waveMinutes(this.wave);
-    const hp = waveHealth(this.wave);
+    const scale = waveScale(this.wave);
     roster.forEach((type, i) => {
       // early waves come from the north gate only, then from both
       const gate = SIEGE.gates[this.wave >= 3 ? i % 2 : 0]!;
@@ -171,11 +173,11 @@ export class Siege {
       const x = gate.x + spread * 2.2;
       const z = gate.z + (gate.z > 0 ? -1 : 1) * (Math.floor(i / 12) * 2.5);
       const u = monsterUnit(this.base, type, { x, z, yaw }, minutes);
-      if (hp > 1) {
-        const c = u.combatant;
-        c.refreshTimedMod('maxHealth', c.stats.maxHealth * (hp - 1), 1e9);
-        c.health = c.stats.maxHealth;
-      }
+      const c = u.combatant;
+      const hp = isBossType(type) && this.wave === 5 ? FIRST_BOSS_HEALTH : scale;
+      if (hp !== 1) c.refreshTimedMod('maxHealth', c.stats.maxHealth * (hp - 1), 1e9);
+      if (scale > 1) c.refreshTimedMod('attackPower', c.stats.attackPower * (scale - 1), 1e9);
+      c.health = c.stats.maxHealth;
       u.tag = type;
       // each monster has its own spot on the plaza, so the horde spreads out over it
       const a = (i / roster.length) * Math.PI * 2;
@@ -196,7 +198,7 @@ export class Siege {
     this.corruption = Math.max(0, this.corruption - SIEGE.waveCleanse);
     for (const g of this.sim.units) {
       if (g.kind !== 'god' || g.team === 'neutral') continue;
-      this.sim.reward(g, 80 + 25 * this.wave, 60 + 10 * this.wave);
+      this.sim.reward(g, 40 + 15 * this.wave, 60 + 10 * this.wave);
       if (g.alive) {
         const c = g.combatant;
         c.heal(c.stats.maxHealth * 0.35);
