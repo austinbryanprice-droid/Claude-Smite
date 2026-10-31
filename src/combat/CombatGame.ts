@@ -36,6 +36,7 @@ import { ClashHud } from '../ui/ClashHud';
 import { Siege, SIEGE, SIEGE_SPAWNS } from '../sim/Siege';
 import { SiegeHud } from '../ui/SiegeHud';
 import { Scoreboard } from '../sim/Scoreboard';
+import { Coach } from '../ui/Coach';
 
 
 const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
@@ -97,6 +98,7 @@ export class CombatGame implements Updatable {
   private setCampActive: ((id: string, active: boolean) => void) | null = null;
   private readonly campLit = new Map<string, boolean>();
   private readonly hud: CombatHud;
+  private readonly coach: Coach;
   private readonly menu: LoadoutMenu;
   private readonly body: Body;
   private readonly bases: Record<'order' | 'chaos', BaseZone>;
@@ -191,6 +193,7 @@ export class CombatGame implements Updatable {
     this.setPlayerModel(mine.id);
 
     this.hud = new CombatHud(this.player, deps.camera, (u, out) => this.views.headOf(u, out));
+    this.coach = new Coach(this.player, () => this.menu.isOpen);
     this.menu = new LoadoutMenu(
       conquest || clash || siege
         ? { combatant: () => this.player.combatant, gods: GODS, onClose: () => undefined }
@@ -494,6 +497,7 @@ export class CombatGame implements Updatable {
     this.updatePreview();
     this.hud.setPreview(this.preview?.slot ?? null);
     this.hud.frame(this.sim.units, dt);
+    this.coach.frame(dt);
     const inBase = this.player.combatant.inBase;
     if (inBase !== this.wasInBase) {
       this.wasInBase = inBase;
