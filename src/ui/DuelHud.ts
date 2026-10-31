@@ -100,8 +100,10 @@ export class DuelHud {
       this.state.textContent = text;
       this.state.dataset.state = d.phase === 'fight' && d.ringIn <= 0 ? 'contested' : '';
     }
-    const big =
-      d.phase === 'countdown'
+    // the boon cards take the screen's middle while they are up
+    const big = offer
+      ? ''
+      : d.phase === 'countdown'
         ? String(Math.ceil(d.timer))
         : d.phase === 'fight' && d.timer < 1
           ? 'Fight!'

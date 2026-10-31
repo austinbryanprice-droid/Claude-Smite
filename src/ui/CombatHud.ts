@@ -139,6 +139,7 @@ export class CombatHud {
   private readonly recallFill: HTMLDivElement;
   private readonly death: HTMLDivElement;
   private readonly deathTimer: HTMLSpanElement;
+  private readonly deathLine: HTMLElement;
   private readonly toastBox: HTMLDivElement;
   private readonly overlay: HTMLDivElement;
   private readonly bars = new Map<Unit, Bar>();
@@ -208,8 +209,9 @@ export class CombatHud {
     this.status = el('div', 'ch-status', this.root);
     this.recall = el('div', 'ch-recall', this.root, '<span>Recalling</span>');
     this.recallFill = el('div', 'ch-recall-fill', this.recall);
-    this.death = el('div', 'ch-death', this.root, '<div class="ch-death-title">Slain</div><div>Returning in <span></span></div>');
+    this.death = el('div', 'ch-death', this.root, '<div class="ch-death-title">Slain</div><div class="ch-death-line">Returning in <span></span></div>');
     this.deathTimer = this.death.querySelector('span')!;
+    this.deathLine = this.death.querySelector('.ch-death-line')!;
     this.toastBox = el('div', 'ch-toasts', this.root);
 
     const obj = el('div', 'ch-boss', this.root);
@@ -430,7 +432,10 @@ export class CombatHud {
     setStyle(this.recallFill, 'width', percent(1 - p.recall / RECALL_TIME));
 
     this.death.classList.toggle('show', !c.alive);
-    if (!c.alive) setText(this.deathTimer, `${Math.ceil(c.respawnTimer)}s`);
+    // a duel's fallen god waits for the next round instead of a timer
+    const timed = Number.isFinite(c.respawnTimer);
+    this.deathLine.style.visibility = timed ? '' : 'hidden';
+    if (!c.alive && timed) setText(this.deathTimer, `${Math.ceil(c.respawnTimer)}s`);
 
     this.overheadBars(units, dt);
     this.objectiveBar(units, dt);
