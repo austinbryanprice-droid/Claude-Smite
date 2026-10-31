@@ -203,7 +203,7 @@ export class GameAudio {
         ref = 20;
         break;
       case 'monster':
-        name = u.name === 'Treasure Wyrm' ? 'basic.wyrm' : u.name === 'Molten Colossus' ? 'basic.colossus' : u.tag.endsWith('warden') ? 'basic.warden' : 'basic.monster';
+        name = u.name === 'Treasure Wyrm' ? 'basic.wyrm' : u.name === 'Molten Colossus' ? 'basic.colossus' : u.tag.endsWith('warden') ? 'basic.warden' : u.tag.endsWith('thornSpitter') ? 'basic.spitter' : 'basic.monster';
         ref = u.radius > 2 ? 16 : 7;
         gain = u.radius > 2 ? 1.1 : 0.7;
         break;
@@ -227,7 +227,7 @@ export class GameAudio {
       name = t === 'brute' ? 'hit.blunt' : t === 'archer' ? 'hit.flesh' : 'hit.blade';
       gain *= 0.6;
       gap = 0.05;
-    } else if (src.kind === 'monster') name = src.radius > 2 ? 'hit.blunt' : 'hit.monster';
+    } else if (src.kind === 'monster') name = src.radius > 2 ? 'hit.blunt' : src.tag.endsWith('thornSpitter') ? 'hit.acid' : 'hit.monster';
     else name = 'hit.flesh';
     const mine = src === this.me || target === this.me;
     this.at(name, target, { gain, vary: 0.08 }, src === this.me ? 4 : 2, gap, mine);
