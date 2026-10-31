@@ -68,7 +68,7 @@ async function main(): Promise<void> {
   // a normal launch opens on the home page and the intro trailer; the title
   // screen (and its hymn) follow once the trailer ends or is skipped
   const chosen: Promise<StartChoice> = skipMenu
-    ? Promise.resolve({ mode: (params.get('map') === 'clash' ? 'clash' : mapFromUrl()) as GameMode, god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
+    ? Promise.resolve({ mode: (params.get('map') === 'clash' || params.get('map') === 'siege' ? params.get('map') : mapFromUrl()) as GameMode, god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
     : playIntro(audio).then(() => {
         music.play('hymn');
         return showStartMenu(GODS, graphics);
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
     }
     // Odin's Einherjar (summons are drawn on the fallback god's body, in their own colors)
     models.add(new GodModel('zeus', 'einherjar').root);
-    if (mode === 'conquest') for (const root of monsterWarmup()) models.add(root);
+    if (mode === 'conquest' || mode === 'siege') for (const root of monsterWarmup()) models.add(root);
     world.actors.add(models);
     await prepareShaders(world, post, 0.85, 0.86);
     return { world, post, models };

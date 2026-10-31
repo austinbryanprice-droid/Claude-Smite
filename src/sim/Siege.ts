@@ -1,0 +1,207 @@
+import { hypot } from '../core/math';
+import type { GodDef } from '../game/types';
+import type { CampKind } from '../map/ConquestLayout';
+import { monsterUnit, type MonsterType } from './factory';
+import { MonsterBrain, type CampState } from './Jungle';
+import type { Sim } from './Sim';
+import type { SimEvent, Unit } from './Unit';
+
+/**
+ * Temple Siege: waves of monsters march on the temple plaza from both gates.
+ * Every monster standing on the plaza corrupts it; when corruption fills, the
+ * temple falls. Clear a wave to cleanse the plaza a little and earn a short
+ * break. Every fifth wave brings a boss. It never ends: the score is how many
+ * waves the team held.
+ */
+export const SIEGE = {
+  plazaRadius: 17,
+  /** Corruption a second for each monster on the plaza (bosses count more). */
+  corruptRate: 1.5,
+  bossCorrupt: 4,
+  /** The plaza heals this fast while no monster stands on it. */
+  cleanseRate: 1,
+  /** Corruption lifted when a wave is cleared. */
+  waveCleanse: 15,
+  max: 100,
+  firstWave: 8,
+  breakTime: 10,
+  respawn: 8,
+  startLevel: 5,
+  startFavor: 400,
+  /** Monsters pick fights with gods this close; otherwise they march on the plaza. */
+  aggro: 11,
+  gates: [
+    { x: 0, z: -56 },
+    { x: 0, z: 56 },
+  ],
+  bases: {
+    order: { x: 0, z: 62, radius: 9 },
+    chaos: { x: 0, z: -62, radius: 9 },
+  },
+} as const;
+
+/** The gods start around the fountain, facing north. */
+export const SIEGE_SPAWNS = [-4, 0, 4].map((x) => ({ x, z: 8, yaw: 0 }));
+
+const BOSSES: MonsterType[] = ['treasureWyrm', 'moltenColossus'];
+
+/** Which monsters a wave brings: more, tougher, and a boss every fifth wave. */
+export function waveRoster(n: number): MonsterType[] {
+  const out: MonsterType[] = [];
+  for (let i = 0; i < Math.min(12, 2 + n); i++) out.push('thornback');
+  for (let i = 0; i < Math.min(5, Math.floor(n / 2)); i++) out.push('thornbackAlpha');
+  for (let i = 0; i < Math.min(3, Math.floor((n - 1) / 3)); i++) out.push('warden');
+  if (n % 5 === 0) out.push(BOSSES[(n / 5 - 1) % 2]!);
+  return out;
+}
+
+/** How grown a wave's monsters are, as jungle minutes (camps get tougher with time). */
+export const waveMinutes = (n: number): number => (n - 1) * 1.8;
+
+/** Beyond the jungle's growth cap, later waves still get tougher. */
+export const waveHealth = (n: number): number => 1 + Math.max(0, n - 12) * 0.12;
+
+const isBossType = (t: string): boolean => t === 'treasureWyrm' || t === 'moltenColossus';
+
+/**
+ * A siege monster: fights the nearest god that comes close, otherwise marches
+ * to its spot on the plaza. It reuses the jungle monster's fighting (windups,
+ * boss slams, the boss bar) with a camp that travels with it.
+ */
+export class SiegeBrain extends MonsterBrain {
+  private readonly at: [number, number];
+
+  constructor(
+    private readonly s: Sim,
+    private readonly self: Unit,
+    camp: CampState,
+  ) {
+    super(s, self, camp);
+    this.at = camp.camp.at as unknown as [number, number];
+  }
+
+  override update(dt: number): void {
+    const u = this.self;
+    this.at[0] = u.x;
+    this.at[1] = u.z;
+    const camp = this.camp;
+    const keep = camp.foe && camp.foe.alive && camp.foe.targetable && camp.foe.stealth <= 0 && hypot(camp.foe.x - u.x, camp.foe.z - u.z) < SIEGE.aggro + 4;
+    if (!keep) {
+      let best: Unit | null = null;
+      let bd: number = SIEGE.aggro;
+      for (const t of this.s.enemiesOf(u)) {
+        if ((t.kind !== 'god' && t.kind !== 'summon') || t.stealth > 0 || !t.targetable) continue;
+        const d = hypot(t.x - u.x, t.z - u.z);
+        if (d < bd) {
+          best = t;
+          bd = d;
+        }
+      }
+      camp.foe = best;
+    }
+    super.update(dt);
+  }
+}
+
+export type SiegePhase = 'break' | 'fight' | 'fallen';
+
+export class Siege {
+  wave = 0;
+  corruption = 0;
+  phase: SiegePhase = 'break';
+  /** Seconds until the next wave while on a break. */
+  timer: number = SIEGE.firstWave;
+  /** Monsters of the current wave still standing. */
+  readonly monsters: Unit[] = [];
+  /** Monsters on the plaza right now. */
+  onPlaza = 0;
+  kills = 0;
+
+  constructor(
+    private readonly sim: Sim,
+    private readonly base: GodDef,
+  ) {
+    sim.listeners.push((e) => this.on(e));
+  }
+
+  /** Waves fully cleared. */
+  get held(): number {
+    return this.phase === 'fight' || this.phase === 'fallen' ? this.wave - 1 : this.wave;
+  }
+
+  private on(e: SimEvent): void {
+    if (e.type !== 'death') return;
+    if (e.unit.kind === 'god') e.unit.combatant.respawnTimer = Math.min(e.unit.combatant.respawnTimer, SIEGE.respawn);
+    else if (e.unit.kind === 'monster' && this.monsters.includes(e.unit)) this.kills++;
+  }
+
+  step(dt: number): void {
+    if (this.phase === 'fallen') return;
+    for (let i = this.monsters.length - 1; i >= 0; i--) if (!this.monsters[i]!.alive) this.monsters.splice(i, 1);
+    let rate = 0;
+    this.onPlaza = 0;
+    for (const m of this.monsters) {
+      if (hypot(m.x, m.z) > SIEGE.plazaRadius) continue;
+      this.onPlaza++;
+      rate += isBossType(m.tag) ? SIEGE.bossCorrupt : SIEGE.corruptRate;
+    }
+    this.corruption = Math.max(0, this.corruption + (rate > 0 ? rate : -SIEGE.cleanseRate) * dt);
+    if (this.corruption >= SIEGE.max) {
+      this.corruption = SIEGE.max;
+      this.phase = 'fallen';
+      return;
+    }
+    if (this.phase === 'break') {
+      this.timer -= dt;
+      if (this.timer <= 0) this.startWave();
+    } else if (this.monsters.length === 0) this.clearWave();
+  }
+
+  private startWave(): void {
+    this.wave++;
+    this.phase = 'fight';
+    const roster = waveRoster(this.wave);
+    const minutes = waveMinutes(this.wave);
+    const hp = waveHealth(this.wave);
+    roster.forEach((type, i) => {
+      // early waves come from the north gate only, then from both
+      const gate = SIEGE.gates[this.wave >= 3 ? i % 2 : 0]!;
+      const yaw = Math.atan2(gate.x, gate.z);
+      const spread = isBossType(type) ? 0 : ((i >> 1) % 6) - 2.5;
+      const x = gate.x + spread * 2.2;
+      const z = gate.z + (gate.z > 0 ? -1 : 1) * (Math.floor(i / 12) * 2.5);
+      const u = monsterUnit(this.base, type, { x, z, yaw }, minutes);
+      if (hp > 1) {
+        const c = u.combatant;
+        c.refreshTimedMod('maxHealth', c.stats.maxHealth * (hp - 1), 1e9);
+        c.health = c.stats.maxHealth;
+      }
+      u.tag = type;
+      // each monster has its own spot on the plaza, so the horde spreads out over it
+      const a = (i / roster.length) * Math.PI * 2;
+      const r = isBossType(type) ? 0 : 5 + (i % 3) * 3;
+      u.home.x = Math.sin(a) * r;
+      u.home.z = Math.cos(a) * r;
+      const kind: CampKind = isBossType(type) ? (type as CampKind) : 'small';
+      const camp: CampState = { camp: { id: `siege:${this.wave}:${i}`, kind, team: null, at: [x, z] }, members: [u], respawnAt: null, foe: null };
+      u.brain = new SiegeBrain(this.sim, u, camp);
+      this.monsters.push(u);
+      this.sim.add(u);
+    });
+  }
+
+  private clearWave(): void {
+    this.phase = 'break';
+    this.timer = SIEGE.breakTime;
+    this.corruption = Math.max(0, this.corruption - SIEGE.waveCleanse);
+    for (const g of this.sim.units) {
+      if (g.kind !== 'god' || g.team === 'neutral') continue;
+      this.sim.reward(g, 80 + 25 * this.wave, 60 + 10 * this.wave);
+      if (g.alive) {
+        const c = g.combatant;
+        c.heal(c.stats.maxHealth * 0.35);
+        c.mana = Math.min(c.stats.maxMana, c.mana + c.stats.maxMana * 0.35);
+      }
+    }
+  }
+}

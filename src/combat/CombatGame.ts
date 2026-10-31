@@ -33,6 +33,8 @@ import type { NetSession } from '../net/Session';
 import { hypot } from '../core/math';
 import { Clash, CLASH, CLASH_SPAWNS } from '../sim/Clash';
 import { ClashHud } from '../ui/ClashHud';
+import { Siege, SIEGE, SIEGE_SPAWNS } from '../sim/Siege';
+import { SiegeHud } from '../ui/SiegeHud';
 
 
 const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
@@ -46,7 +48,7 @@ const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
 export interface CombatDeps {
   world: World;
   /** 'conquest' plays a full match against bots; 'clash' a 3v3 fight over the temple plaza; 'arena' is the training ground. */
-  mode?: 'arena' | 'conquest' | 'clash';
+  mode?: 'arena' | 'conquest' | 'clash' | 'siege';
   /** The player's god (defaults to Zeus). */
   god?: string;
   input: Input;
@@ -79,6 +81,8 @@ export class CombatGame implements Updatable {
   private endTimer = 0;
   private clash: Clash | null = null;
   private clashHud: ClashHud | null = null;
+  private siege: Siege | null = null;
+  private siegeHud: SiegeHud | null = null;
   /** The plaza's edge, glowing in the color of whoever holds it. */
   private plazaRing: GroundDecal | null = null;
   private readonly views: UnitViews;
@@ -119,10 +123,11 @@ export class CombatGame implements Updatable {
     const mySlot = slots?.find((s) => s.player === net!.me) ?? null;
     const myTeam = mySlot?.team ?? 'order';
     const clash = deps.mode === 'clash';
-    const spawn = conquest ? spawnPoint(myTeam, mySlot?.spot ?? 1) : clash ? CLASH_SPAWNS.order[0]! : world.spawn;
+    const siege = deps.mode === 'siege';
+    const spawn = conquest ? spawnPoint(myTeam, mySlot?.spot ?? 1) : clash ? CLASH_SPAWNS.order[0]! : siege ? SIEGE_SPAWNS[1]! : world.spawn;
     this.bases = conquest
       ? conquestBases()
-      : clash
+      : clash || siege
         ? { order: { ...CLASH.bases.order }, chaos: { ...CLASH.bases.chaos } }
         : {
           order: { x: spawn.x, z: spawn.z + 2, radius: 9 },
@@ -166,7 +171,7 @@ export class CombatGame implements Updatable {
     this.shapeDecal.mesh.visible = this.rangeDecal.mesh.visible = false;
     world.vfx.add(this.shapeDecal.mesh, this.rangeDecal.mesh);
 
-    if (conquest || clash) player.spawn(spawn.x, spawn.z, spawn.yaw);
+    if (conquest || clash || siege) player.spawn(spawn.x, spawn.z, spawn.yaw);
     const mine = godById(mySlot?.god ?? deps.god ?? 'zeus') ?? GODS[0]!;
     this.player = godUnit(mine, myTeam, { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
@@ -186,7 +191,7 @@ export class CombatGame implements Updatable {
 
     this.hud = new CombatHud(this.player, deps.camera, (u, out) => this.views.headOf(u, out));
     this.menu = new LoadoutMenu(
-      conquest || clash
+      conquest || clash || siege
         ? { combatant: () => this.player.combatant, gods: GODS, onClose: () => undefined }
         : {
             combatant: () => this.player.combatant,
@@ -218,6 +223,12 @@ export class CombatGame implements Updatable {
       return;
     }
 
+    if (siege) {
+      this.startSiege(mine);
+      this.sim.drainEvents();
+      return;
+    }
+
     if (clash) {
       this.startClash(mine);
       this.sim.drainEvents();
@@ -243,7 +254,7 @@ export class CombatGame implements Updatable {
    * nothing on screen shows them; the loader's shader pre-compile picks them up too.
    */
   private warmup(parent: THREE.Object3D): void {
-    if (!this.match) return;
+    if (!this.match && !this.siege) return;
     const group = new THREE.Group();
     group.position.y = -500;
     for (const root of monsterWarmup()) group.add(root);
@@ -283,6 +294,34 @@ export class CombatGame implements Updatable {
     this.plazaRing.place({ type: 'ring', radius: CLASH.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
     this.deps.world.vfx.add(this.plazaRing.mesh);
     this.hud.toast('Hold the temple plaza. Press K to spend your skill points.');
+  }
+
+  /** Temple Siege: the player and two bot allies hold the plaza against endless monster waves. */
+  private startSiege(mine: GodDef): void {
+    this.siege = new Siege(this.sim, godById('zeus')!);
+    const allies = [...GODS.filter((g) => g.id !== mine.id)].sort(() => Math.random() - 0.5).slice(0, 2);
+    const gods: Unit[] = [this.player];
+    allies.forEach((def, i) => {
+      const at = SIEGE_SPAWNS[i === 0 ? 0 : 2]!;
+      const u = godUnit(def, 'order', at);
+      // one bot leans north, one south, so both gates get a defender
+      u.brain = new GodBot(this.sim, u, { anchor: { x: 0, z: i === 0 ? -9 : 9 }, leash: 40, aggro: 26, aggression: 0.6, recall: true });
+      this.sim.add(u);
+      gods.push(u);
+    });
+    for (const u of gods) {
+      u.combatant.gainXp(XP_TABLE[SIEGE.startLevel - 1]!);
+      u.combatant.gainFavor(SIEGE.startFavor);
+      u.combatant.health = u.combatant.stats.maxHealth;
+      u.combatant.mana = u.combatant.stats.maxMana;
+    }
+    this.warmup(this.deps.world.actors);
+    this.siegeHud = new SiegeHud(this.siege);
+    this.plazaRing = new GroundDecal(this.groundAt);
+    this.plazaRing.setStyle('zone');
+    this.plazaRing.place({ type: 'ring', radius: SIEGE.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
+    this.deps.world.vfx.add(this.plazaRing.mesh);
+    this.hud.toast('Monsters march on the plaza. Keep them off it. Press K to spend your skill points.');
   }
 
   private addTeam(team: 'order' | 'chaos', gods: readonly GodDef[], roles: readonly BotRole[], spots: readonly number[]): void {
@@ -351,7 +390,7 @@ export class CombatGame implements Updatable {
 
   update(dt: number): void {
     // after a Titan falls the world keeps moving a few seconds, then freezes behind the end screen
-    if (this.match?.winner || this.clash?.winner) this.endTimer += dt;
+    if (this.match?.winner || this.clash?.winner || this.siege?.phase === 'fallen') this.endTimer += dt;
     if (this.netGuest) {
       this.netGuest.basic = this.basicHeld;
       this.views.beforeStep(this.sim.units);
@@ -363,6 +402,7 @@ export class CombatGame implements Updatable {
       this.netHost?.beforeStep();
       this.match?.step(dt);
       this.clash?.step(dt);
+      this.siege?.step(dt);
       this.sim.step(dt);
       this.netHost?.afterStep(dt);
       this.views.afterStep(this.sim.units);
@@ -397,7 +437,7 @@ export class CombatGame implements Updatable {
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
 
     this.basicHeld = false;
-    if (!this.menu.isOpen && !this.match?.winner && !this.clash?.winner) this.handleCombatInput();
+    if (!this.menu.isOpen && !this.match?.winner && !this.clash?.winner && this.siege?.phase !== 'fallen') this.handleCombatInput();
     this.netGuest?.syncBuild();
 
     for (const e of this.sim.drainEvents()) {
@@ -412,6 +452,16 @@ export class CombatGame implements Updatable {
     this.views.frame(this.sim.units, dt, alpha, time);
     this.matchHud?.frame(dt, this.sim.units, input.isDown('Tab'));
     this.clashHud?.frame();
+    this.siegeHud?.frame();
+    if (this.plazaRing && this.siege) {
+      // gold while clean, darkening to blood red as the corruption fills
+      const k = this.siege.corruption / SIEGE.max;
+      const lerp = (a: number, b: number) => {
+        const ch = (s: number) => Math.round(((a >> s) & 255) + (((b >> s) & 255) - ((a >> s) & 255)) * k);
+        return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+      };
+      this.plazaRing.setColors(lerp(0xd9a845, 0xff2414), lerp(0xfff0c0, 0xffb090));
+    }
     if (this.plazaRing && this.clash) {
       const state = this.clash.plaza;
       const [main, core] =
