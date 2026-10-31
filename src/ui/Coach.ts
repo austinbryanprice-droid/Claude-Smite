@@ -14,6 +14,8 @@ export interface CoachView {
   /** The player has died at least once and is back. */
   respawned: boolean;
   menuOpen: boolean;
+  /** Modes without a fountain to run back to (Temple Duel) skip the fountain tips. */
+  fountain: boolean;
 }
 
 export interface Tip {
@@ -30,8 +32,8 @@ export const TIPS: readonly Tip[] = [
   { id: 'death', text: 'You will be back in a few seconds. Spend skill points with <kbd>K</kbd> while you wait.', when: (v) => !v.alive },
   { id: 'points', text: 'You have a skill point! Press <kbd>K</kbd> to grow your skill trees and change how your god fights.', when: (v) => v.alive && v.unspentPoints > 0 && !v.menuOpen },
   { id: 'ult', text: 'Your ultimate is ready: press <kbd>4</kbd> or <kbd>R</kbd>.', when: (v) => v.alive && v.ultReady },
-  { id: 'lowhp', text: 'Low on health? Step back to your fountain: it heals you fast.', when: (v) => v.alive && v.healthPct < 0.3 && !v.inBase },
-  { id: 'swap', text: 'At the fountain you can swap which skills sit on your bar: open <kbd>K</kbd>.', when: (v) => v.alive && v.inBase && v.respawned && !v.menuOpen },
+  { id: 'lowhp', text: 'Low on health? Step back to your fountain: it heals you fast.', when: (v) => v.fountain && v.alive && v.healthPct < 0.3 && !v.inBase },
+  { id: 'swap', text: 'At the fountain you can swap which skills sit on your bar: open <kbd>K</kbd>.', when: (v) => v.fountain && v.alive && v.inBase && v.respawned && !v.menuOpen },
 ];
 
 /** The tip to show now, if any, given the ones already seen. */
@@ -59,6 +61,7 @@ export class Coach {
   constructor(
     private readonly player: Unit,
     private readonly menuOpen: () => boolean,
+    private readonly fountain = true,
   ) {
     this.el.className = 'coach';
     document.body.appendChild(this.el);
@@ -85,6 +88,7 @@ export class Coach {
         inBase: c.inBase,
         respawned: this.died && c.alive,
         menuOpen: this.menuOpen(),
+        fountain: this.fountain,
       },
       this.seen,
     );

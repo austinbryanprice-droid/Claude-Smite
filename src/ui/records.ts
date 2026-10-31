@@ -6,7 +6,7 @@ export interface ModeRecord {
   best: number;
 }
 
-export type RecordMode = 'conquest' | 'clash' | 'siege';
+export type RecordMode = 'conquest' | 'clash' | 'siege' | 'duel';
 
 const KEY = 'ascendant.records';
 /** Where the Siege best lived before records existed. */
@@ -42,7 +42,7 @@ export function addResult(mode: RecordMode, result: { won?: boolean; best?: numb
 
 /** One line for the mode's card on the start screen, or '' before the first game. */
 export function recordLine(mode: string): string {
-  if (mode !== 'conquest' && mode !== 'clash' && mode !== 'siege') return '';
+  if (mode !== 'conquest' && mode !== 'clash' && mode !== 'siege' && mode !== 'duel') return '';
   const r = getRecord(mode);
   if (mode === 'siege') return r.best ? `Best: ${r.best} ${r.best === 1 ? 'wave' : 'waves'}` : '';
   return r.played ? `${r.won} ${r.won === 1 ? 'win' : 'wins'} in ${r.played} ${r.played === 1 ? 'game' : 'games'}` : '';

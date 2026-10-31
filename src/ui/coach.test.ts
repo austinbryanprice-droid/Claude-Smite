@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pickTip, type CoachView } from './Coach';
 
-const base: CoachView = { alive: true, healthPct: 1, unspentPoints: 0, ultReady: false, inBase: false, respawned: false, menuOpen: false };
+const base: CoachView = { alive: true, healthPct: 1, unspentPoints: 0, ultReady: false, inBase: false, respawned: false, menuOpen: false, fountain: true };
 
 describe('coach tips', () => {
   it('shows nothing when nothing matters yet', () => {
@@ -20,6 +20,7 @@ describe('coach tips', () => {
     expect(pickTip({ ...base, ultReady: true, healthPct: 0.1 }, new Set())?.id).toBe('ult');
     expect(pickTip({ ...base, healthPct: 0.1 }, new Set())?.id).toBe('lowhp');
     expect(pickTip({ ...base, healthPct: 0.1, inBase: true }, new Set())).toBeNull();
+    expect(pickTip({ ...base, healthPct: 0.1, fountain: false }, new Set())).toBeNull();
   });
 
   it('offers the skill swap only back at the fountain after a respawn', () => {
