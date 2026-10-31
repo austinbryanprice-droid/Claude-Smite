@@ -11,6 +11,7 @@ import type { Terrain } from './Terrain';
 import type { MapContent } from './World';
 import { hypot } from '../core/math';
 import { mergeStatic } from './merge';
+import { slice } from '../core/slices';
 
 /**
  * The ruined temple at the center of the arena: a stepped circular platform,
@@ -23,27 +24,36 @@ export class Temple implements MapContent {
   readonly fires: Fire[] = [];
   readonly spawn = Arena.spawn;
   readonly groundColor = new THREE.Color(0.16, 0.17, 0.09);
-  readonly relic: Relic;
+  relic!: Relic;
 
-  constructor(
+  private constructor(
     private readonly mats: MaterialLibrary,
     private readonly terrain: Terrain,
     private readonly collision: CollisionWorld,
   ) {
     this.group.name = 'temple';
-    const ground = this.buildPlatform();
-    this.buildColumns();
-    this.relic = this.buildCenter();
-    this.buildGates();
-    this.buildLaneWalls();
-    this.buildBraziers();
-    this.buildBoulders();
+  }
+
+  /** Builds the temple a part at a time, giving the browser turns in between (see `slice`). */
+  static async create(mats: MaterialLibrary, terrain: Terrain, collision: CollisionWorld): Promise<Temple> {
+    const t = new Temple(mats, terrain, collision);
+    const ground = t.buildPlatform();
+    await slice();
+    await t.buildColumns();
+    t.relic = t.buildCenter();
+    t.buildGates();
+    t.buildLaneWalls();
+    await slice();
+    t.buildBraziers();
+    t.buildBoulders();
+    await slice();
     // ~200 parts in one draw per material and one shadow caster (the
     // materials are world-space triplanar, so baking moves no texture, and
     // turned parts keep their light: see `turnedVariant`). The platform's
     // steps and floor cast no shadow, so they stay apart from the marble
     // that does.
-    mergeStatic(this.group, [this.relic.group, ...this.fires.map((f) => f.group), ...ground]);
+    mergeStatic(t.group, [t.relic.group, ...t.fires.map((f) => f.group), ...ground]);
+    return t;
   }
 
   private add(mesh: THREE.Mesh, cast = true): THREE.Mesh {
@@ -81,7 +91,7 @@ export class Temple implements MapContent {
     return [steps, floor];
   }
 
-  private buildColumns(): void {
+  private async buildColumns(): Promise<void> {
     const p = Arena.plaza;
     const R = p.columnRadius;
     const baseGeo = columnBase(R);
@@ -94,6 +104,7 @@ export class Temple implements MapContent {
     const fallenAt = new Set([7]);
     const y0 = p.topY;
     for (let i = 0; i < p.columnCount; i++) {
+      await slice();
       // Leave gaps where the lanes cross the ring (north and south).
       const a = (i / p.columnCount) * Math.PI * 2 + Math.PI / p.columnCount;
       const x = Math.cos(a) * p.columnRing;
@@ -139,6 +150,7 @@ export class Temple implements MapContent {
       const cornice = this.add(new THREE.Mesh(arcBlock(ring - 0.95, ring + 0.95, 0.32, start - 0.01, len + 0.02, 0.04), this.mats.marble));
       cornice.position.y = topY + 0.85;
     }
+    await slice();
   }
 
   private buildFallenColumn(x: number, z: number, a: number, R: number, random: () => number): void {

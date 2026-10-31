@@ -30,6 +30,7 @@ import { bakeAll } from './audio/bank';
 import { GameAudio } from './audio/GameAudio';
 import { Music } from './audio/music';
 import { installUiSounds, mountAudioPanel } from './ui/AudioPanel';
+import { slice } from './core/slices';
 
 async function main(): Promise<void> {
   installErrorHandlers();
@@ -123,27 +124,36 @@ async function main(): Promise<void> {
     pipelines.preparing = false;
   };
 
+  /** The map being built, so a second one waits its turn. */
+  let building: Promise<unknown> = Promise.resolve();
   /**
    * Builds the map, lights it and prepares its shaders, plus every god's (and the
    * jungle's in Conquest), so pressing Play only has the little that is left to do.
    */
   const prepare = async (mode: GameMode) => {
     hud.progress(0.6, mode === 'conquest' ? 'Raising the battlefield…' : 'Raising the temple…');
-    await new Promise((r) => setTimeout(r, 0));
-    const world = new World(textures, camera, mode);
+    // a guess behind the title screen may still be building
+    const build = () => World.create(textures, camera, mode);
+    const world = await (building = building.then(build, build));
     const post = new PostFX(renderer, world.scene, camera);
     hud.progress(0.8, 'Lighting the braziers…');
     resize();
     await world.applyQuality(renderer, quality);
+    await slice();
     post.build(quality);
+    await slice();
     world.bakeLighting(renderer);
+    await slice();
     hud.progress(0.85, 'Preparing shaders…');
     // the lights a match starts with: the pool at the fires nearest the spawn
     // (the map's spell lights are already in place)
     world.update(0, 0, new THREE.Vector3(world.spawn.x, 0, world.spawn.z));
     // every god and monster, kept until the match's own last preparation
     const models = new THREE.Group();
-    for (const g of GODS) models.add(new GodModel(g.id).root);
+    for (const g of GODS) {
+      models.add(new GodModel(g.id).root);
+      await slice();
+    }
     // Odin's Einherjar (summons are drawn on the fallback god's body, in their own colors)
     models.add(new GodModel('zeus', 'einherjar').root);
     if (mode === 'conquest') for (const root of monsterWarmup()) models.add(root);

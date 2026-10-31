@@ -3,6 +3,7 @@ import { ConquestLayout as L, type Vec2 } from '../../map/ConquestLayout';
 import type { GrassField } from '../Grass';
 import type { TerrainDef } from '../Terrain';
 import { hypot } from '../../core/math';
+import { slice } from '../../core/slices';
 
 /** Grass verge on each side of a paved lane that is still walkable. */
 const LANE_VERGE = 5;
@@ -30,12 +31,20 @@ class FieldGrid {
   private readonly data: Float32Array;
   private readonly n: number;
 
-  constructor(private readonly half: number, private readonly cell: number, fn: (x: number, z: number) => number) {
+  private constructor(private readonly half: number, private readonly cell: number) {
     this.n = Math.ceil((half * 2) / cell) + 1;
     this.data = new Float32Array(this.n * this.n);
-    for (let j = 0; j < this.n; j++) {
-      for (let i = 0; i < this.n; i++) this.data[j * this.n + i] = fn(-half + i * cell, -half + j * cell);
+  }
+
+  /** Samples `fn` a row at a time, giving the browser turns in between (see `slice`). */
+  static async of(half: number, cell: number, fn: (x: number, z: number) => number): Promise<FieldGrid> {
+    const grid = new FieldGrid(half, cell);
+    const { n, data } = grid;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) data[j * n + i] = fn(-half + i * cell, -half + j * cell);
+      await slice();
     }
+    return grid;
   }
 
   sample(x: number, z: number): number {
@@ -64,12 +73,15 @@ function polyDist(px: number, pz: number, pts: readonly Vec2[]): number {
   return d;
 }
 
+/** Towers and Phoenixes, each on a paved pad. */
+const PADS = [...L.towers, ...L.phoenixes];
+
 /**
  * Conquest terrain: paved lanes and jungle corridors cut through raised,
  * overgrown rock walls, inside a ring of cliffs and distant mountains. Every
  * shape comes from `ConquestLayout`, so gameplay and visuals always agree.
  */
-export function conquestTerrain(): ConquestTerrainDef {
+export async function conquestTerrain(): Promise<ConquestTerrainDef> {
   const E = L.halfExtent;
   const plazas = L.plazas;
   const laneD = (x: number, z: number) => {
@@ -93,11 +105,11 @@ export function conquestTerrain(): ConquestTerrainDef {
   const n3 = simplex2(203);
   const half = E + 20;
   const cell = 0.75;
-  const lane = new FieldGrid(half, cell, laneD);
-  const path = new FieldGrid(half, cell, pathD);
-  const plaza = new FieldGrid(half, cell, plazaD);
+  const lane = await FieldGrid.of(half, cell, laneD);
+  const path = await FieldGrid.of(half, cell, pathD);
+  const plaza = await FieldGrid.of(half, cell, plazaD);
   // The walls wander a little so corridors don't look machine-cut.
-  const open = new FieldGrid(half, cell, (x, z) => {
+  const open = await FieldGrid.of(half, cell, (x, z) => {
     const wobble = fbm2(n1, x * 0.06, z * 0.06, 3) * 1.6;
     return Math.max(LANE_VERGE - laneD(x, z), PATH_VERGE - pathD(x, z), PLAZA_VERGE - plazaD(x, z)) + wobble;
   });
@@ -146,7 +158,7 @@ export function conquestTerrain(): ConquestTerrainDef {
       // structure pads and the base courtyards are paved; camps are dirt clearings
       let pavedPad = Infinity;
       let campD = Infinity;
-      for (const s of [...L.towers, ...L.phoenixes]) pavedPad = Math.min(pavedPad, hypot(x - s.at[0], z - s.at[1]) - L.radii.structurePad);
+      for (const s of PADS) pavedPad = Math.min(pavedPad, hypot(x - s.at[0], z - s.at[1]) - L.radii.structurePad);
       for (const b of L.bases) {
         pavedPad = Math.min(pavedPad, hypot(x - b.plaza.at[0], z - b.plaza.at[1]) - b.plaza.radius);
         pavedPad = Math.min(pavedPad, hypot(x - b.fountain[0], z - b.fountain[1]) - L.radii.fountain - 2);

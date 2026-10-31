@@ -3,6 +3,7 @@ import {
   dot, float, max, mix, normalWorld, positionWorld, sin, smoothstep, texture, transformNormalToView, vec2, vec3,
 } from '../render/tsl';
 import { planar, triplanar, type TextureLibrary } from './Materials';
+import { slice } from '../core/slices';
 
 /** Everything a map supplies to build its terrain. */
 export interface TerrainDef {
@@ -34,40 +35,44 @@ export class Terrain {
   readonly root = new THREE.Group();
   readonly size: number;
   private readonly segments: number;
-  private readonly heights: Float32Array;
   private readonly res: number;
   /** RGBA splat mask over `def.maskSize`: R dirt path, G paved lane, B damp/dark, A macro variation. */
   readonly mask: THREE.DataTexture;
 
-  constructor(textures: TextureLibrary, readonly def: TerrainDef) {
+  private constructor(readonly def: TerrainDef, private readonly heights: Float32Array, mask: Uint8Array) {
     this.size = def.size;
     this.segments = def.segments;
     this.res = def.segments + 1;
-    this.heights = this.generateHeights();
-    this.mask = this.generateMask();
-    const geometry = this.buildGeometry();
-    const material = this.buildMaterial(textures);
+    this.mask = maskTexture(mask, def.maskRes);
     this.root.name = 'terrain';
-    for (const tile of this.tiles(geometry)) {
+  }
+
+  /** Builds the terrain a few rows at a time, giving the browser turns in between (see `slice`). */
+  static async create(textures: TextureLibrary, def: TerrainDef): Promise<Terrain> {
+    const terrain = new Terrain(def, await generateHeights(def), await generateMask(def));
+    const geometry = await terrain.buildGeometry();
+    const material = terrain.buildMaterial(textures);
+    for (const tile of terrain.tiles(geometry)) {
       const mesh = new THREE.Mesh(tile, material);
       mesh.name = 'terrain-tile';
       mesh.receiveShadow = true;
       mesh.castShadow = true;
-      this.root.add(mesh);
+      terrain.root.add(mesh);
+      await slice();
     }
     geometry.dispose();
+    return terrain;
   }
 
   /**
    * Cuts the full grid into square tiles that share their edge vertices.
    * Normals come from the full grid, so there are no seams between tiles.
    */
-  private tiles(full: THREE.BufferGeometry): THREE.BufferGeometry[] {
+  private *tiles(full: THREE.BufferGeometry): Generator<THREE.BufferGeometry> {
     const pos = full.getAttribute('position') as THREE.BufferAttribute;
     const nrm = full.getAttribute('normal') as THREE.BufferAttribute;
     const r = this.res;
     const n = Math.ceil(this.segments / TILE_CELLS);
-    const out: THREE.BufferGeometry[] = [];
     for (let tj = 0; tj < n; tj++) {
       for (let ti = 0; ti < n; ti++) {
         const i0 = Math.floor((ti * this.segments) / n);
@@ -103,49 +108,12 @@ export class Terrain {
         g.setIndex(idx);
         g.computeBoundingSphere();
         g.computeBoundingBox();
-        out.push(g);
+        yield g;
       }
     }
-    return out;
   }
 
-  private generateHeights(): Float32Array {
-    const h = new Float32Array(this.res * this.res);
-    const half = this.size / 2;
-    const step = this.size / this.segments;
-    for (let j = 0; j < this.res; j++) {
-      for (let i = 0; i < this.res; i++) {
-        h[j * this.res + i] = this.def.height(-half + i * step, -half + j * step);
-      }
-    }
-    return h;
-  }
-
-  private generateMask(): THREE.DataTexture {
-    const N = this.def.maskRes;
-    const S = this.def.maskSize;
-    const data = new Uint8Array(N * N * 4);
-    const half = S / 2;
-    for (let j = 0; j < N; j++) {
-      for (let i = 0; i < N; i++) {
-        const w = this.def.mask(-half + ((i + 0.5) / N) * S, -half + ((j + 0.5) / N) * S);
-        const k = (j * N + i) * 4;
-        data[k] = Math.round(w[0] * 255);
-        data[k + 1] = Math.round(w[1] * 255);
-        data[k + 2] = Math.round(w[2] * 255);
-        data[k + 3] = Math.round(w[3] * 255);
-      }
-    }
-    const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
-    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-    tex.magFilter = THREE.LinearFilter;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.generateMipmaps = true;
-    tex.needsUpdate = true;
-    return tex;
-  }
-
-  private buildGeometry(): THREE.BufferGeometry {
+  private async buildGeometry(): Promise<THREE.BufferGeometry> {
     const geo = new THREE.PlaneGeometry(this.size, this.size, this.segments, this.segments);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position as THREE.BufferAttribute;
@@ -156,7 +124,9 @@ export class Terrain {
       pos.setY(v, this.heightAt(x, z));
     }
     geo.deleteAttribute('uv');
+    await slice();
     geo.computeVertexNormals();
+    await slice();
     return geo;
   }
 
@@ -263,4 +233,49 @@ export class Terrain {
     const d = this.mask.image.data as Uint8Array;
     return { dirt: d[k]! / 255, paved: d[k + 1]! / 255 };
   }
+}
+
+/** The heightfield's grid, a row at a time. */
+async function generateHeights(def: TerrainDef): Promise<Float32Array> {
+  const res = def.segments + 1;
+  const h = new Float32Array(res * res);
+  const half = def.size / 2;
+  const step = def.size / def.segments;
+  for (let j = 0; j < res; j++) {
+    for (let i = 0; i < res; i++) {
+      h[j * res + i] = def.height(-half + i * step, -half + j * step);
+    }
+    await slice();
+  }
+  return h;
+}
+
+/** The splat mask's texels, a row at a time. */
+async function generateMask(def: TerrainDef): Promise<Uint8Array> {
+  const N = def.maskRes;
+  const S = def.maskSize;
+  const data = new Uint8Array(N * N * 4);
+  const half = S / 2;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const w = def.mask(-half + ((i + 0.5) / N) * S, -half + ((j + 0.5) / N) * S);
+      const k = (j * N + i) * 4;
+      data[k] = Math.round(w[0] * 255);
+      data[k + 1] = Math.round(w[1] * 255);
+      data[k + 2] = Math.round(w[2] * 255);
+      data[k + 3] = Math.round(w[3] * 255);
+    }
+    await slice();
+  }
+  return data;
+}
+
+function maskTexture(data: Uint8Array, N: number): THREE.DataTexture {
+  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  return tex;
 }
