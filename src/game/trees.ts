@@ -1,7 +1,11 @@
-import type { GodDef, Keystone, SkillModField, SkillTree, StatKey, TreeNode } from './types';
+import type { Effect, GodDef, Keystone, SkillModField, SkillTree, StatKey, TreeNode } from './types';
 
-/** Points that must already be spent in a tree before a node of this tier opens. */
-export const TIER_REQUIREMENT: Record<TreeNode['tier'], number> = { 1: 0, 2: 5, 3: 10, 4: 15 };
+/**
+ * Points that must already be spent in a tree before a node of this tier
+ * opens. A keystone needs 18, so the 35-point budget buys exactly one: the
+ * keystone is the build's playstyle.
+ */
+export const TIER_REQUIREMENT: Record<TreeNode['tier'], number> = { 1: 0, 2: 5, 3: 10, 4: 18 };
 
 /** Ranks per node id, across all three of a god's trees. */
 export type Allocation = Readonly<Record<string, number>>;
@@ -103,6 +107,7 @@ export interface SkillMods {
   ccDurationPct: number;
   extraHits: number;
   extraBounces: number;
+  charges: number;
 }
 
 export function emptySkillMods(): SkillMods {
@@ -115,6 +120,7 @@ export function emptySkillMods(): SkillMods {
     ccDurationPct: 0,
     extraHits: 0,
     extraBounces: 0,
+    charges: 0,
   };
 }
 
@@ -123,10 +129,12 @@ export interface TreeBonuses {
   stats: Partial<Record<StatKey, number>>;
   skills: Record<string, SkillMods>;
   keystones: Keystone[];
+  /** Effects tree nodes add to skills, by skill id. */
+  augments: Record<string, Effect[]>;
 }
 
 export function treeBonuses(index: TreeIndex, alloc: Allocation): TreeBonuses {
-  const out: TreeBonuses = { stats: {}, skills: {}, keystones: [] };
+  const out: TreeBonuses = { stats: {}, skills: {}, keystones: [], augments: {} };
   for (const [id, rank] of Object.entries(alloc)) {
     const entry = index.node.get(id);
     if (!entry || rank <= 0) continue;
@@ -136,6 +144,8 @@ export function treeBonuses(index: TreeIndex, alloc: Allocation): TreeBonuses {
       } else if (e.type === 'skill') {
         const mods = (out.skills[e.skill] ??= emptySkillMods());
         mods[e.field satisfies SkillModField] += e.perRank * rank;
+      } else if (e.type === 'augment') {
+        (out.augments[e.skill] ??= []).push(...e.effects);
       } else {
         out.keystones.push(e.keystone);
       }
@@ -143,3 +153,26 @@ export function treeBonuses(index: TreeIndex, alloc: Allocation): TreeBonuses {
   }
   return out;
 }
+
+/**
+ * The order a bot spends points: its main tree from the bottom up (the
+ * keystone's prerequisite before the other tier-3 nodes, so the keystone
+ * comes as early as the gates allow), then the rest into a second tree.
+ */
+export function botBuildOrder(god: GodDef, main: number): string[] {
+  const order: string[] = [];
+  const add = (tree: SkillTree, withKeystone: boolean) => {
+    const key = tree.nodes.find((n) => n.tier === 4);
+    for (const tier of [1, 2, 3] as const) {
+      const nodes = tree.nodes.filter((n) => n.tier === tier);
+      nodes.sort((a, b) => Number(b.id === key?.requires) - Number(a.id === key?.requires));
+      for (const n of nodes) order.push(n.id);
+    }
+    if (withKeystone && key) order.push(key.id);
+  };
+  const first = god.trees[main % 3]!;
+  add(first, true);
+  add(god.trees[(main + 1) % 3]!, false);
+  return order;
+}
+

@@ -120,3 +120,5 @@
   .lm-foot { flex-wrap: wrap; }
   .lm-loadout { flex-direction: column; }
 }
+.lm-aug { position: absolute; left: -5px; top: -6px; width: 16px; height: 16px; display: grid; place-items: center; font-size: 10px; line-height: 1; color: #1a120a; background: radial-gradient(circle at 40% 35%, #fff4cf, #ffb43a); border-radius: 50%; box-shadow: 0 0 6px rgba(255, 190, 80, 0.8); pointer-events: none; }
+.lm-node.aug.locked .lm-aug { filter: grayscale(1) brightness(0.6); }

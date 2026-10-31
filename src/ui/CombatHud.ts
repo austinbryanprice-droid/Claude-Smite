@@ -123,7 +123,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
  */
 export class CombatHud {
   readonly root: HTMLDivElement;
-  private readonly slots: { tile: HTMLDivElement; icon: HTMLDivElement; cd: HTMLDivElement; cdText: HTMLSpanElement; cost: HTMLSpanElement; lock: HTMLSpanElement; skillId: string; wasCooling: boolean }[] = [];
+  private readonly slots: { tile: HTMLDivElement; icon: HTMLDivElement; cd: HTMLDivElement; cdText: HTMLSpanElement; cost: HTMLSpanElement; lock: HTMLSpanElement; charges: HTMLSpanElement; skillId: string; wasCooling: boolean }[] = [];
   private readonly hpFill: HTMLDivElement;
   private readonly hpShield: HTMLDivElement;
   private readonly hpText: HTMLSpanElement;
@@ -200,7 +200,8 @@ export class CombatHud {
       el('span', 'ch-key', tile, SLOT_KEYS[i]);
       const cost = el('span', 'ch-cost', tile);
       const lock = el('span', 'ch-lock', tile);
-      this.slots.push({ tile, icon, cd, cdText, cost, lock, skillId: '', wasCooling: false });
+      const charges = el('span', 'ch-charges', tile);
+      this.slots.push({ tile, icon, cd, cdText, cost, lock, charges, skillId: '', wasCooling: false });
     }
     this.points = el('div', 'ch-points', frame);
 
@@ -413,6 +414,9 @@ export class CombatHud {
       setText(slot.cdText, cd > 0 ? (cd >= 1 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '');
       setText(slot.cost, locked ? '' : String(Math.round(cost)));
       setText(slot.lock, locked ? `Lv ${i === ULTIMATE_SLOT ? 5 : 1}` : '');
+      // skills a tree gave extra charges show a pip per charge
+      const ch = c.chargesOf(i);
+      setHtml(slot.charges, ch.max > 1 && !locked ? '<i class="on"></i>'.repeat(ch.ready) + '<i></i>'.repeat(ch.max - ch.ready) : '');
     });
     const unspent = c.unspentPoints;
     setHtml(this.points, unspent > 0 ? `<b>${unspent}</b> skill point${unspent > 1 ? 's' : ''} &middot; press <kbd>K</kbd>` : '');
