@@ -3,6 +3,7 @@ import { CLASH, type Clash } from '../sim/Clash';
 import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
 import type { Unit } from '../sim/Unit';
 import { addResult } from './records';
+import { awardLine } from './ascension';
 import { KillTally } from './killTally';
 import type { SimEvent } from '../sim/Unit';
 import './match.css';
@@ -109,10 +110,11 @@ export class ClashHud {
     if (c.winner && !this.shownEnd) {
       this.shownEnd = true;
       const won = c.winner === this.mine;
-      addResult('clash', { won });
+      const { award } = addResult('clash', { won });
       this.end.querySelector('.clash-end-title')!.textContent = won ? 'Victory' : 'Defeat';
       const enemy: Side = this.mine === 'order' ? 'chaos' : 'order';
       this.end.querySelector('.clash-end-score')!.textContent = `${Math.floor(c.score[this.mine])} – ${Math.floor(c.score[enemy])} · takedowns ${c.kills[this.mine]} – ${c.kills[enemy]}`;
+      this.end.querySelector('.clash-end-score')!.insertAdjacentHTML('afterend', awardLine(award));
       if (this.board && this.me) this.end.querySelector('.clash-end-table')!.innerHTML = scoreTable(this.board, this.me, 'gods');
       this.end.classList.add('show', won ? 'won' : 'lost');
       document.exitPointerLock?.();

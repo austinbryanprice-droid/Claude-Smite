@@ -1,0 +1,55 @@
+.asc-badge {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  margin: 2px auto 10px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid rgba(232, 196, 120, 0.45);
+  border-radius: 999px;
+  background: rgba(30, 20, 10, 0.6);
+  color: #f3dfb0;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.asc-badge b {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe6a0, #b8862e 70%);
+  color: #2a1a06;
+  font-size: 13px;
+}
+.asc-bar {
+  display: inline-block;
+  position: relative;
+  width: 90px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.asc-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #c48a2c, #ffe08a);
+}
+.asc-gain {
+  margin: 8px 0 4px;
+  color: #ffe2a0;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+.asc-gain .asc-rank {
+  margin: 0 8px 0 12px;
+  color: #cdb88a;
+  font-size: 13px;
+}
+.asc-gain.up b {
+  color: #fff3c4;
+  text-shadow: 0 0 12px rgba(255, 200, 90, 0.9);
+}
