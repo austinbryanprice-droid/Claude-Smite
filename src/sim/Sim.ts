@@ -618,6 +618,14 @@ export class Sim {
     this.checkLevel(u, before);
   }
 
+  /** Quiet XP and Favor (no reward popup), still announcing level-ups. */
+  grant(u: Unit, xp: number, favor: number): void {
+    const before = u.combatant.level;
+    u.combatant.gainXp(xp);
+    u.combatant.gainFavor(favor);
+    this.checkLevel(u, before);
+  }
+
   private checkLevel(u: Unit, before: number): void {
     const now = u.combatant.level;
     if (now > before) this.emit({ type: 'levelUp', unit: u, level: now });
