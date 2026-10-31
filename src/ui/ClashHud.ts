@@ -3,6 +3,9 @@ import { CLASH, type Clash } from '../sim/Clash';
 import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
 import type { Unit } from '../sim/Unit';
 import { addResult } from './records';
+import { KillTally } from './killTally';
+import type { SimEvent } from '../sim/Unit';
+import './match.css';
 import './clash.css';
 
 const PLAZA_TEXT: Record<string, string> = {
@@ -23,6 +26,10 @@ export class ClashHud {
   private lastBless = '';
   private shownEnd = false;
   private lastPlaza = '';
+  private readonly banner: HTMLElement;
+  private bannerTime = 0;
+  private time = 0;
+  private readonly tally: KillTally | null;
 
   constructor(
     private readonly clash: Clash,
@@ -39,6 +46,7 @@ export class ClashHud {
       </div>
       <div class="clash-state"></div>
       <div class="clash-bless"></div>
+      <div class="mh-banner"></div>
       <div class="clash-end"><div class="clash-end-title"></div><div class="clash-end-score"></div><div class="clash-end-table"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
     const ally = this.root.querySelector('.ally')!;
@@ -49,10 +57,36 @@ export class ClashHud {
     this.state = this.root.querySelector('.clash-state')!;
     this.end = this.root.querySelector('.clash-end')!;
     this.bless = this.root.querySelector('.clash-bless')!;
+    this.banner = this.root.querySelector('.mh-banner')!;
+    this.tally = me ? new KillTally(() => me) : null;
     this.root.querySelector('.clash-again')!.addEventListener('click', () => location.reload());
   }
 
-  frame(): void {
+  /** Takedown banners: the player's kills, streaks and multi-kills, first blood, and the player's own death. */
+  onEvent(e: SimEvent): void {
+    if (e.type !== 'death' || e.unit.kind !== 'god' || !this.tally || this.clash.winner) return;
+    const killer = e.killer ? (e.killer.owner ?? e.killer) : null;
+    const b = this.tally.onGodDeath(e.unit, killer, this.time);
+    if (!b) return;
+    this.banner.className = 'mh-banner';
+    void this.banner.offsetWidth;
+    this.banner.className = `mh-banner show mh-${b.side}`;
+    this.banner.textContent = b.title;
+    if (b.sub) {
+      const sub = document.createElement('small');
+      sub.className = 'mh-banner-sub';
+      sub.textContent = b.sub;
+      this.banner.appendChild(sub);
+    }
+    this.bannerTime = 3;
+  }
+
+  frame(dt = 0): void {
+    this.time += dt;
+    if (this.bannerTime > 0) {
+      this.bannerTime -= dt;
+      if (this.bannerTime <= 0) this.banner.classList.remove('show');
+    }
     const c = this.clash;
     for (const side of ['order', 'chaos'] as const) {
       this.fill[side].style.width = `${(c.score[side] / CLASH.target) * 100}%`;

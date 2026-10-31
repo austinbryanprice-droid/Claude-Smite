@@ -494,13 +494,14 @@ export class CombatGame implements Updatable {
       this.views.onEvent(e);
       this.hud.onEvent(e);
       this.matchHud?.onEvent(e);
+      this.clashHud?.onEvent(e);
       this.feel(e);
       if ((e.type === 'levelUp' || e.type === 'reward' || e.type === 'recall') && e.unit === this.player) this.menu.refresh();
     }
 
     this.views.frame(this.sim.units, dt, alpha, time);
     this.matchHud?.frame(dt, this.sim.units, input.isDown('Tab'));
-    this.clashHud?.frame();
+    this.clashHud?.frame(dt);
     this.siegeHud?.frame();
     this.duelHud?.frame();
     if (this.plazaRing && this.duel) {
