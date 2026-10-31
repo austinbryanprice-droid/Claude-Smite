@@ -8,6 +8,7 @@ import type { NetSession } from '../net/Session';
 import './start.css';
 import { DIFFICULTIES, parseDifficulty, type Difficulty } from '../game/difficulty';
 import { recordLine } from './records';
+import { rankBadge } from './ascension';
 
 export type GameMode = 'conquest' | 'arena' | 'clash' | 'siege' | 'duel';
 
@@ -147,6 +148,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   root.innerHTML = `
     <div class="sm-panel">
       <div class="sm-title">ASCENDANT</div>
+      ${rankBadge()}
       <div class="sm-gods">${gods.map((g) => `<button class="sm-god" data-god="${g.id}"><img src="${import.meta.env.BASE_URL}portraits/${g.id}.jpg" alt="" onerror="this.remove()"><span class="sm-face"><b>${g.name}</b><span>${ROLE_NAMES[g.role] ?? g.role} &middot; ${g.attackRange}</span></span></button>`).join('')}</div>
       <div class="sm-cols">
         <div class="sm-col">

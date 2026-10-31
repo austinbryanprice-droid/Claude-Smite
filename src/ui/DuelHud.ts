@@ -2,6 +2,7 @@ import type { Side } from '../game/combatant';
 import { DUEL, type Duel } from '../sim/Duel';
 import type { Unit } from '../sim/Unit';
 import { addResult } from './records';
+import { awardLine } from './ascension';
 import './clash.css';
 
 /** Temple Duel readout: round wins as pips, the round's state and the ring, and the result. */
@@ -86,9 +87,10 @@ export class DuelHud {
     if (d.winner && !this.shownEnd) {
       this.shownEnd = true;
       const won = d.winner === mine;
-      addResult('duel', { won });
+      const { award } = addResult('duel', { won });
       this.end.querySelector('.clash-end-title')!.textContent = won ? 'Victory' : 'Defeat';
       this.end.querySelector('.clash-end-score')!.textContent = `Rounds ${d.wins[mine]} – ${d.wins[this.foe]} against ${this.rival.name}`;
+      this.end.querySelector('.clash-end-score')!.insertAdjacentHTML('afterend', awardLine(award));
       this.end.classList.add('show', won ? 'won' : 'lost');
       document.exitPointerLock?.();
     }

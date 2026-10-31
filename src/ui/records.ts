@@ -1,3 +1,5 @@
+import { awardXp, gameXp, type Award } from './ascension';
+
 /** Personal records per mode, kept in this browser: games played, won, and the best Siege run. */
 export interface ModeRecord {
   played: number;
@@ -27,8 +29,11 @@ export function getRecord(mode: RecordMode): ModeRecord {
   return { played: 0, won: 0, best: 0, ...loadAll()[mode] };
 }
 
-/** Count a finished game; returns the record as it was before, so a screen can say "new best". */
-export function addResult(mode: RecordMode, result: { won?: boolean; best?: number }): ModeRecord {
+/**
+ * Count a finished game and award its Ascension XP. Returns the record as it
+ * was before (so a screen can say "new best") and the award.
+ */
+export function addResult(mode: RecordMode, result: { won?: boolean; best?: number }): ModeRecord & { award: Award } {
   const all = loadAll();
   const before = { played: 0, won: 0, best: 0, ...all[mode] };
   all[mode] = { played: before.played + 1, won: before.won + (result.won ? 1 : 0), best: Math.max(before.best, result.best ?? 0) };
@@ -37,7 +42,7 @@ export function addResult(mode: RecordMode, result: { won?: boolean; best?: numb
   } catch {
     /* storage unavailable */
   }
-  return before;
+  return { ...before, award: awardXp(gameXp(mode, result)) };
 }
 
 /** One line for the mode's card on the start screen, or '' before the first game. */

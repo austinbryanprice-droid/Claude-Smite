@@ -2,6 +2,7 @@ import { SIEGE, type Siege } from '../sim/Siege';
 import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
 import type { Unit } from '../sim/Unit';
 import { addResult } from './records';
+import { awardLine } from './ascension';
 import './clash.css';
 
 /** Temple Siege readout: the wave, what is left of it, the plaza's corruption, and the final tally. */
@@ -87,10 +88,11 @@ export class SiegeHud {
     if (s.phase === 'fallen' && !this.shownEnd) {
       this.shownEnd = true;
       const held = s.held;
-      const best = addResult('siege', { best: held }).best;
+      const { best, award } = addResult('siege', { best: held });
       const record = held > best;
       this.end.querySelector('.clash-end-score')!.textContent =
         `You held ${held} ${held === 1 ? 'wave' : 'waves'} · ${s.kills} monsters slain · ${s.boons.length} boons · ${record ? 'new best!' : `best ${best}`}`;
+      this.end.querySelector('.clash-end-score')!.insertAdjacentHTML('afterend', awardLine(award));
       if (this.board && this.me) this.end.querySelector('.clash-end-table')!.innerHTML = scoreTable(this.board, this.me, 'monsters');
       this.end.classList.add('show');
       document.exitPointerLock?.();
