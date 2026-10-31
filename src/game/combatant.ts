@@ -677,6 +677,12 @@ export class Combatant {
     this.invalidate();
   }
 
+  /** Every skill off cooldown (a fresh Temple Duel round). */
+  resetCooldowns(): void {
+    this.cooldowns.clear();
+    this.invalidate();
+  }
+
   respawn(): void {
     this.alive = true;
     this.mods = [];

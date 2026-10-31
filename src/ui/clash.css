@@ -48,3 +48,14 @@ body:has(.clash-bar) .hud-panel { top: auto; bottom: 12px; right: 12px; }
 .siege-curse { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); display: none; padding: 2px 12px; font-size: 12px; color: #e6c6ff; background: rgba(30, 6, 36, 0.72); border-radius: 4px; box-shadow: 0 0 0 1px rgba(190, 90, 255, 0.55); text-shadow: 0 1px 2px #000; white-space: nowrap; }
 .siege-curse.show { display: block; animation: clash-in 0.4s ease-out; }
 .siege-curse b { color: #d18cff; margin-right: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+.duel-name { font-size: 16px; font-weight: 700; letter-spacing: 0.06em; text-shadow: 0 2px 4px #000; }
+.duel .ally .duel-name { color: #9fd4ff; }
+.duel .foe .duel-name { color: #ff9a86; }
+.duel-pips { display: flex; gap: 6px; }
+.duel-pips i { width: 14px; height: 14px; border-radius: 50%; background: rgba(0, 0, 0, 0.6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
+.duel .ally .duel-pips i.on { background: radial-gradient(circle at 35% 35%, #e6f4ff, #2a7cff); box-shadow: 0 0 8px rgba(110, 180, 255, 0.9); }
+.duel .foe .duel-pips i.on { background: radial-gradient(circle at 35% 35%, #ffe0c8, #e8332a); box-shadow: 0 0 8px rgba(255, 90, 70, 0.9); }
+.duel-big { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); display: none; font-size: clamp(32px, 6vw, 72px); letter-spacing: 0.12em; text-transform: uppercase; color: #ffe08a; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.9); white-space: nowrap; }
+.duel-big.show { display: block; animation: clash-in 0.35s ease-out; }
+.duel-big[data-side='ally'] { color: #9fd4ff; }
+.duel-big[data-side='foe'] { color: #ff9a86; }

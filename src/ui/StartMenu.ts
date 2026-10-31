@@ -8,7 +8,7 @@ import type { NetSession } from '../net/Session';
 import './start.css';
 import { recordLine } from './records';
 
-export type GameMode = 'conquest' | 'arena' | 'clash' | 'siege';
+export type GameMode = 'conquest' | 'arena' | 'clash' | 'siege' | 'duel';
 
 /** The map a mode is played on. */
 export function mapOf(mode: GameMode): 'conquest' | 'arena' {
@@ -28,6 +28,7 @@ const MODES: { id: GameMode; name: string; text: string }[] = [
   { id: 'conquest', name: 'Conquest', text: '5v5 against bots. Destroy the enemy Titan to win. About 15–20 minutes.' },
   { id: 'clash', name: 'Temple Clash', text: '3v3 king of the hill. Hold the temple plaza and take down gods; the temple\'s blessing doubles points now and then. First to 115. About 4 minutes.' },
   { id: 'siege', name: 'Temple Siege', text: 'You and two bots hold the temple against endless monster waves, with a boss every fifth. Pick a team boon after each wave. How long can you last?' },
+  { id: 'duel', name: 'Temple Duel', text: 'One on one against a bot god. Win a round by taking them down; a ring of fire closes in so nobody can hide. First to 3 rounds. About 2–3 minutes.' },
   { id: 'arena', name: 'Training ground', text: 'Training posts and one enemy Thor. Swap gods and levels freely with K.' },
 ];
 
@@ -66,7 +67,7 @@ function load(): Partial<StartChoice> {
 /** The mode the title screen opens with: the last one played, Conquest at first. */
 export function savedMode(): GameMode {
   const m = load().mode;
-  return m === 'arena' || m === 'clash' || m === 'siege' ? m : 'conquest';
+  return m === 'arena' || m === 'clash' || m === 'siege' || m === 'duel' ? m : 'conquest';
 }
 
 function save(c: StartChoice): void {
@@ -177,7 +178,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
       <div class="sm-skills">${skills
         .map((s, i) => `<div class="sm-skill" title="${s.description.replace(/"/g, '&quot;')}"><div class="sm-ico">${skillIcon(def.id, s)}</div><div class="sm-k">${keys[i]}</div><div class="sm-sn">${s.name}</div></div>`)
         .join('')}</div>
-      <div class="sm-tip">${mode === 'conquest' ? 'You start mid with four allied bots in the other lanes. Go wherever you like.' : mode === 'clash' ? 'You and two bots start at level 8. Stand on the plaza with no enemy on it to score.' : mode === 'siege' ? 'Monsters on the plaza corrupt it. Meet them at the gates, north and south.' : 'Swap gods and jump levels with K at the fountain.'} Press K at your fountain to swap skills and spend tree points.</div>`;
+      <div class="sm-tip">${mode === 'conquest' ? 'You start mid with four allied bots in the other lanes. Go wherever you like.' : mode === 'clash' ? 'You and two bots start at level 8. Stand on the plaza with no enemy on it to score.' : mode === 'siege' ? 'Monsters on the plaza corrupt it. Meet them at the gates, north and south.' : mode === 'duel' ? 'Both gods start at level 9 and gain two levels every round. Stay inside the ring once it closes.' : 'Swap gods and jump levels with K at the fountain.'} Press K at your fountain to swap skills and spend tree points.</div>`;
   };
   render();
 
