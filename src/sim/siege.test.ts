@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { zeus } from '../game/gods';
 import { godUnit } from './factory';
-import { Siege, SIEGE, waveRoster } from './Siege';
+import { BOONS, Siege, SIEGE, waveRoster } from './Siege';
 import { Sim, type SimTerrain } from './Sim';
 
 const flat: SimTerrain = { groundAt: () => 0, resolve: (x, z) => ({ x, z }) };
@@ -49,5 +49,25 @@ describe('Temple Siege', () => {
     expect(siege.phase).toBe('break');
     expect(siege.held).toBe(1);
     expect(g.combatant.xp).toBeGreaterThan(xp);
+  });
+
+  it('offers three boons after a wave; a chosen one lasts through death', () => {
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    const g = sim.add(godUnit(zeus, 'order', { x: 0, z: 0, yaw: 0 }));
+    run(sim, siege, SIEGE.firstWave + 0.1);
+    for (const m of [...siege.monsters]) sim.strike(g, m, 1e6, 'true');
+    run(sim, siege, 0.2);
+    expect(siege.offer).toHaveLength(3);
+    expect(new Set(siege.offer!.map((b) => b.id)).size).toBe(3);
+    siege.offer = [BOONS.find((b) => b.id === 'vitality')!, BOONS[0]!, BOONS[1]!];
+    const hp = g.combatant.stats.maxHealth;
+    siege.choose(0);
+    expect(siege.offer).toBeNull();
+    expect(g.combatant.stats.maxHealth).toBe(hp + 180);
+    g.combatant.takeDamage(1e9);
+    run(sim, siege, SIEGE.respawn + 0.5);
+    expect(g.alive).toBe(true);
+    expect(g.combatant.stats.maxHealth).toBe(hp + 180);
   });
 });

@@ -1,5 +1,5 @@
 import { hypot } from '../core/math';
-import type { GodDef } from '../game/types';
+import type { GodDef, StatKey } from '../game/types';
 import type { CampKind } from '../map/ConquestLayout';
 import { monsterUnit, type MonsterType } from './factory';
 import { MonsterBrain, type CampState } from './Jungle';
@@ -59,7 +59,7 @@ export function waveRoster(n: number): MonsterType[] {
 export const waveMinutes = (n: number): number => (n - 1) * 1.8;
 
 /** Beyond the jungle's growth, later waves get tougher still: health and damage both. */
-export const waveScale = (n: number): number => 1 + Math.max(0, n - 8) * 0.15;
+export const waveScale = (n: number): number => 1 + Math.max(0, n - 6) * 0.22;
 /** The first boss arrives before the team has its keystones, so it comes in lighter. */
 const FIRST_BOSS_HEALTH = 0.7;
 
@@ -105,6 +105,35 @@ export class SiegeBrain extends MonsterBrain {
   }
 }
 
+/**
+ * Boons: after each cleared wave the team picks one of three. Each one lasts
+ * the whole run (through deaths) and they stack, so every run builds differently.
+ */
+export interface Boon {
+  id: string;
+  name: string;
+  text: string;
+  /** Team-wide stat bonuses. */
+  stats?: Partial<Record<StatKey, number>>;
+  /** Siege rules: monsters corrupt slower, or the plaza is cleansed now. */
+  corruptScale?: number;
+  cleanse?: number;
+}
+
+export const BOONS: readonly Boon[] = [
+  { id: 'fury', name: 'Fury of the Gods', text: '+8% damage', stats: { damageBonus: 0.08 } },
+  { id: 'vitality', name: 'Titan Blood', text: '+180 max health', stats: { maxHealth: 180 } },
+  { id: 'haste', name: 'Quickened Rites', text: '+8% cooldown reduction', stats: { cooldownReduction: 0.08 } },
+  { id: 'frenzy', name: 'Frenzy', text: '+18% attack speed', stats: { bonusAttackSpeed: 0.18 } },
+  { id: 'swift', name: 'Winged Sandals', text: '+8% movement speed', stats: { bonusMoveSpeed: 0.08 } },
+  { id: 'thirst', name: 'Bloodthirst', text: '+7% lifesteal', stats: { lifesteal: 0.07 } },
+  { id: 'bulwark', name: 'Temple Bulwark', text: '+14 physical and magical protection', stats: { physicalProtection: 14, magicalProtection: 14 } },
+  { id: 'spring', name: 'Sacred Spring', text: '+5 health and +4 mana per second', stats: { healthRegen: 5, manaRegen: 4 } },
+  { id: 'might', name: 'Heroic Might', text: '+20 strength and +30 intelligence', stats: { strength: 20, intelligence: 30 } },
+  { id: 'hallowed', name: 'Hallowed Ground', text: 'Monsters corrupt the plaza 25% slower', corruptScale: 0.75 },
+  { id: 'purify', name: 'Purifying Flame', text: 'Cleanse 40 corruption now', cleanse: 40 },
+];
+
 export type SiegePhase = 'break' | 'fight' | 'fallen';
 
 export class Siege {
@@ -118,6 +147,11 @@ export class Siege {
   /** Monsters on the plaza right now. */
   onPlaza = 0;
   kills = 0;
+  /** The three boons on offer during a break, until one is chosen. */
+  offer: Boon[] | null = null;
+  /** Boons taken this run, in order. */
+  readonly boons: Boon[] = [];
+  private corruptScale = 1;
 
   constructor(
     private readonly sim: Sim,
@@ -147,6 +181,7 @@ export class Siege {
       this.onPlaza++;
       rate += isBossType(m.tag) ? SIEGE.bossCorrupt : SIEGE.corruptRate;
     }
+    rate *= this.corruptScale;
     this.corruption = Math.max(0, this.corruption + (rate > 0 ? rate : -SIEGE.cleanseRate) * dt);
     if (this.corruption >= SIEGE.max) {
       this.corruption = SIEGE.max;
@@ -159,7 +194,24 @@ export class Siege {
     } else if (this.monsters.length === 0) this.clearWave();
   }
 
+  /** Take one of the offered boons for the whole team. */
+  choose(i: number): Boon | null {
+    const b = this.offer?.[i];
+    if (!b) return null;
+    this.offer = null;
+    this.boons.push(b);
+    if (b.corruptScale) this.corruptScale *= b.corruptScale;
+    if (b.cleanse) this.corruption = Math.max(0, this.corruption - b.cleanse);
+    for (const g of this.sim.units) {
+      if (g.kind !== 'god' || g.team === 'neutral' || !b.stats) continue;
+      for (const [k, v] of Object.entries(b.stats) as [StatKey, number][]) g.combatant.addPerk(k, v);
+    }
+    return b;
+  }
+
   private startWave(): void {
+    // an offer left unanswered is not lost: the first boon is taken
+    if (this.offer) this.choose(0);
     this.wave++;
     this.phase = 'fight';
     const roster = waveRoster(this.wave);
@@ -196,6 +248,9 @@ export class Siege {
     this.phase = 'break';
     this.timer = SIEGE.breakTime;
     this.corruption = Math.max(0, this.corruption - SIEGE.waveCleanse);
+    const pool = [...BOONS].filter((b) => !(b.cleanse && this.corruption < 10));
+    this.offer = [];
+    while (this.offer.length < 3 && pool.length) this.offer.push(pool.splice(Math.floor(this.sim.rng() * pool.length), 1)[0]!);
     for (const g of this.sim.units) {
       if (g.kind !== 'god' || g.team === 'neutral') continue;
       this.sim.reward(g, 40 + 15 * this.wave, 60 + 10 * this.wave);
