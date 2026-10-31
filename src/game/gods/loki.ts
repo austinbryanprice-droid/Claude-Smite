@@ -199,5 +199,5 @@ export const loki: GodDef = {
       node('reset', 'Slip Away', 4, 1, 'Takedowns grant 40% movement speed for 3 s.', keystone({ type: 'speedOnTakedown', pct: 0.4, duration: 3 })),
     ]),
   ],
-  defaultLoadout: ['loki.dagger-fan', 'loki.vanish', 'loki.poison-blade', 'loki.backstab', 'loki.assassinate'],
+  defaultLoadout: ['loki.dagger-fan', 'loki.vanish', 'loki.backstab', 'loki.assassinate'],
 };

@@ -7,7 +7,7 @@
 
 import * as THREE from 'three/webgpu';
 import type { CombatGame } from '../combat/CombatGame';
-import { ULTIMATE_SLOT } from '../game/loadout';
+import { slotForCode, ULTIMATE_SLOT } from '../game/loadout';
 import { ConquestLayout as L, nearestOnPolyline } from '../map/ConquestLayout';
 import { isStructure, type Projectile, type SimEvent, type Unit, type Zone } from '../sim/Unit';
 import type { Announcer } from './Announcer';
@@ -19,7 +19,6 @@ import { hypot } from '../core/math';
 /** A match's music only ever moves forward: dawn, then battle, then the siege. */
 const PHASES: SongName[] = ['dawn', 'battle', 'siege'];
 
-const SLOT_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'];
 
 type Surface = 'stone' | 'grass' | 'dirt' | 'coins' | 'ash';
 
@@ -367,7 +366,7 @@ export class GameAudio {
 
   private onKey(e: KeyboardEvent): void {
     if (e.repeat || !this.engine.ready) return;
-    const slot = SLOT_KEYS.indexOf(e.code);
+    const slot = slotForCode(e.code);
     if (slot < 0 || !this.me.alive) return;
     if (this.me.combatant.canCast(slot)) this.engine.play('ui.deny', { bus: 'ui', gain: 0.6 }, 3, 0.15);
   }

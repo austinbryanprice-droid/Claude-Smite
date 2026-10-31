@@ -1,4 +1,3 @@
-import type { Loadout } from '../game/loadout';
 import type { Allocation } from '../game/trees';
 import type { PlayerController } from '../player/PlayerController';
 import type { Match } from '../sim/Match';
@@ -173,7 +172,7 @@ export class NetHost {
         if (rp && this.started) this.sim.startRecall(rp.unit);
         return;
       case 'build':
-        rp?.unit.combatant.setBuild(msg.loadout as Loadout, msg.allocation as Allocation);
+        rp?.unit.combatant.setBuild(msg.loadout as readonly string[], msg.allocation as Allocation);
         return;
       default:
         return;

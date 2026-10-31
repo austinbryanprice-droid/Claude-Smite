@@ -1,7 +1,7 @@
 import { BUFF_GLOW } from '../combat/MonsterViews';
 import { BUFF_DURATION, BUFF_KINDS, BUFFS, buffMark, FURY_DURATION, isBoss, isBuff, MonsterBrain, type BuffKind } from '../sim/Jungle';
 import * as THREE from 'three/webgpu';
-import { SLOT_KEYS, ULTIMATE_SLOT } from '../game/loadout';
+import { SLOT_COUNT, SLOT_KEYS, ULTIMATE_SLOT } from '../game/loadout';
 import { MAX_LEVEL } from '../game/progression';
 import type { CCKind } from '../game/types';
 import { RECALL_TIME } from '../sim/Sim';
@@ -192,7 +192,7 @@ export class CombatHud {
     this.manaText = el('span', 'ch-res-text', mana);
 
     const row = el('div', 'ch-abilities', frame);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < SLOT_COUNT; i++) {
       const tile = el('div', `ch-slot${i === ULTIMATE_SLOT ? ' ch-ult' : ''}`, row);
       const icon = el('div', 'ch-icon', tile);
       const cd = el('div', 'ch-cd', tile);

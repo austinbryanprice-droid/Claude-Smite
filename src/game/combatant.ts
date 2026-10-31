@@ -1,5 +1,5 @@
 import { basicAttackRaw, CCState, ccClass, computeDamage, type ActiveCC, type DamageResult } from './combat';
-import { skillById, swapSkill, ULTIMATE_SLOT, type Loadout, type LoadoutError } from './loadout';
+import { normalizeLoadout, skillById, swapSkill, ULTIMATE_SLOT, type Loadout, type LoadoutError } from './loadout';
 import { levelForXp, ranked, skillRank, treePointsEarned, XP_TABLE, MAX_LEVEL } from './progression';
 import { addStats, effectiveAttackSpeed, effectiveMoveSpeed, finalizeStats, statsAtLevel } from './stats';
 import {
@@ -110,11 +110,11 @@ export class Combatant {
   private hardCCShieldCooldown = 0;
   private empoweredBasic = false;
 
-  constructor(god: GodDef, team: Team, loadout: Loadout = god.defaultLoadout) {
+  constructor(god: GodDef, team: Team, loadout: readonly string[] = god.defaultLoadout) {
     this.god = god;
     this.team = team;
     this.trees = indexTrees(god);
-    this.loadout = loadout;
+    this.loadout = normalizeLoadout(god, loadout);
     const s = this.stats;
     this.health = s.maxHealth;
     this.mana = s.maxMana;
@@ -197,8 +197,8 @@ export class Combatant {
   }
 
   /** Take a whole build at once: a networked player's loadout and tree points. */
-  setBuild(loadout: Loadout, allocation: Allocation): void {
-    this.loadout = loadout;
+  setBuild(loadout: readonly string[], allocation: Allocation): void {
+    this.loadout = normalizeLoadout(this.god, loadout);
     this.setAllocation(allocation);
   }
 
@@ -232,7 +232,7 @@ export class Combatant {
     this.shields = s.shields;
     this.stacks = s.stacks;
     if (build) {
-      this.loadout = s.loadout;
+      this.loadout = normalizeLoadout(this.god, s.loadout);
       this.allocation = s.allocation;
       this.bonuses = treeBonuses(this.trees, s.allocation);
     }

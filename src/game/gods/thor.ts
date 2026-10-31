@@ -203,5 +203,5 @@ export const thor: GodDef = {
       node('bloodlust', 'Bloodlust', 4, 1, 'Abilities heal you for 15% of the damage they deal.', keystone({ type: 'abilityLifesteal', pct: 0.15 })),
     ]),
   ],
-  defaultLoadout: ['thor.hammer-throw', 'thor.tempest-leap', 'thor.mjolnir-slam', 'thor.berserker-spin', 'thor.anvil-of-dawn'],
+  defaultLoadout: ['thor.hammer-throw', 'thor.tempest-leap', 'thor.mjolnir-slam', 'thor.anvil-of-dawn'],
 };

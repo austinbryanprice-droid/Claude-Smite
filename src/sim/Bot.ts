@@ -1,4 +1,6 @@
-import { ULTIMATE_SLOT } from '../game/loadout';
+import { SLOT_COUNT, ULTIMATE_SLOT } from '../game/loadout';
+
+const ALL_SLOTS = Array.from({ length: SLOT_COUNT }, (_, i) => i);
 import type { Sim } from './Sim';
 import type { SkillDef } from '../game/types';
 import { WORLD_SCALE, type Brain, type Point, type Unit } from './Unit';
@@ -131,7 +133,7 @@ export class GodBot implements Brain {
   private flee(): void {
     const { u, sim } = this;
     const c = u.combatant;
-    for (const s of [0, 1, 2, 3, ULTIMATE_SLOT]) {
+    for (const s of ALL_SLOTS) {
       if (c.canCast(s) !== null) continue;
       const cast = c.resolve(s);
       const role = skillRole(cast.skill);
@@ -170,7 +172,7 @@ export class GodBot implements Brain {
     const { u, sim } = this;
     const c = u.combatant;
     const hp = c.health / c.stats.maxHealth;
-    const slots = [0, 1, 2, 3, ULTIMATE_SLOT].filter((s) => {
+    const slots = ALL_SLOTS.filter((s) => {
       if (c.canCast(s) !== null) return false;
       const role = skillRole(c.resolve(s).skill);
       if (role === 'escape') return false;

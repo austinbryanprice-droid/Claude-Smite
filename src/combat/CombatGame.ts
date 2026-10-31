@@ -5,7 +5,7 @@ import type { Updatable } from '../core/Loop';
 import type { CastError } from '../game/combatant';
 import { GODS, godById } from '../game/gods';
 import type { GodDef } from '../game/types';
-import { ULTIMATE_SLOT } from '../game/loadout';
+import { SLOT_CODES, ULTIMATE_SLOT } from '../game/loadout';
 import { FAVOR_THRESHOLDS, XP_TABLE } from '../game/progression';
 import type { PlayerController } from '../player/PlayerController';
 import type { World } from '../scene/World';
@@ -32,7 +32,6 @@ import { roster, type Slot } from '../net/roster';
 import type { NetSession } from '../net/Session';
 import { hypot } from '../core/math';
 
-const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyR'] as const;
 
 const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
   cooldown: 'On cooldown',
@@ -404,8 +403,9 @@ export class CombatGame implements Updatable {
       } else if (this.sim.startRecall(u)) this.cancelPreview();
     }
 
-    SLOT_CODES.forEach((code, slot) => {
-      if (!input.wasPressed(code)) return;
+    SLOT_CODES.forEach((codes, slot) => {
+      const code = codes.find((c) => input.wasPressed(c));
+      if (!code) return;
       if (this.preview?.slot === slot) {
         this.castSlot(slot);
         return;

@@ -205,5 +205,5 @@ export const anubis: GodDef = {
       node('shell', 'Sealed Tomb', 4, 1, 'When hard crowd controlled, gain a shield of 15% max health (20 s cooldown).', keystone({ type: 'shieldOnHardCC', maxHealthPct: 0.15, cooldown: 20 })),
     ]),
   ],
-  defaultLoadout: ['anubis.mummify', 'anubis.soul-shield', 'anubis.locust-swarm', 'anubis.grave-grasp', 'anubis.sandstorm'],
+  defaultLoadout: ['anubis.mummify', 'anubis.locust-swarm', 'anubis.grave-grasp', 'anubis.sandstorm'],
 };
