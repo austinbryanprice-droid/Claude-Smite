@@ -578,7 +578,7 @@ export class CombatHud {
 
   private makeBar(u: Unit): Bar {
     const side = u === this.player ? 'self' : u.team === this.player.team ? 'ally' : u.team === 'neutral' ? 'neutral' : 'enemy';
-    const root = el('div', `ch-ob ch-ob-${side} ch-ob-${u.kind}`, this.overlay);
+    const root = el('div', `ch-ob ch-ob-${side} ch-ob-${u.kind}${u.name.startsWith('Champion ') ? ' ch-ob-champion' : ''}`, this.overlay);
     const head = el('div', 'ch-ob-head', root);
     const level = el('span', 'ch-ob-level', head);
     const name = el('span', 'ch-ob-name', head, u === this.player ? '' : u.name);
