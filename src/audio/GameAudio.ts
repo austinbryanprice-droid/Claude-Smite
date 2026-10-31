@@ -15,6 +15,7 @@ import type { AudioEngine, LoopHandle } from './AudioEngine';
 import { skillPart, skillSound } from './bank';
 import type { Music, SongName } from './music';
 import { hypot } from '../core/math';
+import { DUEL } from '../sim/Duel';
 
 /** A match's music only ever moves forward: dawn, then battle, then the siege. */
 const PHASES: SongName[] = ['dawn', 'battle', 'siege'];
@@ -398,6 +399,7 @@ export class GameAudio {
     this.marching();
     this.watchMatch();
     this.watchModes();
+    this.watchDuel();
     this.updateMood(dt);
     // while dead, the world is heard as if from far away
     this.muffle += ((me.alive ? 0 : 1) - this.muffle) * Math.min(1, dt * (me.alive ? 6 : 2.5));
@@ -617,7 +619,7 @@ export class GameAudio {
   }
 
   /** Last seen state of Temple Siege and Temple Clash, so the herald calls each change once. */
-  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '' };
+  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '' };
 
   /** The herald calls the beats of Temple Siege (waves, bosses, the temple in danger) and Temple Clash (the blessing, the result). */
   private watchModes(): void {
@@ -649,6 +651,35 @@ export class GameAudio {
         const won = clash.winner === this.me.team;
         this.herald.say(won ? 'Victory! The temple is yours.' : 'Defeat. The temple is lost.', won ? 'epic' : 'bad', 5);
       }
+    }
+  }
+
+  /** Temple Duel: the herald calls each round, the closing ring, who took the round, and the end. */
+  private watchDuel(): void {
+    const d = this.game.duel;
+    if (!d) return;
+    const seen = this.modeSeen;
+    const mine = this.me.team;
+    if (d.phase === 'fight' && seen.round !== d.round) {
+      seen.round = d.round;
+      seen.ring = false;
+      const last = d.wins.order === DUEL.rounds - 1 && d.wins.chaos === DUEL.rounds - 1;
+      this.herald.say(last ? 'Final round. Fight!' : `Round ${d.round}. Fight!`, 'epic', 3);
+      this.engine.play('wave.horn', { gain: 0.7 }, 4);
+    }
+    if (d.phase === 'fight' && d.ringIn <= 0 && !seen.ring) {
+      seen.ring = true;
+      this.herald.say('The ring of fire closes in!', 'bad', 2);
+    }
+    const taken = d.phase === 'pause' ? `${d.round}:${d.lastRound ?? 'draw'}` : '';
+    if (taken && taken !== seen.taken) {
+      seen.taken = taken;
+      this.herald.say(d.lastRound === null ? 'They fall together. Again!' : d.lastRound === mine ? 'You take the round.' : 'The round is lost.', d.lastRound === mine ? 'good' : 'bad', 3);
+    }
+    if (d.winner && !seen.winner) {
+      seen.winner = d.winner;
+      const won = d.winner === mine;
+      this.herald.say(won ? 'Victory! You are the champion of the temple.' : 'Defeat. Your rival stands victorious.', won ? 'epic' : 'bad', 5);
     }
   }
 
