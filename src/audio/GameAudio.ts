@@ -619,7 +619,7 @@ export class GameAudio {
   }
 
   /** Last seen state of Temple Siege and Temple Clash, so the herald calls each change once. */
-  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '' };
+  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '', spoils: 0 };
 
   /** The herald calls the beats of Temple Siege (waves, bosses, the temple in danger) and Temple Clash (the blessing, the result). */
   private watchModes(): void {
@@ -629,6 +629,7 @@ export class GameAudio {
       if (siege.wave !== seen.wave && siege.phase === 'fight') {
         seen.wave = siege.wave;
         if (siege.wave % 5 === 0) this.herald.say('A great beast marches on the temple!', 'epic', 4);
+        else if (siege.champion) this.herald.say('A champion leads the horde! Bring it down!', 'epic', 3);
         else this.herald.say(`Wave ${siege.wave} approaches.`, 'neutral', 2);
       }
       if (siege.phase !== seen.phase) {
@@ -636,6 +637,8 @@ export class GameAudio {
         if (siege.phase === 'fallen') this.herald.say('The temple has fallen.', 'bad', 5);
         seen.phase = siege.phase;
       }
+      if (siege.spoils > seen.spoils + 1) this.herald.say('The champion has fallen! Its strength is yours.', 'good', 3);
+      seen.spoils = siege.spoils;
       const danger = siege.corruption >= 70;
       if (danger && !seen.danger && siege.phase !== 'fallen') this.herald.say('The temple is falling! Clear the plaza!', 'bad', 4);
       // calm again well below the line, so a hovering bar doesn't repeat the warning
