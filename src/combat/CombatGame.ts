@@ -38,6 +38,7 @@ import { SiegeHud } from '../ui/SiegeHud';
 import { Duel, DUEL } from '../sim/Duel';
 import { DuelHud } from '../ui/DuelHud';
 import { Scoreboard } from '../sim/Scoreboard';
+import { difficultyPerks, type Difficulty } from '../game/difficulty';
 import { Coach } from '../ui/Coach';
 
 
@@ -62,6 +63,8 @@ export interface CombatDeps {
   shake?: (amount: number) => void;
   /** A multiplayer Conquest match: the lobby's players take god slots, bots fill the rest. */
   net?: NetSession;
+  /** How hard the bots are (single player only). */
+  difficulty?: Difficulty;
 }
 
 /** Until the Conquest scene lands, a match on another map follows its ground but ignores its walls. */
@@ -90,6 +93,7 @@ export class CombatGame implements Updatable {
   duel: Duel | null = null;
   private duelHud: DuelHud | null = null;
   private ringShown = 0;
+  private difficultyApplied = false;
   /** The plaza's edge, glowing in the color of whoever holds it. */
   private plazaRing: GroundDecal | null = null;
   private readonly views: UnitViews;
@@ -332,6 +336,22 @@ export class CombatGame implements Updatable {
     this.hud.toast(`Duel ${rival.name}: first to ${DUEL.rounds} rounds. Press K to spend your skill points.`);
   }
 
+  /**
+   * Bot difficulty, set once on the first step when every god is in place. The
+   * changes are permanent perks, so they survive deaths. Multiplayer is left alone.
+   */
+  private applyDifficulty(): void {
+    this.difficultyApplied = true;
+    const d = this.deps.difficulty ?? 'normal';
+    if (d === 'normal' || this.deps.net) return;
+    const perks = difficultyPerks(d, !!this.siege);
+    for (const u of this.sim.units) {
+      if (u.kind !== 'god' || u.team === 'neutral') continue;
+      const set = u.team === this.player.team ? perks.team : perks.foe;
+      for (const [k, v] of Object.entries(set) as [keyof typeof set, number][]) u.combatant.addPerk(k, v);
+    }
+  }
+
   /** Takes a Siege boon (from its key or a click on its card). */
   private takeBoon(i: number): void {
     const b = this.siege?.choose(i);
@@ -433,6 +453,7 @@ export class CombatGame implements Updatable {
   // Fixed step
 
   update(dt: number): void {
+    if (!this.difficultyApplied) this.applyDifficulty();
     // after a Titan falls the world keeps moving a few seconds, then freezes behind the end screen
     if (this.match?.winner || this.clash?.winner || this.siege?.phase === 'fallen' || this.duel?.winner) this.endTimer += dt;
     if (this.netGuest) {

@@ -6,6 +6,7 @@ import { skillIcon } from './icons';
 import { mountLobby } from '../net/LobbyPanel';
 import type { NetSession } from '../net/Session';
 import './start.css';
+import { DIFFICULTIES, parseDifficulty, type Difficulty } from '../game/difficulty';
 import { recordLine } from './records';
 
 export type GameMode = 'conquest' | 'arena' | 'clash' | 'siege' | 'duel';
@@ -20,6 +21,7 @@ export interface StartChoice {
   god: string;
   /** A multiplayer Conquest match (the lobby's players and connections). */
   net?: NetSession;
+  difficulty?: Difficulty;
 }
 
 const STORAGE_KEY = 'ascendant.start';
@@ -138,6 +140,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   const prev = load();
   let mode = savedMode();
   let god = gods.some((g) => g.id === prev.god) ? prev.god! : gods[0]!.id;
+  let difficulty: Difficulty = parseDifficulty(prev.difficulty);
 
   const root = document.createElement('div');
   root.className = 'sm';
@@ -149,6 +152,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
         <div class="sm-col">
           <h3>Mode</h3>
           <div class="sm-modes">${MODES.map((m) => `<button class="sm-mode" data-mode="${m.id}"><b>${m.name}</b><span>${m.text}</span>${recordLine(m.id) ? `<em class="sm-rec">${recordLine(m.id)}</em>` : ''}</button>`).join('')}</div>
+          <div class="sm-diff"><span>Bots</span>${DIFFICULTIES.map((d) => `<button class="sm-dif" data-dif="${d.id}" title="${d.text}">${d.name}</button>`).join('')}</div>
           <div class="sm-detail"></div>
           <h3 class="help-gap">Play with friends</h3>
           <div class="sm-net"></div>
@@ -169,6 +173,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   const render = () => {
     root.querySelectorAll<HTMLButtonElement>('.sm-mode').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
     root.querySelectorAll<HTMLButtonElement>('.sm-god').forEach((b) => b.classList.toggle('on', b.dataset.god === god));
+    root.querySelectorAll<HTMLButtonElement>('.sm-dif').forEach((b) => b.classList.toggle('on', b.dataset.dif === difficulty));
     const def = gods.find((g) => g.id === god)!;
     const skills = def.defaultLoadout.map((id) => def.skills.find((s) => s.id === id)!);
     const keys = SLOT_KEYS;
@@ -182,6 +187,12 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   };
   render();
 
+  root.querySelectorAll<HTMLButtonElement>('.sm-dif').forEach((b) =>
+    b.addEventListener('click', () => {
+      difficulty = parseDifficulty(b.dataset.dif);
+      render();
+    }),
+  );
   root.querySelectorAll<HTMLButtonElement>('.sm-mode').forEach((b) =>
     b.addEventListener('click', () => {
       mode = b.dataset.mode as GameMode;
@@ -221,12 +232,12 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
 
   return new Promise((resolve) => {
     const finish = (choice: StartChoice) => {
-      save({ mode: choice.mode, god: choice.god });
+      save({ mode: choice.mode, god: choice.god, difficulty });
       root.classList.add('done');
       setTimeout(() => root.remove(), 400);
       resolve(choice);
     };
     started = finish;
-    play.addEventListener('click', () => finish({ mode, god }));
+    play.addEventListener('click', () => finish({ mode, god, difficulty }));
   });
 }
