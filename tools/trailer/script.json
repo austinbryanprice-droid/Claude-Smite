@@ -1,0 +1,23 @@
+{
+  "voice": "bm_george",
+  "speed": 0.9,
+  "lines": [
+    { "id": "open1", "text": "Long before the first dawn, the gods went to war." },
+    { "id": "open2", "text": "Now, they rise again." },
+    { "id": "choose", "text": "Choose your god." },
+    { "id": "zeus", "text": "Zeus, King of Olympus." },
+    { "id": "thor", "text": "Thor, God of Thunder." },
+    { "id": "odin", "text": "Odin, the Allfather." },
+    { "id": "loki", "text": "Loki, the Trickster." },
+    { "id": "anubis", "text": "And Anubis, Guardian of the Dead." },
+    { "id": "skills1", "text": "Every god carries five skills. Four abilities, and one ultimate." },
+    { "id": "skills2", "text": "But the kit is yours to shape. Each god knows eleven skills. Swap them at your fountain, even your ultimate, and bring the ones that suit your fight." },
+    { "id": "trees", "text": "Every level earns points for three skill trees. Thirty-five in all, spent however you like. Mix them, match them, and make your god your own." },
+    { "id": "conquest", "text": "Then take it to Conquest. Five against five, across three lanes. Break their towers, burn down their Phoenixes, and topple the enemy Titan." },
+    { "id": "jungle", "text": "Between the lanes lies the jungle. Hunt its camps for power." },
+    { "id": "bosses", "text": "And when you are strong enough, face the Treasure Wyrm, and the Molten Colossus." },
+    { "id": "multi", "text": "Fight beside your friends, or against them, in co-op and versus." },
+    { "id": "close1", "text": "The heavens are waiting." },
+    { "id": "close2", "text": "Ascend." }
+  ]
+}

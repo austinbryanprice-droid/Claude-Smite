@@ -9,3 +9,6 @@ assets-src/
 *.log
 .DS_Store
 __pycache__/
+
+# trailer build scratch (tools/trailer/README.md)
+tools/trailer/out/
