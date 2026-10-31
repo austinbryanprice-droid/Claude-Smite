@@ -8,6 +8,7 @@ import { rng } from '../core/random';
 import type { Terrain } from './Terrain';
 import type { QualitySettings } from '../render/Quality';
 import { hypot } from '../core/math';
+import { slice } from '../core/slices';
 
 /** Side of the square chunks the field is drawn in, meters. */
 const CHUNK = 28;
@@ -65,6 +66,8 @@ export class Grass {
   /** World position of the player; blades bend away from it. */
   readonly pusher = uniform(new THREE.Vector3(0, -100, 0));
   private chunks: Chunk[] = [];
+  /** Counts `build` calls, so an older one still running drops its blades. */
+  private builds = 0;
   private material: THREE.MeshStandardNodeMaterial;
   private bladeGeometry: THREE.BufferGeometry;
   /** The main camera's position: blades thin out with distance from it, in the shadow passes too. */
@@ -170,14 +173,14 @@ export class Grass {
     return mat;
   }
 
-  build(q: QualitySettings): void {
-    for (const c of this.chunks) {
-      c.geometry.dispose();
-      this.group.remove(c.mesh);
-    }
-    this.chunks = [];
-    this.fullDistance.value = q.grassDistance * 0.35;
-    this.maxDistance.value = q.grassDistance;
+  /**
+   * Scatters the blades for a quality preset a row of chunks at a time,
+   * giving the browser turns in between (see `slice`). The old blades stay
+   * until the new ones are all placed.
+   */
+  async build(q: QualitySettings): Promise<void> {
+    const build = ++this.builds;
+    const chunks: Chunk[] = [];
     const density = BASE_DENSITY * q.grassDensity * this.field.density;
     const extent = this.field.extent;
     const n = Math.ceil((extent * 2) / CHUNK);
@@ -248,10 +251,21 @@ export class Grass {
         mesh.layers.set(Layers.NEAR_SHADOW);
         mesh.receiveShadow = true;
         mesh.name = 'grass-chunk';
-        this.group.add(mesh);
-        this.chunks.push({ mesh, geometry: geo, center, ranks });
+        chunks.push({ mesh, geometry: geo, center, ranks });
       }
+      await slice();
     }
+    // a newer preset was picked meanwhile: its blades win
+    const stale = build !== this.builds;
+    for (const c of stale ? chunks : this.chunks) {
+      c.geometry.dispose();
+      this.group.remove(c.mesh);
+    }
+    if (stale) return;
+    this.chunks = chunks;
+    for (const c of chunks) this.group.add(c.mesh);
+    this.fullDistance.value = q.grassDistance * 0.35;
+    this.maxDistance.value = q.grassDistance;
   }
 
   /** Distance-based thinning; call once per frame. */

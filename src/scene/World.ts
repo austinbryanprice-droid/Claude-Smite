@@ -13,6 +13,7 @@ import { Temple } from './Temple';
 import { Terrain } from './Terrain';
 import type { QualitySettings } from '../render/Quality';
 import { hypot } from '../core/math';
+import { slice } from '../core/slices';
 
 export type MapName = 'arena' | 'conquest';
 
@@ -55,12 +56,13 @@ export class World {
   readonly actors = new THREE.Group();
   readonly vfx = new THREE.Group();
   readonly environment: Environment;
-  readonly terrain: Terrain;
-  readonly grass: Grass;
-  readonly content: MapContent;
+  // set by `create`, which builds them in slices
+  terrain!: Terrain;
+  grass!: Grass;
+  content!: MapContent;
   readonly materials: MaterialLibrary;
-  readonly collision: CollisionWorld;
-  readonly dust: DustMotes;
+  collision!: CollisionWorld;
+  dust!: DustMotes;
   /** The flames and embers of every fire on the map, drawn together. */
   private readonly fireBatch = new FireBatch();
   /**
@@ -72,7 +74,7 @@ export class World {
   readonly spellLights: THREE.PointLight[] = [];
   private readonly updaters: ((dt: number, t: number) => void)[] = [];
 
-  constructor(textures: TextureLibrary, readonly camera: THREE.PerspectiveCamera, readonly map: MapName = 'arena') {
+  private constructor(textures: TextureLibrary, readonly camera: THREE.PerspectiveCamera, readonly map: MapName) {
     this.static.name = 'static';
     this.actors.name = 'actors';
     this.vfx.name = 'vfx';
@@ -80,18 +82,26 @@ export class World {
 
     this.environment = new Environment(this.scene, camera);
     this.materials = new MaterialLibrary(textures);
-    const conquest = map === 'conquest' ? conquestTerrain() : null;
-    this.terrain = new Terrain(textures, conquest ?? arenaTerrain());
-    this.static.add(this.terrain.root);
-    this.collision = new CollisionWorld((x, z) => this.terrain.heightAt(x, z));
+  }
+
+  /**
+   * Builds the map a little at a time (see `slice`): it takes seconds on a
+   * slow laptop, behind a title screen that should keep playing meanwhile.
+   */
+  static async create(textures: TextureLibrary, camera: THREE.PerspectiveCamera, map: MapName = 'arena'): Promise<World> {
+    const w = new World(textures, camera, map);
+    const conquest = map === 'conquest' ? await conquestTerrain() : null;
+    w.terrain = await Terrain.create(textures, conquest ?? arenaTerrain());
+    w.static.add(w.terrain.root);
+    w.collision = new CollisionWorld((x, z) => w.terrain.heightAt(x, z));
     if (conquest) {
-      this.collision.setWalkable(conquest.walkable);
-      this.content = new ConquestMap(this.materials, this.terrain, this.collision, conquest, this.environment.sunDirection);
-      this.grass = new Grass(this.terrain, this.environment.sunDirection, conquest.grass);
+      w.collision.setWalkable(conquest.walkable);
+      w.content = await ConquestMap.create(w.materials, w.terrain, w.collision, conquest, w.environment.sunDirection);
+      w.grass = new Grass(w.terrain, w.environment.sunDirection, conquest.grass);
     } else {
-      this.content = new Temple(this.materials, this.terrain, this.collision);
+      w.content = await Temple.create(w.materials, w.terrain, w.collision);
       const plazaR = Arena.plaza.baseRadius + 0.6;
-      this.grass = new Grass(this.terrain, this.environment.sunDirection, {
+      w.grass = new Grass(w.terrain, w.environment.sunDirection, {
         extent: Arena.valleyRadius + 14,
         round: true,
         density: 1,
@@ -99,29 +109,31 @@ export class World {
         reject: (x, z) => hypot(x, z) < plazaR,
       });
     }
-    this.static.add(this.content.group, this.grass.group);
-    if (this.content.dynamic) this.scene.add(this.content.dynamic);
-    this.dust = new DustMotes(600, this.environment.sunDirection);
-    this.vfx.add(this.dust.sprite, this.fireBatch.group);
+    await slice();
+    w.static.add(w.content.group, w.grass.group);
+    if (w.content.dynamic) w.scene.add(w.content.dynamic);
+    w.dust = new DustMotes(600, w.environment.sunDirection);
+    w.vfx.add(w.dust.sprite, w.fireBatch.group);
     for (let i = 0; i < SPELL_LIGHTS; i++) {
       const l = new THREE.PointLight(0xffffff, 0, 14, 2);
       l.castShadow = false;
-      this.spellLights.push(l);
-      this.vfx.add(l);
+      w.spellLights.push(l);
+      w.vfx.add(l);
     }
 
     // Static geometry never moves: skip per-frame matrix updates.
-    this.static.traverse((o) => {
+    w.static.traverse((o) => {
       o.updateMatrix();
       o.matrixAutoUpdate = false;
     });
-    this.static.updateMatrixWorld(true);
-    this.fireBatch.update();
+    w.static.updateMatrixWorld(true);
+    w.fireBatch.update();
+    return w;
   }
 
   async applyQuality(renderer: THREE.WebGPURenderer, q: QualitySettings): Promise<void> {
     this.environment.applyQuality(renderer, q);
-    this.grass.build(q);
+    await this.grass.build(q);
     this.content.applyQuality?.(q);
     this.static.traverse((o) => {
       o.updateMatrix();

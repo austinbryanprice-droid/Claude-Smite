@@ -18,6 +18,7 @@ import type { MapContent } from '../World';
 import type { ConquestTerrainDef } from './ConquestTerrain';
 import { ConquestProps } from './Props';
 import { hypot } from '../../core/math';
+import { slice } from '../../core/slices';
 
 /** Spatial hash for rejecting placements that crowd each other. */
 class Spacing {
@@ -67,9 +68,9 @@ export class ConquestMap implements MapContent {
   readonly structures = new Map<string, StructureModel>();
   private readonly cameraBlockers: { model: StructureModel; collider: Collider; ground: number }[] = [];
   private readonly fountains: Fountain[] = [];
-  private readonly props: ConquestProps;
+  private props!: ConquestProps;
 
-  constructor(
+  private constructor(
     readonly materials: MaterialLibrary,
     readonly terrain: Terrain,
     readonly collision: CollisionWorld,
@@ -79,18 +80,32 @@ export class ConquestMap implements MapContent {
     this.group.name = 'conquest';
     this.foliage = new Foliage(materials.textures, sunDirection);
     this.group.add(this.foliage.group);
-    this.buildStructures();
-    this.props = new ConquestProps(materials, terrain, collision, def);
-    this.group.add(this.props.group);
-    this.group.add(new Flowers(this.placeFlowers()).root);
-    this.fires.push(...this.props.fires);
-    for (const g of [this.dynamic, this.group]) g.traverse((o) => {
-      if ((o as THREE.PointLight).isPointLight) this.lights.push(o as THREE.PointLight);
-    });
   }
 
-  private buildStructures(): void {
+  /** Builds the map a structure at a time, giving the browser turns in between (see `slice`). */
+  static async create(
+    materials: MaterialLibrary,
+    terrain: Terrain,
+    collision: CollisionWorld,
+    def: ConquestTerrainDef,
+    sunDirection: THREE.Vector3,
+  ): Promise<ConquestMap> {
+    const map = new ConquestMap(materials, terrain, collision, def, sunDirection);
+    await map.buildStructures();
+    map.props = await ConquestProps.create(materials, terrain, collision, def);
+    map.group.add(map.props.group);
+    await slice();
+    map.group.add(new Flowers(map.placeFlowers()).root);
+    map.fires.push(...map.props.fires);
+    for (const g of [map.dynamic, map.group]) g.traverse((o) => {
+      if ((o as THREE.PointLight).isPointLight) map.lights.push(o as THREE.PointLight);
+    });
+    return map;
+  }
+
+  private async buildStructures(): Promise<void> {
     const teamMats = { order: new TeamMaterials(this.materials, TEAM_STYLE.order), chaos: new TeamMaterials(this.materials, TEAM_STYLE.chaos) };
+    await slice();
     const enemyBase = (team: 'order' | 'chaos') => baseOf(team === 'order' ? 'chaos' : 'order').titan;
     /** Yaw that turns a model's +Z front toward a point. */
     const face = (x: number, z: number, tx: number, tz: number) => Math.atan2(tx - x, tz - z);
@@ -108,24 +123,29 @@ export class ConquestMap implements MapContent {
       place(t.id, model, t.at[0], t.at[1], yaw);
       // the square plinth is 5.6 m across
       this.blockCamera(model, { kind: 'box', x: t.at[0], z: t.at[1], hx: 2.8, hz: 2.8, yaw, top: Infinity });
+      await slice();
     }
     for (const p of L.phoenixes) {
       const [ex, ez] = enemyBase(p.team);
       const model = new PhoenixModel(this.materials, p.team, teamMats[p.team]);
       place(p.id, model, p.at[0], p.at[1], face(p.at[0], p.at[1], ex, ez));
       this.blockCamera(model, { kind: 'circle', x: p.at[0], z: p.at[1], r: L.radii.phoenix, top: Infinity });
+      await slice();
     }
     for (const b of L.bases) {
       const [ex, ez] = enemyBase(b.team);
       const titan = new TitanModel(this.materials, b.team, teamMats[b.team]);
       place(`${b.team}-titan`, titan, b.titan[0], b.titan[1], face(b.titan[0], b.titan[1], ex, ez));
       this.blockCamera(titan, { kind: 'circle', x: b.titan[0], z: b.titan[1], r: L.radii.titan, top: Infinity });
+      await slice();
       const f = new Fountain(this.materials, b.team, L.radii.fountain, teamMats[b.team]);
       f.group.position.set(b.fountain[0], this.terrain.heightAt(b.fountain[0], b.fountain[1]), b.fountain[1]);
       this.fountains.push(f);
+      await slice();
       this.group.add(this.colonnade(b.fountain[0], b.fountain[1], f.group.position.y, face(b.fountain[0], b.fountain[1], b.titan[0], b.titan[1]), teamMats[b.team]));
       this.fires.push(...f.fires);
       this.group.add(f.group);
+      await slice();
     }
   }
 

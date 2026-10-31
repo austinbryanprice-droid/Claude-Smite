@@ -15,6 +15,7 @@ import { mergeStatic } from '../structures/common';
 import { objectUniforms, useUniforms } from '../../render/shared';
 import type { ConquestTerrainDef } from './ConquestTerrain';
 import { hypot } from '../../core/math';
+import { slice } from '../../core/slices';
 
 const CAMP_LIGHT = 35;
 
@@ -166,7 +167,7 @@ export class ConquestProps {
   /** Each buff camp's crystal brightness and light, by camp id, for `setCampActive`. */
   private readonly campGlow = new Map<string, { glow: ReturnType<typeof campUniforms>; light: THREE.PointLight }>();
 
-  constructor(
+  private constructor(
     private readonly mats: MaterialLibrary,
     private readonly terrain: Terrain,
     private readonly collision: CollisionWorld,
@@ -193,15 +194,23 @@ export class ConquestProps {
     this.wallStone = mats.sandstone.clone() as THREE.MeshStandardNodeMaterial;
     const sand = mats.sandstone.colorNode as any;
     this.wallStone.colorNode = mix(sand, vec3(dot(sand.rgb, vec3(0.3, 0.59, 0.11))), 0.8).mul(vec3(0.78, 0.88, 0.76));
-    this.laneWalls();
-    this.braziers();
+  }
+
+  /** Builds the props a camp at a time, giving the browser turns in between (see `slice`). */
+  static async create(mats: MaterialLibrary, terrain: Terrain, collision: CollisionWorld, def: ConquestTerrainDef): Promise<ConquestProps> {
+    const props = new ConquestProps(mats, terrain, collision, def);
+    props.laneWalls();
+    props.braziers();
+    await slice();
     for (const c of L.camps) {
-      if (c.kind === 'treasureWyrm') this.wyrmPit(c);
-      else if (c.kind === 'moltenColossus') this.colossusPit(c);
-      else if (c.kind === 'small') this.smallCamp(c);
-      else this.buffCamp(c);
+      if (c.kind === 'treasureWyrm') props.wyrmPit(c);
+      else if (c.kind === 'moltenColossus') props.colossusPit(c);
+      else if (c.kind === 'small') props.smallCamp(c);
+      else props.buffCamp(c);
+      await slice();
     }
-    this.inst.build(this.group);
+    props.inst.build(props.group);
+    return props;
   }
 
   /** Dims a buff camp's crystal and light while its buff is taken, and relights it on respawn. */
