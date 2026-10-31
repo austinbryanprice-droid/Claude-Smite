@@ -5,6 +5,7 @@ import { isStructure, type SimEvent, type Unit } from '../sim/Unit';
 import { BUFF_GLOW } from '../combat/MonsterViews';
 import { hex, TEAM_COLORS } from '../combat/palette';
 import './match.css';
+import { addResult } from './records';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, html = ''): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -327,6 +328,7 @@ export class MatchHud {
   private showEnd(winner: Team): void {
     this.shown = true;
     const won = winner === this.player.team;
+    addResult('conquest', { won });
     this.end.innerHTML = `<div class="mh-end-title ${won ? 'win' : 'loss'}">${won ? 'Victory' : 'Defeat'}</div><div class="mh-end-sub">${won ? 'The enemy Titan has fallen' : 'Your Titan has fallen'} &middot; ${clock(this.match.time)}</div><button class="mh-again">Play again</button>`;
     // the final scoreboard sits between the title and the button
     this.end.insertBefore(this.board, this.end.querySelector('button'));

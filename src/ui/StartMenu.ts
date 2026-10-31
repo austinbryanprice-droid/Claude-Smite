@@ -6,6 +6,7 @@ import { skillIcon } from './icons';
 import { mountLobby } from '../net/LobbyPanel';
 import type { NetSession } from '../net/Session';
 import './start.css';
+import { recordLine } from './records';
 
 export type GameMode = 'conquest' | 'arena' | 'clash' | 'siege';
 
@@ -146,7 +147,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
       <div class="sm-cols">
         <div class="sm-col">
           <h3>Mode</h3>
-          <div class="sm-modes">${MODES.map((m) => `<button class="sm-mode" data-mode="${m.id}"><b>${m.name}</b><span>${m.text}</span></button>`).join('')}</div>
+          <div class="sm-modes">${MODES.map((m) => `<button class="sm-mode" data-mode="${m.id}"><b>${m.name}</b><span>${m.text}</span>${recordLine(m.id) ? `<em class="sm-rec">${recordLine(m.id)}</em>` : ''}</button>`).join('')}</div>
           <div class="sm-detail"></div>
           <h3 class="help-gap">Play with friends</h3>
           <div class="sm-net"></div>

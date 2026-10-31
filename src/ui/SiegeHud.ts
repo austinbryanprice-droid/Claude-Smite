@@ -1,17 +1,8 @@
 import { SIEGE, type Siege } from '../sim/Siege';
 import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
 import type { Unit } from '../sim/Unit';
+import { addResult } from './records';
 import './clash.css';
-
-const BEST_KEY = 'ascendant.siegeBest';
-
-function loadBest(): number {
-  try {
-    return Number(localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-}
 
 /** Temple Siege readout: the wave, what is left of it, the plaza's corruption, and the final tally. */
 export class SiegeHud {
@@ -21,7 +12,6 @@ export class SiegeHud {
   private readonly num: HTMLElement;
   private readonly state: HTMLElement;
   private readonly end: HTMLElement;
-  private readonly best = loadBest();
   private shownEnd = false;
   private lastText = '';
   private readonly curseEl: HTMLElement;
@@ -97,16 +87,10 @@ export class SiegeHud {
     if (s.phase === 'fallen' && !this.shownEnd) {
       this.shownEnd = true;
       const held = s.held;
-      const record = held > this.best;
-      if (record) {
-        try {
-          localStorage.setItem(BEST_KEY, String(held));
-        } catch {
-          /* storage unavailable */
-        }
-      }
+      const best = addResult('siege', { best: held }).best;
+      const record = held > best;
       this.end.querySelector('.clash-end-score')!.textContent =
-        `You held ${held} ${held === 1 ? 'wave' : 'waves'} · ${s.kills} monsters slain · ${s.boons.length} boons · ${record ? 'new best!' : `best ${this.best}`}`;
+        `You held ${held} ${held === 1 ? 'wave' : 'waves'} · ${s.kills} monsters slain · ${s.boons.length} boons · ${record ? 'new best!' : `best ${best}`}`;
       if (this.board && this.me) this.end.querySelector('.clash-end-table')!.innerHTML = scoreTable(this.board, this.me, 'monsters');
       this.end.classList.add('show');
       document.exitPointerLock?.();
