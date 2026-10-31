@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { zeus } from '../game/gods';
 import { godUnit } from './factory';
-import { BOONS, Siege, SIEGE, waveRoster } from './Siege';
+import { BOONS, CURSES, FIRST_CURSE, Siege, SIEGE, waveRoster } from './Siege';
 import { Sim, type SimTerrain } from './Sim';
 
 const flat: SimTerrain = { groundAt: () => 0, resolve: (x, z) => ({ x, z }) };
@@ -69,5 +69,39 @@ describe('Temple Siege', () => {
     run(sim, siege, SIEGE.respawn + 0.5);
     expect(g.alive).toBe(true);
     expect(g.combatant.stats.maxHealth).toBe(hp + 180);
+  });
+
+  it('announces a curse from wave 4 and lays it on that wave', () => {
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    const g = sim.add(godUnit(zeus, 'order', { x: 0, z: 0, yaw: 0 }));
+    const clear = () => {
+      for (const m of [...siege.monsters]) sim.strike(g, m, 1e6, 'true');
+      run(sim, siege, 0.2);
+    };
+    run(sim, siege, SIEGE.firstWave + 0.1);
+    for (let w = 1; w < FIRST_CURSE - 1; w++) {
+      clear();
+      expect(siege.curse).toBeNull();
+      run(sim, siege, SIEGE.breakTime + 0.1);
+    }
+    clear();
+    // the break before wave 4 shows what is coming
+    expect(siege.curse).not.toBeNull();
+    siege.curse = CURSES.find((c) => c.id === 'swift')!;
+    run(sim, siege, SIEGE.breakTime + 0.1);
+    expect(siege.wave).toBe(FIRST_CURSE);
+    const m = siege.monsters.find((u) => u.tag === 'thornback')!;
+    expect(m.combatant.stats.moveSpeed).toBeCloseTo(360 * 1.3, 0);
+  });
+
+  it('a swarm brings more, frailer thornbacks', () => {
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    siege.curse = CURSES.find((c) => c.id === 'swarm')!;
+    run(sim, siege, SIEGE.firstWave + 0.1);
+    const t = siege.monsters.filter((u) => u.tag === 'thornback');
+    expect(t.length).toBe(2 * waveRoster(1).filter((x) => x === 'thornback').length);
+    expect(t[0]!.combatant.stats.maxHealth).toBeLessThan(300);
   });
 });

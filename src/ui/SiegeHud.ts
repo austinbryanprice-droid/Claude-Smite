@@ -24,6 +24,8 @@ export class SiegeHud {
   private readonly best = loadBest();
   private shownEnd = false;
   private lastText = '';
+  private readonly curseEl: HTMLElement;
+  private shownCurse: unknown = undefined;
 
   private readonly cards: HTMLElement;
   private shownOffer: unknown = null;
@@ -42,6 +44,7 @@ export class SiegeHud {
         <div class="clash-goal">CORRUPTION</div>
       </div>
       <div class="clash-state"></div>
+      <div class="siege-curse"></div>
       <div class="siege-boons"></div>
       <div class="clash-end lost"><div class="clash-end-title">The temple falls</div><div class="clash-end-score"></div><div class="clash-end-table"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
@@ -51,6 +54,7 @@ export class SiegeHud {
     this.state = this.root.querySelector('.clash-state')!;
     this.end = this.root.querySelector('.clash-end')!;
     this.cards = this.root.querySelector('.siege-boons')!;
+    this.curseEl = this.root.querySelector('.siege-curse')!;
     this.cards.addEventListener('click', (e) => {
       const card = (e.target as HTMLElement).closest<HTMLElement>('.siege-boon');
       if (card) onPick(Number(card.dataset.i));
@@ -73,6 +77,12 @@ export class SiegeHud {
       this.lastText = text;
       this.state.textContent = text;
       this.state.dataset.state = s.phase === 'fight' && s.onPlaza ? 'chaos' : s.phase === 'break' ? 'order' : '';
+    }
+    const curse = s.phase === 'fallen' ? null : s.curse;
+    if (curse !== this.shownCurse) {
+      this.shownCurse = curse;
+      this.curseEl.innerHTML = curse ? `<b>${curse.name}</b> ${curse.text}` : '';
+      this.curseEl.classList.toggle('show', !!curse);
     }
     if (s.offer !== this.shownOffer) {
       this.shownOffer = s.offer;
