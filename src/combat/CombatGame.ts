@@ -31,6 +31,8 @@ import type { Roster } from '../net/Replica';
 import { roster, type Slot } from '../net/roster';
 import type { NetSession } from '../net/Session';
 import { hypot } from '../core/math';
+import { Clash, CLASH, CLASH_SPAWNS } from '../sim/Clash';
+import { ClashHud } from '../ui/ClashHud';
 
 
 const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
@@ -43,8 +45,8 @@ const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
 
 export interface CombatDeps {
   world: World;
-  /** 'conquest' plays a full match against bots; 'arena' is the training ground. */
-  mode?: 'arena' | 'conquest';
+  /** 'conquest' plays a full match against bots; 'clash' a 3v3 fight over the temple plaza; 'arena' is the training ground. */
+  mode?: 'arena' | 'conquest' | 'clash';
   /** The player's god (defaults to Zeus). */
   god?: string;
   input: Input;
@@ -75,6 +77,10 @@ export class CombatGame implements Updatable {
   readonly match: Match | null = null;
   private readonly matchHud: MatchHud | null = null;
   private endTimer = 0;
+  private clash: Clash | null = null;
+  private clashHud: ClashHud | null = null;
+  /** The plaza's edge, glowing in the color of whoever holds it. */
+  private plazaRing: GroundDecal | null = null;
   private readonly views: UnitViews;
   private readonly vfx: CombatVfx;
   private readonly auras = new BuffAuras();
@@ -112,10 +118,13 @@ export class CombatGame implements Updatable {
     const slots = net ? roster(net.players) : null;
     const mySlot = slots?.find((s) => s.player === net!.me) ?? null;
     const myTeam = mySlot?.team ?? 'order';
-    const spawn = conquest ? spawnPoint(myTeam, mySlot?.spot ?? 1) : world.spawn;
+    const clash = deps.mode === 'clash';
+    const spawn = conquest ? spawnPoint(myTeam, mySlot?.spot ?? 1) : clash ? CLASH_SPAWNS.order[0]! : world.spawn;
     this.bases = conquest
       ? conquestBases()
-      : {
+      : clash
+        ? { order: { ...CLASH.bases.order }, chaos: { ...CLASH.bases.chaos } }
+        : {
           order: { x: spawn.x, z: spawn.z + 2, radius: 9 },
           chaos: { x: 0, z: -62, radius: 9 },
         };
@@ -157,7 +166,7 @@ export class CombatGame implements Updatable {
     this.shapeDecal.mesh.visible = this.rangeDecal.mesh.visible = false;
     world.vfx.add(this.shapeDecal.mesh, this.rangeDecal.mesh);
 
-    if (conquest) player.spawn(spawn.x, spawn.z, spawn.yaw);
+    if (conquest || clash) player.spawn(spawn.x, spawn.z, spawn.yaw);
     const mine = godById(mySlot?.god ?? deps.god ?? 'zeus') ?? GODS[0]!;
     this.player = godUnit(mine, myTeam, { x: spawn.x, z: spawn.z, yaw: spawn.yaw }, this.body);
     this.sim.add(this.player);
@@ -177,7 +186,7 @@ export class CombatGame implements Updatable {
 
     this.hud = new CombatHud(this.player, deps.camera, (u, out) => this.views.headOf(u, out));
     this.menu = new LoadoutMenu(
-      conquest
+      conquest || clash
         ? { combatant: () => this.player.combatant, gods: GODS, onClose: () => undefined }
         : {
             combatant: () => this.player.combatant,
@@ -209,6 +218,12 @@ export class CombatGame implements Updatable {
       return;
     }
 
+    if (clash) {
+      this.startClash(mine);
+      this.sim.drainEvents();
+      return;
+    }
+
     // Training posts on the temple plaza, facing the fountain.
     for (const x of [-6, 0, 6]) {
       this.sim.add(dummyUnit(godById('zeus')!, 'chaos', { x, z: 9 + Math.abs(x) * 0.25, yaw: Math.PI }));
@@ -235,6 +250,39 @@ export class CombatGame implements Updatable {
     group.traverse((o) => (o.frustumCulled = false));
     parent.add(group);
     this.warm = { group, frames: 3 };
+  }
+
+  /** Temple Clash: two bot allies against three bot enemies, everyone at level 8, all racing for the plaza. */
+  private startClash(mine: GodDef): void {
+    this.clash = new Clash(this.sim);
+    const others = GODS.filter((g) => g.id !== mine.id);
+    const shuffled = [...others].sort(() => Math.random() - 0.5);
+    const allies = shuffled.slice(0, 2);
+    const enemies = [...GODS].sort(() => Math.random() - 0.5).slice(0, 3);
+    const gods: Unit[] = [this.player];
+    const add = (def: GodDef, team: 'order' | 'chaos', i: number) => {
+      const at = CLASH_SPAWNS[team][i]!;
+      const u = godUnit(def, team, at);
+      // each bot fights around its own corner of the plaza, so they spread out a little
+      const anchor = { x: (i - 1) * 6, z: team === 'order' ? 4 : -4 };
+      u.brain = new GodBot(this.sim, u, { anchor, leash: 70, aggro: 24, aggression: 0.55, recall: true });
+      this.sim.add(u);
+      gods.push(u);
+    };
+    allies.forEach((g, i) => add(g, 'order', i + 1));
+    enemies.forEach((g, i) => add(g, 'chaos', i));
+    for (const u of gods) {
+      u.combatant.gainXp(XP_TABLE[CLASH.startLevel - 1]!);
+      u.combatant.gainFavor(CLASH.startFavor);
+      u.combatant.health = u.combatant.stats.maxHealth;
+      u.combatant.mana = u.combatant.stats.maxMana;
+    }
+    this.clashHud = new ClashHud(this.clash, 'order');
+    this.plazaRing = new GroundDecal(this.groundAt);
+    this.plazaRing.setStyle('zone');
+    this.plazaRing.place({ type: 'ring', radius: CLASH.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
+    this.deps.world.vfx.add(this.plazaRing.mesh);
+    this.hud.toast('Hold the temple plaza. Press K to spend your skill points.');
   }
 
   private addTeam(team: 'order' | 'chaos', gods: readonly GodDef[], roles: readonly BotRole[], spots: readonly number[]): void {
@@ -303,7 +351,7 @@ export class CombatGame implements Updatable {
 
   update(dt: number): void {
     // after a Titan falls the world keeps moving a few seconds, then freezes behind the end screen
-    if (this.match?.winner) this.endTimer += dt;
+    if (this.match?.winner || this.clash?.winner) this.endTimer += dt;
     if (this.netGuest) {
       this.netGuest.basic = this.basicHeld;
       this.views.beforeStep(this.sim.units);
@@ -314,6 +362,7 @@ export class CombatGame implements Updatable {
       this.views.beforeStep(this.sim.units);
       this.netHost?.beforeStep();
       this.match?.step(dt);
+      this.clash?.step(dt);
       this.sim.step(dt);
       this.netHost?.afterStep(dt);
       this.views.afterStep(this.sim.units);
@@ -348,7 +397,7 @@ export class CombatGame implements Updatable {
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
 
     this.basicHeld = false;
-    if (!this.menu.isOpen && !this.match?.winner) this.handleCombatInput();
+    if (!this.menu.isOpen && !this.match?.winner && !this.clash?.winner) this.handleCombatInput();
     this.netGuest?.syncBuild();
 
     for (const e of this.sim.drainEvents()) {
@@ -362,6 +411,13 @@ export class CombatGame implements Updatable {
 
     this.views.frame(this.sim.units, dt, alpha, time);
     this.matchHud?.frame(dt, this.sim.units, input.isDown('Tab'));
+    this.clashHud?.frame();
+    if (this.plazaRing && this.clash) {
+      const state = this.clash.plaza;
+      const [main, core] =
+        state === 'contested' ? [0xffe08a, 0xffffff] : state === 'neutral' ? [0xd9a845, 0xfff0c0] : state === this.player.team ? [0x4fb2ff, 0xe6f4ff] : [0xff3524, 0xffe0c8];
+      this.plazaRing.setColors(main, core);
+    }
     if (this.match?.winner) this.hud.setVisible(false);
     this.vfx.player = this.player;
     this.vfx.frame(this.sim, dt, time);

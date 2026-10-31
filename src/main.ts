@@ -22,7 +22,7 @@ import { Hud } from './ui/Hud';
 import { CombatGame } from './combat/CombatGame';
 import { monsterWarmup } from './combat/MonsterViews';
 import { GODS, godById } from './game/gods';
-import { savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
+import { mapOf, savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
 import { compatibilityMode, installErrorHandlers, showFatal } from './ui/Fatal';
 import { playIntro } from './ui/Intro';
 import { Announcer } from './audio/Announcer';
@@ -68,7 +68,7 @@ async function main(): Promise<void> {
   // a normal launch opens on the home page and the intro trailer; the title
   // screen (and its hymn) follow once the trailer ends or is skipped
   const chosen: Promise<StartChoice> = skipMenu
-    ? Promise.resolve({ mode: mapFromUrl(), god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
+    ? Promise.resolve({ mode: (params.get('map') === 'clash' ? 'clash' : mapFromUrl()) as GameMode, god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
     : playIntro(audio).then(() => {
         music.play('hymn');
         return showStartMenu(GODS, graphics);
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   const prepare = async (mode: GameMode) => {
     hud.progress(0.6, mode === 'conquest' ? 'Raising the battlefield…' : 'Raising the temple…');
     // a guess behind the title screen may still be building
-    const build = () => World.create(textures, camera, mode);
+    const build = () => World.create(textures, camera, mapOf(mode));
     const world = await (building = building.then(build, build));
     const post = new PostFX(renderer, world.scene, camera);
     hud.progress(0.8, 'Lighting the braziers…');
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
   // A map built for the other mode is left to the garbage collector, not disposed:
   // it shares cached geometry with the new map, and disposing destroys GPU
   // buffers that the new map still draws ("buffer used in submit while destroyed").
-  const reuse = guess && guessMode === choice.mode;
+  const reuse = guess && mapOf(guessMode!) === mapOf(choice.mode);
   const { world, post, models } = reuse ? await guess : await prepare(choice.mode);
 
   const input = new Input(renderer.domElement);
