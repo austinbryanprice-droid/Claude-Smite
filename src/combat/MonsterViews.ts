@@ -26,6 +26,8 @@ import { hypot } from '../core/math';
 export const BUFF_GLOW: Partial<Record<string, number>> = { ...BUFF_COLOR, fury: 0xff6a1a };
 
 const AMBER = 0xffa53a;
+/** The Thornspitter's acid: its sacs, eyes and spit. */
+export const ACID = 0x8cff3a;
 
 export interface MonsterView {
   root: THREE.Group;
@@ -141,10 +143,11 @@ function pivot(parent: THREE.Object3D, x: number, y: number, z: number): THREE.G
 // ---------------------------------------------------------------------------
 // Thornback
 
-function thornback(alpha: boolean): MonsterView {
+function thornback(alpha: boolean, spitter = false): MonsterView {
   const m = mats();
   const root = new THREE.Group();
-  const s = alpha ? 1.8 : 1.25;
+  const s = alpha ? 1.8 : spitter ? 1.1 : 1.25;
+  const eye = spitter ? ACID : AMBER;
   const rig = pivot(root, 0, 0, 0);
   rig.scale.setScalar(s);
   const body = pivot(rig, 0, 0.72, 0);
@@ -174,8 +177,22 @@ function thornback(alpha: boolean): MonsterView {
       mesh(body, shard, glow(AMBER, 3), Math.sin(a) * 0.32, 0.38 + Math.cos(a) * 0.04, 0.3, -0.3, 0, -a * 1.2);
     }
   }
+  // the Spitter's acid sacs swell along its back and pulse as it breathes
+  const sacs: THREE.Mesh[] = [];
+  if (spitter) {
+    const sac = geo('tb-sac', () => new THREE.SphereGeometry(0.11, 14, 10).scale(1, 0.8, 1.2));
+    for (const [x, z, k] of [[-0.2, 0.15, 1], [0.2, 0.0, 0.9], [-0.18, -0.2, 0.8], [0.17, -0.32, 0.7]] as const) {
+      const o = mesh(body, sac, glow(ACID, 2.6), x, 0.2, z, 0, 0, 0, false);
+      o.scale.setScalar(k);
+      sacs.push(o);
+    }
+  }
   // head on a neck pivot so it can bob and thrust
   const head = pivot(body, 0, 0.05, 0.55);
+  if (spitter) {
+    // a swollen glowing throat that empties when it spits
+    sacs.push(mesh(head, geo('tb-throat', () => new THREE.SphereGeometry(0.15, 16, 12).scale(1, 0.85, 1.1)), glow(ACID, 2.2), 0, -0.2, 0.18, 0, 0, 0, false));
+  }
   mesh(head, geo('tb-skull', () => new THREE.SphereGeometry(0.27, 20, 14).scale(0.9, 0.82, 1.15)), m.fur, 0, 0, 0.1);
   // tapering snout ending in a leathery nose pad with nostrils
   mesh(head, geo('tb-snout', () => new THREE.CylinderGeometry(0.1, 0.16, 0.3, 14).rotateX(Math.PI / 2).scale(1.1, 0.9, 1)), m.hide, 0, -0.07, 0.36);
@@ -184,7 +201,7 @@ function thornback(alpha: boolean): MonsterView {
   const tusk = geo('tb-tusk', () => new THREE.ConeGeometry(0.035, 0.26, 8).translate(0, 0.13, 0));
   for (const sx of [-1, 1]) {
     mesh(head, tusk, m.bone, sx * 0.12, -0.12, 0.42, -0.5, 0, -sx * 0.35);
-    mesh(head, geo('tb-eye', () => new THREE.SphereGeometry(0.035, 10, 8)), glow(AMBER, 6), sx * 0.13, 0.07, 0.28, 0, 0, 0, false);
+    mesh(head, geo('tb-eye', () => new THREE.SphereGeometry(0.035, 10, 8)), glow(eye, 6), sx * 0.13, 0.07, 0.28, 0, 0, 0, false);
     mesh(head, geo('tb-ear', () => new THREE.ConeGeometry(0.07, 0.18, 6).translate(0, 0.09, 0)), m.fur, sx * 0.17, 0.16, 0.02, -0.7, 0, -sx * 0.6);
   }
   // four legs hanging from hip pivots
@@ -196,7 +213,8 @@ function thornback(alpha: boolean): MonsterView {
     mesh(leg, geo('tb-hoof', () => new THREE.CylinderGeometry(0.07, 0.085, 0.08, 10)), m.hoof, 0, -0.56, 0.03);
     legs.push(leg);
   }
-  skinRigid(root, alpha ? 'thornback-alpha' : 'thornback', rig, [], bounds(1.25 * s));
+  skinRigid(root, alpha ? 'thornback-alpha' : spitter ? 'thornback-spitter' : 'thornback', rig, sacs, bounds(1.25 * s));
+  const sacSize = sacs.map((o) => o.scale.x);
 
   let phase = Math.random() * 10;
   let breath = Math.random() * 10;
@@ -221,6 +239,9 @@ function thornback(alpha: boolean): MonsterView {
       head.rotation.x = gore * 0.55 - Math.sin(breath * 0.5) * 0.05 + (a < 0.2 ? 0.25 : 0) * (1 - a / 0.2);
       head.position.z = 0.55 + gore * 0.12;
       body.rotation.x = -gore * 0.08 + wobble * 0.05;
+      // sacs swell between spits and empty in one squeeze as the acid flies
+      const fill = (a < 0.25 ? 0.6 + a * 1.6 : 1) + Math.sin(breath * 1.6) * 0.06;
+      sacs.forEach((o, i) => o.scale.setScalar(sacSize[i]! * (deathTime >= 0 ? Math.max(0.01, 1 - deathTime) : fill)));
       body.rotation.z = wobble * 0.08;
       if (deathTime >= 0) {
         // keel over on its side, then sink into the ground
@@ -636,6 +657,7 @@ export function monsterWarmup(): THREE.Object3D[] {
   return [
     thornback(false),
     thornback(true),
+    thornback(false, true),
     ...buffs.map((b) => giant({ glow: BUFF_GLOW[b] ?? 0xffffff, stone: mats().stone, scale: 1 })),
     giant({ glow: 0xff6a1a, stone: lavaStone(), scale: 2.1, molten: true }),
     wyrm(),
@@ -647,5 +669,5 @@ export function createMonsterView(u: Unit): MonsterView {
   if (type === 'warden') return giant({ glow: BUFF_GLOW[campKindOf(u)] ?? 0xffffff, stone: mats().stone, scale: 1 });
   if (type === 'moltenColossus') return giant({ glow: 0xff6a1a, stone: lavaStone(), scale: 2.1, molten: true });
   if (type === 'treasureWyrm') return wyrm();
-  return thornback(type === 'thornbackAlpha');
+  return thornback(type === 'thornbackAlpha', type === 'thornSpitter');
 }

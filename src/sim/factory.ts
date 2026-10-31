@@ -106,12 +106,14 @@ export function minionUnit(
   return u;
 }
 
-export type MonsterType = 'thornback' | 'thornbackAlpha' | 'warden' | 'treasureWyrm' | 'moltenColossus';
+export type MonsterType = 'thornback' | 'thornbackAlpha' | 'thornSpitter' | 'warden' | 'treasureWyrm' | 'moltenColossus';
 
 /** Jungle monsters, neutral to both sides. Bounty is XP and favor for the god who kills one. */
-const MONSTERS: Record<MonsterType, { name: string; health: number; power: number; speed: number; prot: number; range: number; radius: number; rate: number; xp: number; favor: number }> = {
+const MONSTERS: Record<MonsterType, { name: string; health: number; power: number; speed: number; prot: number; range: number; radius: number; rate: number; xp: number; favor: number; projectile?: number }> = {
   thornback: { name: 'Thornback', health: 300, power: 14, speed: 360, prot: 10, range: 1.4, radius: 0.6, rate: 0.9, xp: 45, favor: 6 },
   thornbackAlpha: { name: 'Thornback Alpha', health: 620, power: 24, speed: 340, prot: 18, range: 1.7, radius: 0.9, rate: 0.8, xp: 110, favor: FAVOR_REWARDS.jungleCamp },
+  // Temple Siege only: hangs back and spits acid, so the gods have to dive for it
+  thornSpitter: { name: 'Thornspitter', health: 240, power: 20, speed: 330, prot: 8, range: 6.5, radius: 0.55, rate: 0.75, xp: 60, favor: 8, projectile: 26 },
   treasureWyrm: { name: 'Treasure Wyrm', health: 5200, power: 70, speed: 280, prot: 35, range: 3.2, radius: 2.6, rate: 0.5, xp: 300, favor: 0 },
   moltenColossus: { name: 'Molten Colossus', health: 8500, power: 95, speed: 240, prot: 45, range: 3.6, radius: 3.4, rate: 0.4, xp: 400, favor: 0 },
   warden: { name: 'Warden', health: 950, power: 30, speed: 300, prot: 20, range: 2, radius: 1.25, rate: 0.55, xp: 220, favor: FAVOR_REWARDS.buffCamp },
@@ -133,7 +135,7 @@ export function monsterUnit(base: GodDef, type: MonsterType, at: { x: number; z:
       physicalProtection: m.prot,
       magicalProtection: m.prot,
     },
-    { range: m.range, damageType: 'physical' },
+    { range: m.range, damageType: 'physical', projectileSpeed: m.projectile },
   );
   const u = new Unit('monster', def.name, new Combatant(def, 'neutral'), body(at.x, at.z, at.yaw), m.radius, at);
   u.respawns = false;

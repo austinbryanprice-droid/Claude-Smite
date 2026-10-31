@@ -8,7 +8,7 @@ import { PROJECTILE_HEIGHT } from '../sim/Sim';
 import { isStructure, WORLD_SCALE, type Unit, type Flash, type FlashShape, type Projectile, type SimEvent } from '../sim/Unit';
 import { ArcView } from './Arcs';
 import { GroundDecal, type DecalShape } from './GroundDecal';
-import { BUFF_GLOW } from './MonsterViews';
+import { ACID, BUFF_GLOW } from './MonsterViews';
 import { paletteFor, paletteOf, type GodPalette } from './palette';
 import { hypot } from '../core/math';
 
@@ -665,7 +665,7 @@ export class CombatVfx {
       case 'basic': {
         // the Warden's two-fisted slam cracks the ground in front of it
         const u = e.unit;
-        if (u.kind !== 'monster' || u.tag.includes('thornback')) break;
+        if (u.kind !== 'monster' || u.tag.includes('thorn')) break;
         const f = u.forward;
         const reach = u.radius + 1.2;
         const x = u.x + f.x * reach;
@@ -729,7 +729,7 @@ export class CombatVfx {
         v = this.projectilePool.take();
         const size = p.cast ? Math.min(1.3, 0.35 + p.radius * 0.45) : isStructure(p.owner) ? 0.75 : p.owner.kind === 'minion' ? 0.16 : 0.28;
         // structure shots crackle like lightning so they read as heavy
-        v.reset(paletteOf(p.owner), size, at, isStructure(p.owner));
+        v.reset(monsterPalette(p.owner), size, at, isStructure(p.owner));
         this.projectiles.set(p.id, v);
       }
       v.update(at, t);
@@ -827,6 +827,7 @@ function monsterPalette(u: Unit): GodPalette {
   const p = paletteOf(u);
   if (u.tag.endsWith('treasureWyrm')) return { ...p, vfx: 0xffc83a, core: 0xfff6d0 };
   if (u.tag.endsWith('moltenColossus')) return { ...p, vfx: 0xff4a10, core: 0xffd080 };
+  if (u.tag.endsWith('thornSpitter')) return { ...p, vfx: ACID, core: 0xe8ffc0 };
   if (u.kind !== 'monster' || !u.tag.endsWith('warden')) return p;
   const kind = u.tag.split(':')[0]!.split('-')[1] as keyof typeof BUFF_GLOW;
   const c = BUFF_GLOW[kind];
