@@ -25,6 +25,8 @@ export class ClashHud {
   private readonly end: HTMLElement;
   private readonly bless: HTMLElement;
   private lastBless = '';
+  private readonly relic: HTMLElement;
+  private lastRelic = '';
   private shownEnd = false;
   private lastPlaza = '';
   private readonly banner: HTMLElement;
@@ -47,6 +49,7 @@ export class ClashHud {
       </div>
       <div class="clash-state"></div>
       <div class="clash-bless"></div>
+      <div class="clash-relic"></div>
       <div class="mh-banner"></div>
       <div class="clash-end"><div class="clash-end-title"></div><div class="clash-end-score"></div><div class="clash-end-table"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
@@ -58,6 +61,7 @@ export class ClashHud {
     this.state = this.root.querySelector('.clash-state')!;
     this.end = this.root.querySelector('.clash-end')!;
     this.bless = this.root.querySelector('.clash-bless')!;
+    this.relic = this.root.querySelector('.clash-relic')!;
     this.banner = this.root.querySelector('.mh-banner')!;
     this.tally = me ? new KillTally(() => me) : null;
     this.root.querySelector('.clash-again')!.addEventListener('click', () => location.reload());
@@ -80,6 +84,25 @@ export class ClashHud {
       this.banner.appendChild(sub);
     }
     this.bannerTime = 3;
+  }
+
+  /** The Sun Relic line: where it is, who is claiming it, and who holds its blessing. */
+  private relicText(): { text: string; tone: string } {
+    const c = this.clash;
+    const enemy: Side = this.mine === 'order' ? 'chaos' : 'order';
+    const R = CLASH.relic;
+    if (c.relicBuff[this.mine] > 0) return { text: `Sun Relic: your team hits ${R.damage * 100}% harder · ${Math.ceil(c.relicBuff[this.mine])}`, tone: 'ally' };
+    if (c.relic?.claimer) {
+      const pct = Math.floor(c.relic.progress * 100);
+      return c.relic.claimer === this.mine ? { text: `Claiming the Sun Relic · ${pct}%`, tone: 'ally' } : { text: `Enemies are claiming the Sun Relic! · ${pct}%`, tone: 'foe' };
+    }
+    if (c.relicBuff[enemy] > 0) return { text: `Enemies hold the Sun Relic's blessing · ${Math.ceil(c.relicBuff[enemy])}`, tone: 'foe' };
+    if (c.relic) {
+      // the player's team looks toward -z from its base, so +x is on the right
+      const right = this.mine === 'order' ? c.relic.x > 0 : c.relic.x < 0;
+      return { text: `The Sun Relic has risen on the ${right ? 'right' : 'left'} flank: stand on it to claim`, tone: 'up' };
+    }
+    return c.relicIn <= 8 ? { text: `Sun Relic rises in ${Math.ceil(c.relicIn)}`, tone: '' } : { text: '', tone: '' };
   }
 
   frame(dt = 0): void {
@@ -106,6 +129,13 @@ export class ClashHud {
       this.bless.textContent = bless;
       this.bless.classList.toggle('on', b > 0);
       this.bless.classList.toggle('show', bless !== '');
+    }
+    const relic = this.relicText();
+    if (relic.text !== this.lastRelic) {
+      this.lastRelic = relic.text;
+      this.relic.textContent = relic.text;
+      this.relic.dataset.tone = relic.tone;
+      this.relic.classList.toggle('show', relic.text !== '');
     }
     if (c.winner && !this.shownEnd) {
       this.shownEnd = true;
