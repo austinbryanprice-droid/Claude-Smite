@@ -24,6 +24,7 @@ import { monsterWarmup } from './combat/MonsterViews';
 import { GODS, godById } from './game/gods';
 import { savedMode, showStartMenu, type GameMode, type StartChoice } from './ui/StartMenu';
 import { installErrorHandlers, showFatal } from './ui/Fatal';
+import { playIntro } from './ui/Intro';
 import { Announcer } from './audio/Announcer';
 import { AudioEngine } from './audio/AudioEngine';
 import { bakeAll } from './audio/bank';
@@ -58,16 +59,20 @@ async function main(): Promise<void> {
   const baked = bakeAll(audio);
   (window as unknown as { __audio: unknown }).__audio = { audio, music, herald, baked };
   // Links with ?map= (and automated captures) skip the title screen.
-  const skipMenu = params.has('map') || params.has('capture') || params.has('showcase');
+  const skipMenu = params.has('map') || params.has('capture') || params.has('showcase') || params.has('stage');
   const rendering = createRenderer(document.body);
   const graphics = rendering.then((r) => {
     const gpu = gpuName(r.renderer);
     return { webgpu: r.isWebGPU, gpu, advice: gpuAdvice(gpu) };
   });
+  // a normal launch opens on the home page and the intro trailer; the title
+  // screen (and its hymn) follow once the trailer ends or is skipped
   const chosen: Promise<StartChoice> = skipMenu
     ? Promise.resolve({ mode: mapFromUrl(), god: godById(params.get('god') ?? '')?.id ?? 'zeus' })
-    : showStartMenu(GODS, graphics);
-  if (!skipMenu) music.play('hymn');
+    : playIntro(audio).then(() => {
+        music.play('hymn');
+        return showStartMenu(GODS, graphics);
+      });
 
   const { renderer, isWebGPU } = await rendering;
   const { gpu, advice: slowGpu } = await graphics;
@@ -220,6 +225,9 @@ async function main(): Promise<void> {
   const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, net: choice.net, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
   void baked;
+  // `?stage`: the trailer's film set (tools/trailer)
+  const stage = params.has('stage') ? new (await import('./dev/Stage')).Stage(combat, camera, () => (player.model.root.visible = false)) : null;
+  if (stage) follow.update = () => {};
   const gameAudio = new GameAudio(audio, music, herald, combat, camera, choice.mode === 'conquest', () => !player.grounded);
   // Prepare what the match added (the player, spell effects, structures), every
   // god and monster still included, then wait (bounded) for the driver to
@@ -272,6 +280,7 @@ async function main(): Promise<void> {
     combat.frame(dt, loop.alpha, loop.time);
     gameAudio.frame(dt);
     showcase?.update(dt);
+    stage?.update(dt);
     follow.update(dt);
     perf.mark(1);
     world.update(dt, loop.time, player.model.root.position);
@@ -294,27 +303,28 @@ async function main(): Promise<void> {
   /**
    * Deterministic capture for automated screenshots: stops the live loop,
    * renders `frames` frames at a fixed 60 Hz (so temporal AA converges) and
-   * returns the canvas as a PNG data URL.
+   * returns the canvas as a PNG data URL. `capture(0, 1000 / 30)` films one
+   * frame of 30 fps footage (tools/trailer).
    */
   let simNow = 0;
-  const capture = async (frames = 8): Promise<string> => {
+  const capture = async (frames = 8, step = 1000 / 60): Promise<string> => {
     renderer.setAnimationLoop(null);
     // continue from the live clock if the loop already ran, so time never steps backwards
     if (simNow === 0) simNow = performance.now();
     const device = (renderer.backend as unknown as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } } }).device;
     for (let i = 0; i < frames; i++) {
-      frame((simNow += 1000 / 60));
+      frame((simNow += step));
       await device?.queue.onSubmittedWorkDone();
     }
     await new Promise((r) => requestAnimationFrame(r));
-    frame((simNow += 1000 / 60));
+    frame((simNow += step));
     const url = renderer.domElement.toDataURL('image/png');
     await device?.queue.onSubmittedWorkDone();
     return url;
   };
 
   // Hooks for automated screenshots and for gameplay code during development.
-  const debug = { perf, pipelines, grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
+  const debug = { stage, perf, pipelines, grading, combat, audio, music, herald, world, player, camera, follow, renderer, post, setQuality: applyQuality, isWebGPU, capture, resume: () => renderer.setAnimationLoop(frame) };
   (window as unknown as { __game: typeof debug }).__game = debug;
 }
 
