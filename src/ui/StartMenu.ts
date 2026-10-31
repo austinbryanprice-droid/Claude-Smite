@@ -23,6 +23,8 @@ export interface StartChoice {
   /** A multiplayer Conquest match (the lobby's players and connections). */
   net?: NetSession;
   difficulty?: Difficulty;
+  /** Temple Duel: the rival god's id, or '' for a random one. */
+  rival?: string;
 }
 
 const STORAGE_KEY = 'ascendant.start';
@@ -142,6 +144,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   let mode = savedMode();
   let god = gods.some((g) => g.id === prev.god) ? prev.god! : gods[0]!.id;
   let difficulty: Difficulty = parseDifficulty(prev.difficulty);
+  let rival = gods.some((g) => g.id === prev.rival) ? prev.rival! : '';
 
   const root = document.createElement('div');
   root.className = 'sm';
@@ -155,6 +158,7 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
           <h3>Mode</h3>
           <div class="sm-modes">${MODES.map((m) => `<button class="sm-mode" data-mode="${m.id}"><b>${m.name}</b><span>${m.text}</span>${recordLine(m.id) ? `<em class="sm-rec">${recordLine(m.id)}</em>` : ''}</button>`).join('')}</div>
           <div class="sm-diff"><span>Bots</span>${DIFFICULTIES.map((d) => `<button class="sm-dif" data-dif="${d.id}" title="${d.text}">${d.name}</button>`).join('')}</div>
+          <div class="sm-diff sm-rival"><span>Rival</span><button class="sm-dif" data-rival="">Random</button>${gods.map((g) => `<button class="sm-dif" data-rival="${g.id}">${g.name}</button>`).join('')}</div>
           <div class="sm-detail"></div>
           <h3 class="help-gap">Play with friends</h3>
           <div class="sm-net"></div>
@@ -175,7 +179,14 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   const render = () => {
     root.querySelectorAll<HTMLButtonElement>('.sm-mode').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
     root.querySelectorAll<HTMLButtonElement>('.sm-god').forEach((b) => b.classList.toggle('on', b.dataset.god === god));
-    root.querySelectorAll<HTMLButtonElement>('.sm-dif').forEach((b) => b.classList.toggle('on', b.dataset.dif === difficulty));
+    root.querySelectorAll<HTMLButtonElement>('.sm-dif[data-dif]').forEach((b) => b.classList.toggle('on', b.dataset.dif === difficulty));
+    // a rival row only for the duel; your own god can't be your rival
+    if (rival === god) rival = '';
+    root.querySelector<HTMLDivElement>('.sm-rival')!.classList.toggle('hide', mode !== 'duel');
+    root.querySelectorAll<HTMLButtonElement>('[data-rival]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.rival === rival);
+      b.hidden = b.dataset.rival === god;
+    });
     const def = gods.find((g) => g.id === god)!;
     const skills = def.defaultLoadout.map((id) => def.skills.find((s) => s.id === id)!);
     const keys = SLOT_KEYS;
@@ -189,7 +200,13 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
   };
   render();
 
-  root.querySelectorAll<HTMLButtonElement>('.sm-dif').forEach((b) =>
+  root.querySelectorAll<HTMLButtonElement>('[data-rival]').forEach((b) =>
+    b.addEventListener('click', () => {
+      rival = b.dataset.rival ?? '';
+      render();
+    }),
+  );
+  root.querySelectorAll<HTMLButtonElement>('.sm-dif[data-dif]').forEach((b) =>
     b.addEventListener('click', () => {
       difficulty = parseDifficulty(b.dataset.dif);
       render();
@@ -234,12 +251,12 @@ export function showStartMenu(gods: readonly GodDef[], graphics: Promise<Graphic
 
   return new Promise((resolve) => {
     const finish = (choice: StartChoice) => {
-      save({ mode: choice.mode, god: choice.god, difficulty });
+      save({ mode: choice.mode, god: choice.god, difficulty, rival });
       root.classList.add('done');
       setTimeout(() => root.remove(), 400);
       resolve(choice);
     };
     started = finish;
-    play.addEventListener('click', () => finish({ mode, god, difficulty }));
+    play.addEventListener('click', () => finish({ mode, god, difficulty, rival }));
   });
 }

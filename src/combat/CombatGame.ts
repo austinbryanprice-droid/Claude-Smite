@@ -55,6 +55,8 @@ export interface CombatDeps {
   world: World;
   /** 'conquest' plays a full match against bots; 'clash' a 3v3 fight over the temple plaza; 'arena' is the training ground. */
   mode?: 'arena' | 'conquest' | 'clash' | 'siege' | 'duel';
+  /** Temple Duel: the rival god's id; anything else (or the player's own god) picks one at random. */
+  rival?: string;
   /** The player's god (defaults to Zeus). */
   god?: string;
   input: Input;
@@ -324,7 +326,8 @@ export class CombatGame implements Updatable {
   /** Temple Duel: the player against one bot god, round by round, inside a closing ring of fire. */
   private startDuel(mine: GodDef): void {
     this.duel = new Duel(this.sim);
-    const def = [...GODS.filter((g) => g.id !== mine.id)].sort(() => Math.random() - 0.5)[0]!;
+    const others = GODS.filter((g) => g.id !== mine.id);
+    const def = others.find((g) => g.id === this.deps.rival) ?? others[Math.floor(Math.random() * others.length)]!;
     const rival = godUnit(def, 'chaos', DUEL.spawns.chaos);
     rival.brain = new GodBot(this.sim, rival, { anchor: { x: 0, z: 0 }, leash: 30, aggro: 40, aggression: 0.8 });
     this.sim.add(rival);

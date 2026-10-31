@@ -76,3 +76,5 @@ body:has(.mh-map) .hud-panel { top: auto; bottom: 12px; right: 12px; }
 .sm-diff span { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.75; margin-right: 4px; }
 .sm-dif { padding: 4px 14px; font: inherit; font-size: 13px; letter-spacing: 0.08em; color: inherit; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(231, 194, 122, 0.3); border-radius: 4px; cursor: pointer; }
 .sm-dif.on { background: rgba(231, 194, 122, 0.18); border-color: #e7c27a; color: #ffe3a3; }
+.sm-rival { flex-wrap: wrap; }
+.sm-rival.hide { display: none; }
