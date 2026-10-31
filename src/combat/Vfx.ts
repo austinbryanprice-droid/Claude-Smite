@@ -755,7 +755,9 @@ export class CombatVfx {
         break;
       }
       case 'teleport':
-        if (e.unit.alive) {
+        // a hop under a meter (a duelist held on their mark) is not worth a flash:
+        // the countdown's hold used to stack hundreds of bursts in a few seconds
+        if (e.unit.alive && hypot(e.unit.x - e.fromX, e.unit.z - e.fromZ) > 1) {
           const p = paletteOf(e.unit);
           this.burst(p, e.fromX, this.ground(e.fromX, e.fromZ) + 1.2, e.fromZ, 1.2);
           this.burst(p, e.unit.x, e.unit.body.y + 1.2, e.unit.z, 1.2);

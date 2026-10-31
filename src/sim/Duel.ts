@@ -159,7 +159,8 @@ export class Duel {
   private hold(): void {
     for (const g of this.gods) {
       const at = DUEL.spawns[g.team as Side];
-      if (g.alive) this.sim.teleport(g, at.x, at.z, at.yaw);
+      // only when it has stepped off: a teleport every step floods the event stream
+      if (g.alive && hypot(g.x - at.x, g.z - at.z) > 0.05) this.sim.teleport(g, at.x, at.z, at.yaw);
     }
   }
 
