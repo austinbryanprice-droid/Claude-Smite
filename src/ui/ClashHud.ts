@@ -1,5 +1,7 @@
 import type { Side } from '../game/combatant';
 import { CLASH, type Clash } from '../sim/Clash';
+import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
+import type { Unit } from '../sim/Unit';
 import './clash.css';
 
 const PLAZA_TEXT: Record<string, string> = {
@@ -24,6 +26,8 @@ export class ClashHud {
   constructor(
     private readonly clash: Clash,
     private readonly mine: Side,
+    private readonly board?: Scoreboard,
+    private readonly me?: Unit,
   ) {
     this.root.className = 'clash';
     this.root.innerHTML = `
@@ -34,7 +38,7 @@ export class ClashHud {
       </div>
       <div class="clash-state"></div>
       <div class="clash-bless"></div>
-      <div class="clash-end"><div class="clash-end-title"></div><div class="clash-end-score"></div><button class="clash-again">Play again</button></div>`;
+      <div class="clash-end"><div class="clash-end-title"></div><div class="clash-end-score"></div><div class="clash-end-table"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
     const ally = this.root.querySelector('.ally')!;
     const foe = this.root.querySelector('.foe')!;
@@ -73,6 +77,7 @@ export class ClashHud {
       this.end.querySelector('.clash-end-title')!.textContent = won ? 'Victory' : 'Defeat';
       const enemy: Side = this.mine === 'order' ? 'chaos' : 'order';
       this.end.querySelector('.clash-end-score')!.textContent = `${Math.floor(c.score[this.mine])} – ${Math.floor(c.score[enemy])} · takedowns ${c.kills[this.mine]} – ${c.kills[enemy]}`;
+      if (this.board && this.me) this.end.querySelector('.clash-end-table')!.innerHTML = scoreTable(this.board, this.me, 'gods');
       this.end.classList.add('show', won ? 'won' : 'lost');
       document.exitPointerLock?.();
     }

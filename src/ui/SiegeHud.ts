@@ -1,4 +1,6 @@
 import { SIEGE, type Siege } from '../sim/Siege';
+import { scoreTable, type Scoreboard } from '../sim/Scoreboard';
+import type { Unit } from '../sim/Unit';
 import './clash.css';
 
 const BEST_KEY = 'ascendant.siegeBest';
@@ -29,6 +31,8 @@ export class SiegeHud {
   constructor(
     private readonly siege: Siege,
     onPick: (i: number) => void,
+    private readonly board?: Scoreboard,
+    private readonly me?: Unit,
   ) {
     this.root.className = 'clash siege';
     this.root.innerHTML = `
@@ -39,7 +43,7 @@ export class SiegeHud {
       </div>
       <div class="clash-state"></div>
       <div class="siege-boons"></div>
-      <div class="clash-end lost"><div class="clash-end-title">The temple falls</div><div class="clash-end-score"></div><button class="clash-again">Play again</button></div>`;
+      <div class="clash-end lost"><div class="clash-end-title">The temple falls</div><div class="clash-end-score"></div><div class="clash-end-table"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
     this.wave = this.root.querySelector('.siege-wave')!;
     this.fill = this.root.querySelector('.clash-fill')!;
@@ -93,6 +97,7 @@ export class SiegeHud {
       }
       this.end.querySelector('.clash-end-score')!.textContent =
         `You held ${held} ${held === 1 ? 'wave' : 'waves'} · ${s.kills} monsters slain · ${s.boons.length} boons · ${record ? 'new best!' : `best ${this.best}`}`;
+      if (this.board && this.me) this.end.querySelector('.clash-end-table')!.innerHTML = scoreTable(this.board, this.me, 'monsters');
       this.end.classList.add('show');
       document.exitPointerLock?.();
     }
