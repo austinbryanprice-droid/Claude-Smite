@@ -88,6 +88,12 @@ export class PerfStats {
   private readonly longFrames: LongFrame[] = [];
   private longFrameCount = 0;
   private timer: { pool: () => GpuPool | undefined; frames: number } | null = null;
+  /** What each render context draws (see `passOf`), keyed by its timestamp id without the frame. */
+  private readonly passes = new Map<string, string>();
+  /** GPU milliseconds per pass, summed over `passFrames` frames of the last minute's batches. */
+  private passMs = new Map<string, number>();
+  private passFrames = 0;
+  private passSince = performance.now();
   private battery: { charging: boolean; level: number } | null = null;
 
   constructor() {
@@ -121,6 +127,14 @@ export class PerfStats {
     }
     if (!supported) return;
     backend.trackTimestamp = true;
+    // name each render context's timestamps by what it draws, for the report's per-pass split
+    const inspector = renderer.inspector as unknown as { beginRender: (uid: string, scene: unknown, camera: unknown, target: unknown) => void };
+    const begin = inspector.beginRender.bind(inspector);
+    inspector.beginRender = (uid, scene, camera, target) => {
+      const key = uid.slice(0, uid.lastIndexOf(':f'));
+      if (!this.passes.has(key)) this.passes.set(key, passOf(scene, camera, target));
+      begin(uid, scene, camera, target);
+    };
     this.timer = { pool: () => backend.timestampQueryPool?.render, frames: 0 };
   }
 
@@ -197,10 +211,20 @@ export class PerfStats {
     void pool.resolveQueriesAsync().then(() => {
       // three sums the passes of the batch's last frame only: add up every frame
       const frames = new Map<string, number>();
-      for (const [uid, d] of pool.timestamps) {
-        const f = uid.slice(uid.lastIndexOf(':f') + 2);
-        frames.set(f, (frames.get(f) ?? 0) + d);
+      // the per-pass split covers the last minute or so, restarted each minute
+      if (at - this.passSince > WINDOW * 1000) {
+        this.passMs = new Map();
+        this.passFrames = 0;
+        this.passSince = at;
       }
+      for (const [uid, d] of pool.timestamps) {
+        const cut = uid.lastIndexOf(':f');
+        const f = uid.slice(cut + 2);
+        frames.set(f, (frames.get(f) ?? 0) + d);
+        const pass = this.passes.get(uid.slice(0, cut)) ?? 'other';
+        this.passMs.set(pass, (this.passMs.get(pass) ?? 0) + d);
+      }
+      this.passFrames += frames.size;
       // a resolve with nothing new leaves the old batch in place: never count it twice
       pool.timestamps.clear();
       for (const d of frames.values()) {
@@ -268,6 +292,7 @@ export class PerfStats {
         return `${name} ${Math.round(v.reduce((s, x) => s + x, 0) / Math.max(1, v.length))} / ${Math.round(percentile(v, 0.99))}`;
       }).join(' · ')}`,
       gpu.length ? `GPU ms/frame: ${dist(gpu)}` : 'GPU ms/frame: not measurable in this browser',
+      ...(this.passFrames ? [`  by pass (avg): ${[...this.passMs].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${(v / this.passFrames).toFixed(1)}`).join(' · ')}`] : []),
       `Stalls since load: ${this.counts.over50} over 50 ms · ${this.counts.over100} over 100 ms · ${this.counts.over250} over 250 ms · ${this.counts.over1000} over 1 s`,
       ...this.hitches.map((h) => `  ${ms(h.ms)} ms at ${h.t.toFixed(1)} s: the frame before ran ${ms(h.cpu)} ms of game code${h.shaders ? ` and built ${h.shaders} shaders` : ''}`),
       `Shaders built during play: ${info.shaders}${info.deferred ? ` (${info.deferred} draws waited for one)` : ''}`,
@@ -302,4 +327,13 @@ function buildId(): string {
   } catch {
     return 'dev';
   }
+}
+
+/** A short name for what a render call draws: the scene, a shadow map, or a full-screen effect. */
+function passOf(scene: unknown, camera: unknown, target: unknown): string {
+  const quad = scene as { isQuadMesh?: boolean; name?: string };
+  if (quad.isQuadMesh) return (quad.name || 'effect').split(' ')[0]!;
+  const name = (target as { texture?: { name?: string } } | null)?.texture?.name;
+  if ((camera as { isOrthographicCamera?: boolean }).isOrthographicCamera) return 'shadows';
+  return name === 'output' || !target ? 'scene' : name || 'offscreen';
 }
