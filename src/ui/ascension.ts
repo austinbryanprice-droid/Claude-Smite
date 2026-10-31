@@ -1,4 +1,5 @@
 import './ascension.css';
+import type { Difficulty } from '../game/difficulty';
 
 /**
  * Ascension: a rank that grows with every finished game, in any mode, kept in
@@ -35,28 +36,59 @@ export function gameXp(mode: XpMode, result: { won?: boolean; best?: number }): 
   return base * (result.won ? 2 : 1);
 }
 
-export function getXp(): number {
+/** Harder bots pay more, easier ones less. */
+export const DIFFICULTY_XP: Record<Difficulty, number> = { easy: 0.75, normal: 1, hard: 1.5 };
+/** The first win of each day pays this much on top. */
+export const FIRST_WIN_BONUS = 150;
+
+let difficulty: Difficulty = 'normal';
+/** The current game's bot difficulty, set when the game applies it. */
+export function setXpDifficulty(d: Difficulty): void {
+  difficulty = d;
+}
+
+interface Saved {
+  xp?: number;
+  /** The local day (YYYY-MM-DD) of the last first-win bonus. */
+  winDay?: string;
+}
+
+function load(): Saved {
   try {
-    return Number(JSON.parse(localStorage.getItem(KEY) ?? '{}').xp) || 0;
+    return JSON.parse(localStorage.getItem(KEY) ?? '{}') as Saved;
   } catch {
-    return 0;
+    return {};
   }
 }
 
+export function getXp(): number {
+  return Number(load().xp) || 0;
+}
+
+const today = (now = new Date()): string => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
 export interface Award {
   gained: number;
+  /** The first win of the day's bonus, included in `gained` (0 when none). */
+  bonus: number;
+  difficulty: Difficulty;
   before: Rank;
   after: Rank;
 }
 
-export function awardXp(gained: number): Award {
-  const xp = getXp();
+/** Award a game's XP: scaled by the bot difficulty, plus the first win of the day. */
+export function awardXp(base: number, won = false, now = new Date()): Award {
+  const saved = load();
+  const xp = Number(saved.xp) || 0;
+  const day = today(now);
+  const bonus = won && saved.winDay !== day ? FIRST_WIN_BONUS : 0;
+  const gained = Math.round(base * DIFFICULTY_XP[difficulty]) + bonus;
   try {
-    localStorage.setItem(KEY, JSON.stringify({ xp: xp + gained }));
+    localStorage.setItem(KEY, JSON.stringify({ xp: xp + gained, winDay: bonus ? day : saved.winDay }));
   } catch {
     /* storage unavailable */
   }
-  return { gained, before: rankOf(xp), after: rankOf(xp + gained) };
+  return { gained, bonus, difficulty, before: rankOf(xp), after: rankOf(xp + gained) };
 }
 
 const bar = (r: Rank) => `<span class="asc-bar"><i style="width:${Math.round((r.into / r.need) * 100)}%"></i></span>`;
@@ -71,5 +103,6 @@ export function rankBadge(xp = getXp()): string {
 /** The end screen's line: what the game earned, and a rank up if there was one. */
 export function awardLine(a: Award): string {
   const up = a.after.level > a.before.level;
-  return `<div class="asc-gain${up ? ' up' : ''}">+${a.gained} Ascension${up ? ` · <b>Rank up: ${a.after.title}</b>` : ''} <span class="asc-rank">Rank ${a.after.level} ${a.after.title}</span>${bar(a.after)}</div>`;
+  const extra = [a.difficulty !== 'normal' ? `${a.difficulty === 'hard' ? 'Hard' : 'Easy'} bots ×${DIFFICULTY_XP[a.difficulty]}` : '', a.bonus ? `first win today +${a.bonus}` : ''].filter(Boolean).join(' · ');
+  return `<div class="asc-gain${up ? ' up' : ''}">+${a.gained} Ascension${extra ? ` <small>(${extra})</small>` : ''}${up ? ` · <b>Rank up: ${a.after.title}</b>` : ''} <span class="asc-rank">Rank ${a.after.level} ${a.after.title}</span>${bar(a.after)}</div>`;
 }

@@ -53,3 +53,7 @@
   color: #fff3c4;
   text-shadow: 0 0 12px rgba(255, 200, 90, 0.9);
 }
+.asc-gain small {
+  color: #cdb88a;
+  font-size: 12px;
+}

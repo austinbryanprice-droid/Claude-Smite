@@ -39,6 +39,7 @@ import { Duel, DUEL } from '../sim/Duel';
 import { DuelHud } from '../ui/DuelHud';
 import { Scoreboard } from '../sim/Scoreboard';
 import { difficultyPerks, type Difficulty } from '../game/difficulty';
+import { setXpDifficulty } from '../ui/ascension';
 import { Coach } from '../ui/Coach';
 
 
@@ -126,6 +127,8 @@ export class CombatGame implements Updatable {
 
   constructor(private readonly deps: CombatDeps) {
     const { world, player } = deps;
+    // set before anything can end the game, so the end screen's XP always counts it
+    setXpDifficulty(deps.net ? 'normal' : (deps.difficulty ?? 'normal'));
     const conquest = deps.mode === 'conquest';
     const onConquestMap = (world as unknown as { map?: string }).map === 'conquest';
     const terrain: SimTerrain = conquest && !onConquestMap ? openGround(world.collision) : world.collision;

@@ -42,7 +42,7 @@ export function addResult(mode: RecordMode, result: { won?: boolean; best?: numb
   } catch {
     /* storage unavailable */
   }
-  return { ...before, award: awardXp(gameXp(mode, result)) };
+  return { ...before, award: awardXp(gameXp(mode, result), !!result.won) };
 }
 
 /** One line for the mode's card on the start screen, or '' before the first game. */
