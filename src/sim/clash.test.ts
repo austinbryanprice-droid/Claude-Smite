@@ -61,4 +61,20 @@ describe('Temple Clash', () => {
     const levels = sim.units.filter((u) => u.kind === 'god').map((u) => u.combatant.level);
     expect(Math.min(...levels)).toBeGreaterThan(5);
   });
+
+  it('doubles points during the temple blessing', () => {
+    const sim = newSim();
+    const clash = new Clash(sim);
+    sim.add(godUnit(zeus, 'order', { x: 0, z: 2, yaw: 0 }));
+    const start = CLASH.blessingEvery - CLASH.blessingLength;
+    for (let i = 0; i < 30 * (start - 1); i++) clash.step(1 / 30);
+    expect(clash.blessing).toBe(0);
+    expect(clash.blessingIn).toBeCloseTo(1, 3);
+    const before = clash.score.order;
+    for (let i = 0; i < 30 * 3; i++) clash.step(1 / 30);
+    expect(clash.blessing).toBeGreaterThan(0);
+    // 1 s unblessed, 2 s blessed
+    expect(clash.score.order - before).toBeCloseTo(CLASH.holdRate * 5, 1);
+  });
 });
+

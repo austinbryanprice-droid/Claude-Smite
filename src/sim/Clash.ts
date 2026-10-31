@@ -10,7 +10,7 @@ import type { SimEvent, Unit } from './Unit';
  * keystones come into play within a few minutes.
  */
 export const CLASH = {
-  target: 100,
+  target: 115,
   /** Points a second while a team holds the plaza alone. */
   holdRate: 1,
   killPoints: 5,
@@ -22,6 +22,9 @@ export const CLASH = {
   xpRate: 24,
   favorRate: 14,
   startFavor: 700,
+  /** Every so often the temple's blessing descends: points count double for a while. */
+  blessingEvery: 70,
+  blessingLength: 20,
   bases: {
     order: { x: 0, z: 62, radius: 9 },
     chaos: { x: 0, z: -62, radius: 9 },
@@ -42,6 +45,25 @@ export class Clash {
   winner: Side | null = null;
   /** Takedowns per team, for the scoreboard. */
   readonly kills: Record<Side, number> = { order: 0, chaos: 0 };
+  private time = 0;
+
+  /** Seconds left on the blessing (points count double), 0 when none. */
+  get blessing(): number {
+    const t = this.time % CLASH.blessingEvery;
+    const start = CLASH.blessingEvery - CLASH.blessingLength;
+    return this.time >= start && t >= start ? CLASH.blessingEvery - t : 0;
+  }
+
+  /** Seconds until the next blessing begins. */
+  get blessingIn(): number {
+    const start = CLASH.blessingEvery - CLASH.blessingLength;
+    const t = this.time % CLASH.blessingEvery;
+    return t < start ? start - t : start + CLASH.blessingEvery - t;
+  }
+
+  private get mult(): number {
+    return this.blessing > 0 ? 2 : 1;
+  }
 
   constructor(private readonly sim: Sim) {
     sim.listeners.push((e) => this.on(e));
@@ -54,7 +76,7 @@ export class Clash {
     const killer = e.killer ? (e.killer.owner ?? e.killer) : null;
     if (!killer || killer.team === e.unit.team || killer.team === 'neutral' || this.winner) return;
     this.kills[killer.team]++;
-    this.add(killer.team, CLASH.killPoints);
+    this.add(killer.team, CLASH.killPoints * this.mult);
   }
 
   private add(team: Side, points: number): void {
@@ -75,9 +97,10 @@ export class Clash {
 
   step(dt: number): void {
     if (this.winner) return;
+    this.time += dt;
     const n = this.onPlaza(this.sim.units);
     this.plaza = n.order && n.chaos ? 'contested' : n.order ? 'order' : n.chaos ? 'chaos' : 'neutral';
-    if (this.plaza === 'order' || this.plaza === 'chaos') this.add(this.plaza, CLASH.holdRate * dt);
+    if (this.plaza === 'order' || this.plaza === 'chaos') this.add(this.plaza, CLASH.holdRate * this.mult * dt);
     for (const u of this.sim.units) {
       if (u.kind !== 'god' || !u.alive) continue;
       this.sim.grant(u, CLASH.xpRate * dt, CLASH.favorRate * dt);
