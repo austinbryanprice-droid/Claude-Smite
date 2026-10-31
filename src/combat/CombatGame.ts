@@ -80,9 +80,9 @@ export class CombatGame implements Updatable {
   readonly match: Match | null = null;
   private readonly matchHud: MatchHud | null = null;
   private endTimer = 0;
-  private clash: Clash | null = null;
+  clash: Clash | null = null;
   private clashHud: ClashHud | null = null;
-  private siege: Siege | null = null;
+  siege: Siege | null = null;
   private siegeHud: SiegeHud | null = null;
   /** The plaza's edge, glowing in the color of whoever holds it. */
   private plazaRing: GroundDecal | null = null;

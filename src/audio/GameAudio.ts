@@ -397,6 +397,7 @@ export class GameAudio {
     this.idleBeds();
     this.marching();
     this.watchMatch();
+    this.watchModes();
     this.updateMood(dt);
     // while dead, the world is heard as if from far away
     this.muffle += ((me.alive ? 0 : 1) - this.muffle) * Math.min(1, dt * (me.alive ? 6 : 2.5));
@@ -612,6 +613,42 @@ export class GameAudio {
       if (g.n < 3 || this.marches.has(team)) continue;
       const l = this.engine.loop('march', { at: { x: g.x / g.n, y: 0.5, z: g.z / g.n }, gain: Math.min(0.6, 0.12 * Math.sqrt(g.n)), ref: 6, rate: team === this.me.team ? 1 : 0.94 });
       if (l) this.marches.set(team, l);
+    }
+  }
+
+  /** Last seen state of Temple Siege and Temple Clash, so the herald calls each change once. */
+  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '' };
+
+  /** The herald calls the beats of Temple Siege (waves, bosses, the temple in danger) and Temple Clash (the blessing, the result). */
+  private watchModes(): void {
+    const seen = this.modeSeen;
+    const siege = this.game.siege;
+    if (siege) {
+      if (siege.wave !== seen.wave && siege.phase === 'fight') {
+        seen.wave = siege.wave;
+        if (siege.wave % 5 === 0) this.herald.say('A great beast marches on the temple!', 'epic', 4);
+        else this.herald.say(`Wave ${siege.wave} approaches.`, 'neutral', 2);
+      }
+      if (siege.phase !== seen.phase) {
+        if (siege.phase === 'break' && seen.phase === 'fight') this.herald.say('The wave is broken. Choose a boon.', 'good', 3);
+        if (siege.phase === 'fallen') this.herald.say('The temple has fallen.', 'bad', 5);
+        seen.phase = siege.phase;
+      }
+      const danger = siege.corruption >= 70;
+      if (danger && !seen.danger && siege.phase !== 'fallen') this.herald.say('The temple is falling! Clear the plaza!', 'bad', 4);
+      // calm again well below the line, so a hovering bar doesn't repeat the warning
+      seen.danger = danger || (seen.danger && siege.corruption > 55);
+    }
+    const clash = this.game.clash;
+    if (clash) {
+      const blessed = clash.blessing > 0;
+      if (blessed && !seen.blessed && !clash.winner) this.herald.say("The temple's blessing is upon the plaza! Points count double!", 'epic', 3);
+      seen.blessed = blessed;
+      if (clash.winner && !seen.winner) {
+        seen.winner = clash.winner;
+        const won = clash.winner === this.me.team;
+        this.herald.say(won ? 'Victory! The temple is yours.' : 'Defeat. The temple is lost.', won ? 'epic' : 'bad', 5);
+      }
     }
   }
 
