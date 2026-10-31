@@ -4,7 +4,7 @@ import type { CampKind } from '../map/ConquestLayout';
 import { monsterUnit, type MonsterType } from './factory';
 import { MonsterBrain, type CampState } from './Jungle';
 import type { Sim } from './Sim';
-import type { SimEvent, Unit } from './Unit';
+import type { Brain, SimEvent, Unit } from './Unit';
 
 /**
  * Temple Siege: waves of monsters march on the temple plaza from both gates.
@@ -77,6 +77,58 @@ export const monsterType = (u: Unit): string => u.tag.split(':').pop()!;
 export const CHAMPION = { from: 6, health: 2.6, power: 1.3, damage: 0.12, time: 25, heal: 0.25 } as const;
 
 /** Wardens glow in the four buff colors in turn, as they do on their altars. */
+/**
+ * The Gilded Thornback: on some waves a golden beast slips in, never fights,
+ * and runs from the gods. Bring it down before it escapes and the team picks
+ * a second boon after the wave.
+ */
+export const GILDED = { from: 4, every: 3, escape: 22, flee: 14, roam: 24 } as const;
+
+/** Gilded waves: every third from wave 4, never a boss wave. */
+export const gildedWave = (n: number): boolean => n >= GILDED.from && (n - GILDED.from) % GILDED.every === 0 && n % 5 !== 0;
+
+/** Runs from the nearest god; with none close, circles the plaza out of reach. */
+export class GildedBrain implements Brain {
+  private dir = 1;
+  constructor(
+    private readonly s: Sim,
+    private readonly u: Unit,
+  ) {}
+
+  update(): void {
+    const u = this.u;
+    u.move = null;
+    if (!u.alive) return;
+    let nx = 0;
+    let nz = 0;
+    let near = Infinity;
+    for (const t of this.s.enemiesOf(u)) {
+      if (t.kind !== 'god' || !t.alive) continue;
+      const d = hypot(t.x - u.x, t.z - u.z);
+      if (d < near) [near, nx, nz] = [d, t.x, t.z];
+    }
+    const r = Math.max(0.01, hypot(u.x, u.z));
+    // around the plaza, in its chosen direction
+    let mx = (-u.z / r) * this.dir;
+    let mz = (u.x / r) * this.dir;
+    // drift back to its ring
+    mx += (u.x / r) * (GILDED.roam - r) * 0.15;
+    mz += (u.z / r) * (GILDED.roam - r) * 0.15;
+    if (near < GILDED.flee) {
+      const ax = (u.x - nx) / Math.max(0.01, near);
+      const az = (u.z - nz) / Math.max(0.01, near);
+      // a god cutting it off makes it turn around the other way
+      if (ax * mx + az * mz < -0.3) this.dir = -this.dir;
+      mx += ax * 2;
+      mz += az * 2;
+    }
+    const m = hypot(mx, mz);
+    if (m < 0.01) return;
+    u.move = { x: mx / m, z: mz / m };
+    u.body.yaw = Math.atan2(-mx, -mz);
+  }
+}
+
 const WARDEN_GLOWS = ['might', 'wisdom', 'swiftness', 'insight'] as const;
 
 /**
@@ -199,6 +251,13 @@ export class Siege {
   /** Boons taken this run, in order. */
   readonly boons: Boon[] = [];
   private corruptScale = 1;
+  /** The Gilded Thornback while it roams, and seconds until it escapes. */
+  gilded: Unit | null = null;
+  gildedLeft = 0;
+  /** How the last Gilded Thornback ended, for the herald. */
+  gildedFate: 'caught' | 'escaped' | null = null;
+  /** Extra boon picks earned this wave (from the Gilded Thornback). */
+  bonusBoons = 0;
   /** The curse on the coming wave (during a break) or the current one (during a fight). */
   curse: Curse | null = null;
 
@@ -219,6 +278,11 @@ export class Siege {
     if (e.unit.kind === 'god') e.unit.combatant.respawnTimer = Math.min(e.unit.combatant.respawnTimer, SIEGE.respawn * (this.phase === 'fight' ? (this.curse?.respawn ?? 1) : 1));
     else if (e.unit.kind === 'monster' && this.monsters.includes(e.unit)) this.kills++;
     if (e.unit === this.champion) this.claimSpoils();
+    if (e.unit === this.gilded) {
+      this.gilded = null;
+      this.gildedFate = 'caught';
+      this.bonusBoons++;
+    }
   }
 
   /** The Champion fell: every god on the team hits harder for a while and is healed. */
@@ -236,6 +300,10 @@ export class Siege {
   step(dt: number): void {
     if (this.phase === 'fallen') return;
     this.spoils = Math.max(0, this.spoils - dt);
+    if (this.gilded) {
+      this.gildedLeft -= dt;
+      if (this.gildedLeft <= 0) this.escapeGilded();
+    }
     for (let i = this.monsters.length - 1; i >= 0; i--) if (!this.monsters[i]!.alive) this.monsters.splice(i, 1);
     let rate = 0;
     this.onPlaza = 0;
@@ -262,6 +330,11 @@ export class Siege {
     const b = this.offer?.[i];
     if (!b) return null;
     this.offer = null;
+    // the Gilded Thornback's prize: another pick straight after
+    if (this.bonusBoons > 0) {
+      this.bonusBoons--;
+      this.rollOffer(b);
+    }
     this.boons.push(b);
     if (b.corruptScale) this.corruptScale *= b.corruptScale;
     if (b.cleanse) this.corruption = Math.max(0, this.corruption - b.cleanse);
@@ -274,7 +347,7 @@ export class Siege {
 
   private startWave(): void {
     // an offer left unanswered is not lost: the first boon is taken
-    if (this.offer) this.choose(0);
+    while (this.offer) this.choose(0);
     this.wave++;
     this.phase = 'fight';
     const curse = this.curse;
@@ -323,6 +396,7 @@ export class Siege {
       this.monsters.push(u);
       this.sim.add(u);
     });
+    if (gildedWave(this.wave)) this.spawnGilded();
   }
 
   /** Curses never repeat back to back. */
@@ -332,14 +406,40 @@ export class Siege {
     return pool[Math.floor(this.sim.rng() * pool.length)]!;
   }
 
+  private escapeGilded(): void {
+    if (!this.gilded) return;
+    this.sim.remove(this.gilded);
+    this.gilded = null;
+    this.gildedFate = 'escaped';
+  }
+
+  private spawnGilded(): void {
+    const gate = SIEGE.gates[this.wave % 2]!;
+    const u = monsterUnit(this.base, 'gildedThornback', { x: gate.x, z: gate.z, yaw: 0 }, waveMinutes(this.wave));
+    u.combatant.refreshTimedMod('maxHealth', u.combatant.stats.maxHealth * (waveScale(this.wave) - 1), 1e9);
+    u.combatant.health = u.combatant.stats.maxHealth;
+    u.tag = `siege-small-${this.wave}.g:gildedThornback`;
+    u.brain = new GildedBrain(this.sim, u);
+    this.gilded = u;
+    this.gildedLeft = GILDED.escape;
+    this.gildedFate = null;
+    this.sim.add(u);
+  }
+
+  private rollOffer(except?: Boon): void {
+    const pool = [...BOONS].filter((b) => b !== except && !(b.cleanse && this.corruption < 10));
+    this.offer = [];
+    while (this.offer.length < 3 && pool.length) this.offer.push(pool.splice(Math.floor(this.sim.rng() * pool.length), 1)[0]!);
+  }
+
   private clearWave(): void {
+    // the wave is over: a Gilded Thornback still loose gets away
+    this.escapeGilded();
     this.phase = 'break';
     this.timer = SIEGE.breakTime;
     this.corruption = Math.max(0, this.corruption - SIEGE.waveCleanse);
     this.curse = this.rollCurse(this.wave + 1);
-    const pool = [...BOONS].filter((b) => !(b.cleanse && this.corruption < 10));
-    this.offer = [];
-    while (this.offer.length < 3 && pool.length) this.offer.push(pool.splice(Math.floor(this.sim.rng() * pool.length), 1)[0]!);
+    this.rollOffer();
     for (const g of this.sim.units) {
       if (g.kind !== 'god' || g.team === 'neutral') continue;
       this.sim.reward(g, 40 + 15 * this.wave, 60 + 10 * this.wave);
