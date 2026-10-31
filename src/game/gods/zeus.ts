@@ -20,14 +20,14 @@ export const zeus: GodDef = {
     moveSpeed: 375,
   },
   growth: {
-    maxHealth: 86,
+    maxHealth: 80,
     healthRegen: 0.2,
     maxMana: 42,
     manaRegen: 0.12,
     physicalProtection: 3,
     magicalProtection: 1.5,
     attackSpeed: 0.016,
-    attackPower: 2.4,
+    attackPower: 2.2,
   },
   basicAttack: { range: 8.8, damageType: 'magical', projectileSpeed: 40 },
   passive: {

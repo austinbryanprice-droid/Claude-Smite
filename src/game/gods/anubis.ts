@@ -16,7 +16,7 @@ export const anubis: GodDef = {
     physicalProtection: 21,
     magicalProtection: 30,
     attackSpeed: 0.95,
-    attackPower: 43,
+    attackPower: 48,
     moveSpeed: 370,
   },
   growth: {
@@ -27,7 +27,7 @@ export const anubis: GodDef = {
     physicalProtection: 3.4,
     magicalProtection: 1.8,
     attackSpeed: 0.014,
-    attackPower: 2,
+    attackPower: 1.8,
   },
   basicAttack: { range: 7.5, damageType: 'magical', projectileSpeed: 35 },
   passive: {
