@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   // a normal launch opens on the home page and the intro trailer; the title
   // screen (and its hymn) follow once the trailer ends or is skipped
   const chosen: Promise<StartChoice> = skipMenu
-    ? Promise.resolve({ mode: (['clash', 'siege', 'duel'].includes(params.get('map') ?? '') ? params.get('map') : mapFromUrl()) as GameMode, god: godById(params.get('god') ?? '')?.id ?? 'zeus', difficulty: parseDifficulty(params.get('difficulty')) })
+    ? Promise.resolve({ mode: (['clash', 'siege', 'duel'].includes(params.get('map') ?? '') ? params.get('map') : mapFromUrl()) as GameMode, god: godById(params.get('god') ?? '')?.id ?? 'zeus', difficulty: parseDifficulty(params.get('difficulty')), rival: params.get('rival') ?? undefined })
     : playIntro(audio).then(() => {
         music.play('hymn');
         return showStartMenu(GODS, graphics);
@@ -222,7 +222,7 @@ async function main(): Promise<void> {
   const loop = new Loop();
   loop.addFixed(player);
   // Conquest plays a full match against bots; the arena is the training ground
-  const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, net: choice.net, difficulty: choice.difficulty, shake: (a) => follow.addShake(a) });
+  const combat = new CombatGame({ world, input, player, camera, mode: choice.mode, god: choice.god, net: choice.net, difficulty: choice.difficulty, rival: choice.rival, shake: (a) => follow.addShake(a) });
   loop.addFixed(combat);
   void baked;
   // `?stage`: the trailer's film set (tools/trailer)
