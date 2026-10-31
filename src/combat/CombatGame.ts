@@ -127,6 +127,8 @@ export class CombatGame implements Updatable {
 
   constructor(private readonly deps: CombatDeps) {
     const { world, player } = deps;
+    // set before anything can end the game, so the end screen's XP always counts it
+    setXpDifficulty(deps.net ? 'normal' : (deps.difficulty ?? 'normal'));
     const conquest = deps.mode === 'conquest';
     const onConquestMap = (world as unknown as { map?: string }).map === 'conquest';
     const terrain: SimTerrain = conquest && !onConquestMap ? openGround(world.collision) : world.collision;
@@ -344,7 +346,6 @@ export class CombatGame implements Updatable {
   private applyDifficulty(): void {
     this.difficultyApplied = true;
     const d = this.deps.difficulty ?? 'normal';
-    setXpDifficulty(this.deps.net ? 'normal' : d);
     if (d === 'normal' || this.deps.net) return;
     const perks = difficultyPerks(d, !!this.siege);
     for (const u of this.sim.units) {
