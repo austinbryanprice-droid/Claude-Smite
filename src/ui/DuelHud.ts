@@ -1,5 +1,6 @@
 import type { Side } from '../game/combatant';
 import { DUEL, type Duel } from '../sim/Duel';
+import type { Boon } from '../sim/Siege';
 import type { Unit } from '../sim/Unit';
 import { addResult } from './records';
 import { awardLine } from './ascension';
@@ -17,11 +18,17 @@ export class DuelHud {
   private lastPips = '';
   private shownEnd = false;
   private readonly foe: Side;
+  private readonly cards: HTMLElement;
+  private shownOffer: Duel['offer'] = null;
+  private rivalBoons = 0;
+  /** The rival's latest boon, called out in the round line for a few seconds. */
+  private rivalNews = '';
 
   constructor(
     private readonly duel: Duel,
     private readonly me: Unit,
     private readonly rival: Unit,
+    onPick: (i: number) => void = (i) => duel.choose(i),
   ) {
     this.foe = me.team === 'order' ? 'chaos' : 'order';
     this.root.className = 'clash duel';
@@ -33,6 +40,7 @@ export class DuelHud {
       </div>
       <div class="clash-state"></div>
       <div class="duel-big"></div>
+      <div class="siege-boons"></div>
       <div class="clash-end"><div class="clash-end-title"></div><div class="clash-end-score"></div><button class="clash-again">Play again</button></div>`;
     document.body.appendChild(this.root);
     this.pips = {
@@ -42,7 +50,19 @@ export class DuelHud {
     this.state = this.root.querySelector('.clash-state')!;
     this.big = this.root.querySelector('.duel-big')!;
     this.end = this.root.querySelector('.clash-end')!;
+    this.cards = this.root.querySelector('.siege-boons')!;
+    this.cards.addEventListener('click', (e) => {
+      const card = (e.target as HTMLElement).closest<HTMLElement>('.siege-boon');
+      if (card) onPick(Number(card.dataset.i));
+    });
     this.root.querySelector('.clash-again')!.addEventListener('click', () => location.reload());
+  }
+
+  private boonCards(boons: readonly Boon[]): string {
+    return (
+      `<div class="siege-boons-title">You lost the round: choose a boon for the rest of the duel</div>` +
+      boons.map((b, i) => `<div class="siege-boon" data-i="${i}"><kbd>${'ZXC'[i]}</kbd><b>${b.name}</b><span>${b.text}</span></div>`).join('')
+    );
   }
 
   frame(): void {
@@ -55,8 +75,22 @@ export class DuelHud {
         this.pips[side].innerHTML = Array.from({ length: DUEL.rounds }, (_, i) => `<i class="${i < d.wins[side] ? 'on' : ''}"></i>`).join('');
       }
     }
-    const text =
-      d.phase === 'fight'
+    const offer = d.offer?.team === mine ? d.offer : null;
+    if (offer !== this.shownOffer) {
+      this.shownOffer = offer;
+      this.cards.innerHTML = offer ? this.boonCards(offer.boons) : '';
+      this.cards.classList.toggle('show', !!offer);
+    }
+    const theirs = d.boons[this.foe];
+    if (theirs.length !== this.rivalBoons) {
+      this.rivalBoons = theirs.length;
+      const b = theirs[theirs.length - 1]!;
+      this.rivalNews = `${this.rival.name} takes a boon: ${b.name} (${b.text})`;
+    }
+    if (d.phase === 'fight' && d.timer > 4) this.rivalNews = '';
+    const text = this.rivalNews
+      ? this.rivalNews
+      : d.phase === 'fight'
         ? d.ringIn > 0
           ? `Round ${d.round} · the ring closes in ${Math.ceil(d.ringIn)}`
           : 'The ring of fire is closing!'
