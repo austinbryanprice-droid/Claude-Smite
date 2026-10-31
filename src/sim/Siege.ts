@@ -49,6 +49,7 @@ const BOSSES: MonsterType[] = ['treasureWyrm', 'moltenColossus'];
 export function waveRoster(n: number): MonsterType[] {
   const out: MonsterType[] = [];
   for (let i = 0; i < Math.min(12, 2 + n); i++) out.push('thornback');
+  for (let i = 0; i < Math.min(4, Math.floor((n - 1) / 2)); i++) out.push('thornSpitter');
   for (let i = 0; i < Math.min(5, Math.floor(n / 2)); i++) out.push('thornbackAlpha');
   for (let i = 0; i < Math.min(3, Math.floor((n - 1) / 3)); i++) out.push('warden');
   if (n % 5 === 0) out.push(BOSSES[(n / 5 - 1) % 2]!);
@@ -64,6 +65,12 @@ export const waveScale = (n: number): number => 1 + Math.max(0, n - 6) * 0.22;
 const FIRST_BOSS_HEALTH = 0.7;
 
 const isBossType = (t: string): boolean => t === 'treasureWyrm' || t === 'moltenColossus';
+
+/** A siege monster's type: the end of its tag, which reads like a jungle camp's (`siege-<kind>-<id>:<type>`). */
+export const monsterType = (u: Unit): string => u.tag.split(':').pop()!;
+
+/** Wardens glow in the four buff colors in turn, as they do on their altars. */
+const WARDEN_GLOWS = ['might', 'wisdom', 'swiftness', 'insight'] as const;
 
 /**
  * A siege monster: fights the nearest god that comes close, otherwise marches
@@ -210,7 +217,7 @@ export class Siege {
     for (const m of this.monsters) {
       if (hypot(m.x, m.z) > SIEGE.plazaRadius) continue;
       this.onPlaza++;
-      rate += isBossType(m.tag) ? SIEGE.bossCorrupt : SIEGE.corruptRate;
+      rate += isBossType(monsterType(m)) ? SIEGE.bossCorrupt : SIEGE.corruptRate;
     }
     rate *= this.corruptScale;
     this.corruption = Math.max(0, this.corruption + (rate > 0 ? rate : -SIEGE.cleanseRate) * dt);
@@ -271,7 +278,8 @@ export class Siege {
       for (const [k, f] of Object.entries(curse?.scale ?? {}) as [StatKey, number][]) c.refreshTimedMod(k, c.stats[k] * f, 1e9);
       for (const [k, v] of Object.entries(curse?.flat ?? {}) as [StatKey, number][]) c.refreshTimedMod(k, k === 'healthRegen' ? c.stats.maxHealth * v : v, 1e9);
       c.health = c.stats.maxHealth;
-      u.tag = type;
+      // the camp-style tag picks the right model and colors in the view
+      u.tag = `siege-${type === 'warden' ? WARDEN_GLOWS[i % 4] : isBossType(type) ? type : 'small'}-${this.wave}.${i}:${type}`;
       // each monster has its own spot on the plaza, so the horde spreads out over it
       const a = (i / roster.length) * Math.PI * 2;
       const r = isBossType(type) ? 0 : 5 + (i % 3) * 3;

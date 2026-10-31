@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { zeus } from '../game/gods';
-import { godUnit } from './factory';
-import { BOONS, CURSES, FIRST_CURSE, Siege, SIEGE, waveRoster } from './Siege';
+import { godUnit, monsterUnit } from './factory';
+import { BOONS, CURSES, FIRST_CURSE, monsterType, Siege, SIEGE, waveRoster } from './Siege';
 import { Sim, type SimTerrain } from './Sim';
 
 const flat: SimTerrain = { groundAt: () => 0, resolve: (x, z) => ({ x, z }) };
@@ -19,6 +19,16 @@ describe('Temple Siege', () => {
     expect(waveRoster(4).some((t) => t === 'treasureWyrm' || t === 'moltenColossus')).toBe(false);
     expect(waveRoster(5)).toContain('treasureWyrm');
     expect(waveRoster(10)).toContain('moltenColossus');
+  });
+
+  it('brings Thornspitters from wave 3: ranged, and tagged so the view draws each monster as itself', () => {
+    expect(waveRoster(2)).not.toContain('thornSpitter');
+    expect(waveRoster(3)).toContain('thornSpitter');
+    const sim = newSim();
+    const siege = new Siege(sim, zeus);
+    run(sim, siege, SIEGE.firstWave + 0.1);
+    for (const m of siege.monsters) expect(m.tag).toMatch(/^siege-small-1\.\d+:thornback$/);
+    expect(monsterUnit(zeus, 'thornSpitter', { x: 0, z: 0, yaw: 0 }, 0).combatant.god.basicAttack.projectileSpeed).toBeGreaterThan(0);
   });
 
   it('sends monsters to the plaza, where they corrupt it until the temple falls', () => {
@@ -91,7 +101,7 @@ describe('Temple Siege', () => {
     siege.curse = CURSES.find((c) => c.id === 'swift')!;
     run(sim, siege, SIEGE.breakTime + 0.1);
     expect(siege.wave).toBe(FIRST_CURSE);
-    const m = siege.monsters.find((u) => u.tag === 'thornback')!;
+    const m = siege.monsters.find((u) => monsterType(u) === 'thornback')!;
     expect(m.combatant.stats.moveSpeed).toBeCloseTo(360 * 1.3, 0);
   });
 
@@ -100,7 +110,7 @@ describe('Temple Siege', () => {
     const siege = new Siege(sim, zeus);
     siege.curse = CURSES.find((c) => c.id === 'swarm')!;
     run(sim, siege, SIEGE.firstWave + 0.1);
-    const t = siege.monsters.filter((u) => u.tag === 'thornback');
+    const t = siege.monsters.filter((u) => monsterType(u) === 'thornback');
     expect(t.length).toBe(2 * waveRoster(1).filter((x) => x === 'thornback').length);
     expect(t[0]!.combatant.stats.maxHealth).toBeLessThan(300);
   });
