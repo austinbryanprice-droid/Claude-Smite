@@ -35,6 +35,7 @@ import { Clash, CLASH, CLASH_SPAWNS } from '../sim/Clash';
 import { ClashHud } from '../ui/ClashHud';
 import { Siege, SIEGE, SIEGE_SPAWNS } from '../sim/Siege';
 import { SiegeHud } from '../ui/SiegeHud';
+import { Scoreboard } from '../sim/Scoreboard';
 
 
 const CAST_MESSAGES: Partial<Record<CastError | 'forced', string>> = {
@@ -288,7 +289,9 @@ export class CombatGame implements Updatable {
       u.combatant.health = u.combatant.stats.maxHealth;
       u.combatant.mana = u.combatant.stats.maxMana;
     }
-    this.clashHud = new ClashHud(this.clash, 'order');
+    const board = new Scoreboard(this.sim);
+    board.track(gods);
+    this.clashHud = new ClashHud(this.clash, 'order', board, this.player);
     this.plazaRing = new GroundDecal(this.groundAt);
     this.plazaRing.setStyle('zone');
     this.plazaRing.place({ type: 'ring', radius: CLASH.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
@@ -322,7 +325,9 @@ export class CombatGame implements Updatable {
       u.combatant.mana = u.combatant.stats.maxMana;
     }
     this.warmup(this.deps.world.actors);
-    this.siegeHud = new SiegeHud(this.siege, (i) => this.takeBoon(i));
+    const board = new Scoreboard(this.sim);
+    board.track(gods);
+    this.siegeHud = new SiegeHud(this.siege, (i) => this.takeBoon(i), board, this.player);
     this.plazaRing = new GroundDecal(this.groundAt);
     this.plazaRing.setStyle('zone');
     this.plazaRing.place({ type: 'ring', radius: SIEGE.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
