@@ -1,0 +1,4 @@
+.coach { position: fixed; left: 50%; bottom: 200px; transform: translate(-50%, 8px); max-width: min(90vw, 520px); padding: 8px 16px; font-size: 14px; line-height: 1.4; text-align: center; color: #fff4d6; background: rgba(12, 9, 6, 0.82); border-radius: 6px; box-shadow: 0 0 0 1px rgba(255, 210, 120, 0.55), 0 4px 18px rgba(0, 0, 0, 0.5); text-shadow: 0 1px 2px #000; opacity: 0; pointer-events: none; transition: opacity 0.35s, transform 0.35s; z-index: 20; }
+.coach.show { opacity: 1; transform: translate(-50%, 0); }
+.coach kbd { display: inline-block; min-width: 1.4em; padding: 0 5px; margin: 0 1px; font: inherit; font-weight: 700; color: #ffe08a; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 224, 138, 0.6); border-radius: 3px; }
+@media (max-width: 700px) { .coach { bottom: 160px; font-size: 12px; } }
