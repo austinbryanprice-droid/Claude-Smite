@@ -619,7 +619,7 @@ export class GameAudio {
   }
 
   /** Last seen state of Temple Siege and Temple Clash, so the herald calls each change once. */
-  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '', spoils: 0 };
+  private modeSeen = { wave: 0, phase: '', danger: false, blessed: false, winner: '', round: 0, ring: false, taken: '', spoils: 0, relic: false };
 
   /** The herald calls the beats of Temple Siege (waves, bosses, the temple in danger) and Temple Clash (the blessing, the result). */
   private watchModes(): void {
@@ -649,6 +649,13 @@ export class GameAudio {
       const blessed = clash.blessing > 0;
       if (blessed && !seen.blessed && !clash.winner) this.herald.say("The temple's blessing is upon the plaza! Points count double!", 'epic', 3);
       seen.blessed = blessed;
+      const up = clash.relic !== null;
+      if (up && !seen.relic && !clash.winner) this.herald.say('The Sun Relic has risen! Seize it!', 'epic', 2);
+      if (!up && seen.relic && clash.lastClaim && !clash.winner) {
+        const ours = clash.lastClaim === this.me.team;
+        this.herald.say(ours ? 'Your team claims the Sun Relic!' : 'The enemy has claimed the Sun Relic!', ours ? 'good' : 'bad', 3);
+      }
+      seen.relic = up;
       if (clash.winner && !seen.winner) {
         seen.winner = clash.winner;
         const won = clash.winner === this.me.team;

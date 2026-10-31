@@ -58,6 +58,8 @@ describe('Temple Clash', () => {
       sim.drainEvents();
     }
     expect(clash.winner).not.toBeNull();
+    // the bots go after relics too
+    expect(clash.lastClaim).not.toBeNull();
     const levels = sim.units.filter((u) => u.kind === 'god').map((u) => u.combatant.level);
     expect(Math.min(...levels)).toBeGreaterThan(5);
   });
@@ -76,5 +78,35 @@ describe('Temple Clash', () => {
     // 1 s unblessed, 2 s blessed
     expect(clash.score.order - before).toBeCloseTo(CLASH.holdRate * 5, 1);
   });
-});
 
+  it('raises a Sun Relic beside the plaza that a lone team claims for points and a blessing', () => {
+    const sim = newSim();
+    const clash = new Clash(sim);
+    const R = CLASH.relic;
+    const a = sim.add(godUnit(zeus, 'order', { x: 40, z: 40, yaw: 0 }));
+    for (let i = 0; i < 30 * (R.first - 0.5); i++) clash.step(1 / 30);
+    expect(clash.relic).toBeNull();
+    for (let i = 0; i < 30; i++) clash.step(1 / 30);
+    const relic = clash.relic!;
+    expect(relic).not.toBeNull();
+    expect(Math.abs(relic.x)).toBeGreaterThan(CLASH.plazaRadius);
+    // an enemy beside it holds the claim
+    a.combatant.takeDamage(a.combatant.stats.maxHealth * 0.5);
+    const hurt = a.combatant.health;
+    sim.teleport(a, relic.x, relic.z);
+    const t = sim.add(godUnit(thor, 'chaos', { x: relic.x + 1, z: relic.z, yaw: 0 }));
+    for (let i = 0; i < 30 * 3; i++) clash.step(1 / 30);
+    expect(clash.relic).not.toBeNull();
+    expect(relic.progress).toBe(0);
+    sim.teleport(t, -40, -40);
+    for (let i = 0; i < 30 * (R.claim + 0.1); i++) clash.step(1 / 30);
+    expect(clash.relic).toBeNull();
+    expect(clash.lastClaim).toBe('order');
+    expect(clash.score.order).toBe(R.points);
+    expect(clash.relicBuff.order).toBeGreaterThan(R.time - 1);
+    expect(a.combatant.health).toBeGreaterThan(hurt);
+    // the next one rises on the other flank
+    for (let i = 0; i < 30 * (R.every + 0.1); i++) clash.step(1 / 30);
+    expect(clash.relic!.x).toBeCloseTo(-relic.x, 5);
+  });
+});

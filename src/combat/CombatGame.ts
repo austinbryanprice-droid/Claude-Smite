@@ -25,7 +25,7 @@ import { UnitViews } from './UnitViews';
 import { BuffAuras } from './BuffAuras';
 import { StatusAuras } from './StatusAuras';
 import { monsterWarmup } from './MonsterViews';
-import { CombatVfx } from './Vfx';
+import { CombatVfx, RelicView } from './Vfx';
 import { NetGuest, NetHost } from '../net/NetGame';
 import type { Roster } from '../net/Replica';
 import { roster, type Slot } from '../net/roster';
@@ -99,6 +99,7 @@ export class CombatGame implements Updatable {
   private difficultyApplied = false;
   /** The plaza's edge, glowing in the color of whoever holds it. */
   private plazaRing: GroundDecal | null = null;
+  private relicView: RelicView | null = null;
   private readonly views: UnitViews;
   private readonly vfx: CombatVfx;
   private readonly auras = new BuffAuras();
@@ -320,6 +321,8 @@ export class CombatGame implements Updatable {
     this.plazaRing.setStyle('zone');
     this.plazaRing.place({ type: 'ring', radius: CLASH.plazaRadius, width: 1.4 }, 0, 0, 0, 0.12);
     this.deps.world.vfx.add(this.plazaRing.mesh);
+    this.relicView = new RelicView(this.groundAt);
+    this.deps.world.vfx.add(this.relicView.group);
     this.hud.toast('Hold the temple plaza. Press K to spend your skill points.');
   }
 
@@ -556,6 +559,9 @@ export class CombatGame implements Updatable {
       // during the blessing the ring's core flickers gold
       const blessed = this.clash.blessing > 0 && Math.sin(time * 8) > 0;
       this.plazaRing.setColors(main, blessed ? 0xffd34a : core);
+      const relic = this.clash.relic;
+      const mine = relic?.claimer === this.player.team;
+      this.relicView?.set(relic, CLASH.relic.radius, relic?.progress ?? 0, time, mine ? 0x4fb2ff : 0xff3524, mine ? 0xe6f4ff : 0xffe0c8);
     }
     if (this.match?.winner) this.hud.setVisible(false);
     this.vfx.player = this.player;

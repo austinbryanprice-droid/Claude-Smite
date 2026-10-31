@@ -456,6 +456,81 @@ class ZoneView {
   }
 }
 
+/**
+ * The Sun Relic in Temple Clash: a standing column of gold light over a ring,
+ * with motes rising through it. The ring fills in team color while a god
+ * claims it. Built from the pillar, mote and decal materials every match
+ * already prepares, so it adds no shaders mid-match.
+ */
+export class RelicView {
+  readonly group = new THREE.Group();
+  private readonly ring: GroundDecal;
+  private readonly fill: GroundDecal;
+  private readonly beam: THREE.Mesh;
+  private readonly beamValues = pillarUniforms();
+  private readonly moteValues = moteUniforms();
+  private readonly motes: THREE.Sprite;
+  private shown = 0;
+
+  constructor(private readonly ground: Ground) {
+    this.group.name = 'relic';
+    this.ring = new GroundDecal(ground);
+    this.ring.setStyle('zone');
+    this.ring.setColors(0xffc23a, 0xfff2c4);
+    this.fill = new GroundDecal(ground);
+    this.fill.setStyle('zone');
+    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), (pillarMaterial ??= makePillarMaterial()));
+    this.beam.frustumCulled = false;
+    this.beam.renderOrder = 12;
+    useUniforms(this.beamValues, this.beam);
+    this.beamValues.main.setHex(0xffb428);
+    this.beamValues.hot.setHex(0xfff6d8);
+    this.motes = instancedSprite((moteMaterial ??= makeMoteMaterial()), 40);
+    this.motes.frustumCulled = false;
+    this.motes.renderOrder = 13;
+    useUniforms(this.moteValues, this.motes);
+    this.moteValues.main.setHex(0xffc84a);
+    this.group.add(this.ring.mesh, this.fill.mesh, this.beam, this.motes);
+    this.set(null, 0, 0, 0);
+  }
+
+  /** `at` is the relic (or null when none is up); `progress` 0..1 fills the ring in `claimColor`. */
+  set(at: { x: number; z: number } | null, radius: number, progress: number, t: number, claimColor = 0xffffff, claimCore = 0xffffff): void {
+    // rise and sink over a quarter second rather than popping
+    this.shown = at ? Math.min(1, this.shown + 0.08) : Math.max(0, this.shown - 0.08);
+    const k = this.shown;
+    if (at) this.at = at;
+    const { x, z } = this.at;
+    const y = this.ground(x, z);
+    // decals are conformed to the ground only when they change, not every frame
+    const key = `${x},${z},${radius}`;
+    if (key !== this.placed) {
+      this.placed = key;
+      this.ring.place({ type: 'ring', radius, width: 0.6 }, x, z, 0, 0.1);
+      this.filled = -1;
+    }
+    const step = Math.round(progress * 24);
+    if (step !== this.filled) {
+      this.filled = step;
+      this.fill.place({ type: 'circle', radius: Math.max(0.05, (radius * step) / 24) }, x, z, 0, 0.11);
+    }
+    this.ring.values.opacity = k * (0.85 + 0.15 * Math.sin(t * 3));
+    this.fill.setColors(claimColor, claimCore);
+    this.fill.values.opacity = k * (step > 0 ? 0.85 : 0);
+    // the column stays at the bright early part of a pillar's life, flickering a little
+    this.beamValues.age = k > 0 ? 0.25 + 0.1 * Math.sin(t * 7) + (1 - k) * 1.35 : PILLAR_LIFE;
+    this.beam.position.set(x, y, z);
+    this.beam.scale.set(0.9 + 0.12 * Math.sin(t * 2.3), 26, 0.9 + 0.12 * Math.sin(t * 2.3));
+    this.moteValues.radius = radius * 0.8;
+    this.moteValues.fade = k;
+    this.motes.position.set(x, y, z);
+  }
+
+  private at = { x: 0, z: 0 };
+  private placed = '';
+  private filled = -1;
+}
+
 class FlashView {
   readonly group = new THREE.Group();
   readonly decal: GroundDecal;
