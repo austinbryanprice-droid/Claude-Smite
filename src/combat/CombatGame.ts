@@ -287,11 +287,13 @@ export class CombatGame implements Updatable {
 
   /**
    * Shows every pooled spell effect and status aura until the returned function
-   * is called (see `Vfx.prime`), and builds the training dummies' views.
+   * is called (see `Vfx.prime`) along with one of each lane minion, and builds
+   * the training dummies' views.
    */
   prime(): () => void {
     this.views.prime(this.sim.units);
-    const restore = [this.vfx.prime(), this.status.prime()];
+    // (lane minions only march in Conquest)
+    const restore = [this.vfx.prime(), this.status.prime(), ...(this.match ? [this.views.minions.prime()] : [])];
     return () => {
       for (const r of restore) r();
     };

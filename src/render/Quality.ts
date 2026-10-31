@@ -107,7 +107,14 @@ export const QUALITY_PRESETS: Record<QualityName, QualitySettings> = {
   },
 };
 
-const STORAGE_KEY = 'smite.quality';
+/** Only a quality the player picked is saved, never the startup guess. */
+const STORAGE_KEY = 'smite.quality.picked';
+/**
+ * Older builds saved the startup guess too, so one session on the WebGL 2
+ * fallback left the game on Medium for good. Only Ultra, which the guess never
+ * makes, is certainly a pick there.
+ */
+const LEGACY_KEY = 'smite.quality';
 
 /**
  * URL `?quality=` wins, then the saved choice, then a guess from the hardware.
@@ -119,6 +126,7 @@ export function initialQuality(isWebGPU: boolean, slowGpu = false): QualityName 
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved && saved in QUALITY_PRESETS) return saved as QualityName;
+    if (localStorage.getItem(LEGACY_KEY) === 'ultra') return 'ultra';
   } catch {
     /* storage unavailable */
   }
