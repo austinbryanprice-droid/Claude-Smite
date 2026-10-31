@@ -335,7 +335,8 @@ export class CombatGame implements Updatable {
     rival.brain = new GodBot(this.sim, rival, { anchor: { x: 0, z: 0 }, leash: 30, aggro: 40, aggression: 0.8 });
     this.sim.add(rival);
     this.duel.begin(this.player, rival);
-    this.duelHud = new DuelHud(this.duel, this.player, rival);
+    this.duel.human = this.player.team as 'order' | 'chaos';
+    this.duelHud = new DuelHud(this.duel, this.player, rival, (i) => this.takeDuelBoon(i));
     this.plazaRing = new GroundDecal(this.groundAt);
     this.plazaRing.setStyle('zone');
     this.plazaRing.setColors(0xff6a1a, 0xffd08a);
@@ -364,6 +365,13 @@ export class CombatGame implements Updatable {
   /** Takes a Siege boon (from its key or a click on its card). */
   private takeBoon(i: number): void {
     const b = this.siege?.choose(i);
+    if (b) this.hud.toast(`${b.name}: ${b.text}`);
+  }
+
+  /** Takes the underdog's boon in a duel (from its key or a click on its card). */
+  private takeDuelBoon(i: number): void {
+    if (this.duel?.offer?.team !== this.player.team) return;
+    const b = this.duel.choose(i);
     if (b) this.hud.toast(`${b.name}: ${b.text}`);
   }
 
@@ -512,6 +520,10 @@ export class CombatGame implements Updatable {
     if (this.siege?.offer) {
       const pick = ['KeyZ', 'KeyX', 'KeyC'].findIndex((k) => input.wasPressed(k));
       if (pick >= 0) this.takeBoon(pick);
+    }
+    if (this.duel?.offer) {
+      const pick = ['KeyZ', 'KeyX', 'KeyC'].findIndex((k) => input.wasPressed(k));
+      if (pick >= 0) this.takeDuelBoon(pick);
     }
     if (this.menu.isOpen && input.wasPressed('Escape')) this.menu.close();
 

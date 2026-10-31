@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { thor, zeus } from '../game/gods';
-import { Duel, DUEL } from './Duel';
+import { Duel, DUEL, DUEL_BOONS } from './Duel';
 import { godUnit } from './factory';
 import { Sim, type SimTerrain } from './Sim';
 
@@ -76,5 +76,31 @@ describe('Temple Duel', () => {
     }
     expect(duel.winner).toBe('order');
     expect(duel.phase).toBe('over');
+  });
+
+  it("gives a round's loser a lasting boon: a bot picks at once, the player chooses", () => {
+    const { duel, a, b, run } = setup();
+    duel.human = 'order';
+    expect(DUEL_BOONS.length).toBeGreaterThanOrEqual(3);
+    run(DUEL.countdown + 0.1);
+    b.combatant.takeDamage(1e9);
+    run(0.1);
+    // the bot side lost: it took a boon by itself
+    expect(duel.offer).toBeNull();
+    expect(duel.boons.chaos.length).toBe(1);
+    run(DUEL.pause + DUEL.countdown + 0.2);
+    expect(duel.phase).toBe('fight');
+    const before = a.combatant.stats.damageBonus;
+    a.combatant.takeDamage(1e9);
+    run(0.1);
+    // the player lost: three choices wait, with a longer break
+    expect(duel.offer?.team).toBe('order');
+    expect(duel.offer?.boons.length).toBe(3);
+    expect(duel.timer).toBeGreaterThan(DUEL.pause);
+    const fury = duel.offer!.boons.findIndex((x) => x.id === 'fury');
+    const pick = duel.choose(fury >= 0 ? fury : 0)!;
+    expect(duel.boons.order).toEqual([pick]);
+    expect(duel.timer).toBeLessThanOrEqual(2);
+    if (pick.id === 'fury') expect(a.combatant.stats.damageBonus).toBeCloseTo(before + 0.08, 5);
   });
 });

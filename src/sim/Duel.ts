@@ -1,6 +1,8 @@
 import type { Side } from '../game/combatant';
+import type { StatKey } from '../game/types';
 import { XP_TABLE } from '../game/progression';
 import { hypot } from '../core/math';
+import { BOONS, type Boon } from './Siege';
 import type { Sim } from './Sim';
 import type { SimEvent, Unit } from './Unit';
 
@@ -19,6 +21,8 @@ export const DUEL = {
   countdown: 3,
   /** Seconds after a god falls before the next round. */
   pause: 3,
+  /** A longer break when the round's loser has a boon to choose. */
+  boonPause: 7,
   ringStart: 24,
   ringEnd: 5,
   /** The ring holds still this long, then closes over ringClose seconds. */
@@ -36,6 +40,9 @@ export const DUEL = {
   },
 } as const;
 
+/** The boons a duelist can be offered: Siege's stat boons (not its plaza rules). */
+export const DUEL_BOONS: readonly Boon[] = BOONS.filter((b) => b.stats && !b.corruptScale && !b.cleanse);
+
 export type DuelPhase = 'countdown' | 'fight' | 'pause' | 'over';
 
 export class Duel {
@@ -48,6 +55,15 @@ export class Duel {
   /** Who took the last round (null for a draw), for the announcement. */
   lastRound: Side | null = null;
   private readonly gods: Unit[] = [];
+  /**
+   * The underdog's boon: whoever loses a round (and is still in the duel)
+   * picks one of three lasting boons before the next. The human side chooses
+   * with `choose`; any other side picks at once.
+   */
+  offer: { team: Side; boons: Boon[] } | null = null;
+  readonly boons: Record<Side, Boon[]> = { order: [], chaos: [] };
+  /** The side a person plays, who picks their own boon; null lets every side pick by itself. */
+  human: Side | null = null;
 
   constructor(private readonly sim: Sim) {
     sim.listeners.push((e) => this.on(e));
@@ -111,6 +127,32 @@ export class Duel {
     }
     this.phase = 'pause';
     this.timer = DUEL.pause;
+    if (taker) this.offerBoons(taker === 'order' ? 'chaos' : 'order');
+  }
+
+  private offerBoons(team: Side): void {
+    const pool = [...DUEL_BOONS];
+    const boons: Boon[] = [];
+    while (boons.length < 3 && pool.length) boons.push(pool.splice(Math.floor(this.sim.rng() * pool.length), 1)[0]!);
+    this.offer = { team, boons };
+    if (team === this.human) this.timer = DUEL.boonPause;
+    else this.choose(Math.floor(this.sim.rng() * boons.length));
+  }
+
+  /** Take one of the offered boons for the side it was offered to. */
+  choose(i: number): Boon | null {
+    const b = this.offer?.boons[i];
+    if (!b || !this.offer) return null;
+    const team = this.offer.team;
+    this.offer = null;
+    this.boons[team].push(b);
+    // once the player has chosen, the break needn't drag on
+    if (team === this.human && this.phase === 'pause') this.timer = Math.min(this.timer, 2);
+    for (const g of this.gods) {
+      if (g.team !== team) continue;
+      for (const [k, v] of Object.entries(b.stats ?? {}) as [StatKey, number][]) g.combatant.addPerk(k, v);
+    }
+    return b;
   }
 
   /** During the countdown the gods stand at their marks. */
@@ -122,6 +164,8 @@ export class Duel {
   }
 
   private startRound(): void {
+    // an offer left unanswered is not lost: the first boon is taken
+    if (this.offer) this.choose(0);
     this.round++;
     this.phase = 'countdown';
     this.timer = DUEL.countdown;
