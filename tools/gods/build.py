@@ -17,8 +17,6 @@ from forge import clips  # noqa: E402
 from forge.gods import GODS  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[2] / 'public/models/gods'
-# gods imported from sculpts by meshy.py: only rebuilt here when named explicitly
-SCULPTED = {'thor'}
 
 
 def main(names: list[str]) -> None:
@@ -26,7 +24,7 @@ def main(names: list[str]) -> None:
     if not names or 'clips' in names:
         n = clips.export(OUT / 'clips.glb')
         print(f'clips.glb  {n / 1e6:.2f} MB')
-    for name in names or [g for g in GODS if g not in SCULPTED]:
+    for name in names or list(GODS):
         if name == 'clips':
             continue
         t = time.time()

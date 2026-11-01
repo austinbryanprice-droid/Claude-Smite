@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { godAsset, type GodAsset } from './gods/assets';
-import { combinedMaterials, COMBINED, godMaterials, paintedMaterial } from './gods/materials';
+import { combinedMaterials, COMBINED, godMaterials } from './gods/materials';
 import { SecondaryPhysics } from './gods/Physics';
 import { castSkinnedAsOne, mergeSkinned, packScalars } from '../scene/merge';
 import { color, luminance } from '../render/tsl';
@@ -208,10 +208,8 @@ export class GodModel {
       const mesh = o as THREE.SkinnedMesh;
       if ((o as THREE.Bone).isBone) this.bones.set(o.name, o as THREE.Bone);
       if (!mesh.isMesh) return;
-      const src = mesh.material as THREE.MeshStandardMaterial;
-      const name = src.name;
-      // a sculpted god carries its paint in the GLB (tools/gods/meshy.py)
-      mesh.material = src.map ? paintedMaterial(src.map) : mats.get(name) ?? mats.get('default')!;
+      const name = (mesh.material as THREE.Material).name;
+      mesh.material = mats.get(name) ?? mats.get('default')!;
       mesh.castShadow = !NO_SHADOW.has(name);
       mesh.receiveShadow = true;
       // cull against a fixed, generous sphere: the posed mesh (swinging weapons,

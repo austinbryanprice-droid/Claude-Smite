@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
   abs, attribute, color, float, fract, max, min, mix, mx_fractal_noise_float, mx_noise_float, normalView,
-  positionLocal, positionView, pow, saturate, select, sin, smoothstep, texture, time, uv, vec3,
+  positionLocal, positionView, pow, saturate, select, sin, smoothstep, time, uv, vec3,
 } from '../../render/tsl';
 
 /**
@@ -289,44 +289,6 @@ function gemMaterial(c: number): THREE.Material {
 }
 
 const cache = new Map<string, Map<string, THREE.Material>>();
-
-const painted = new Map<THREE.Texture, THREE.Material>();
-
-/**
- * A sculpted god with a painted texture (tools/gods/meshy.py): one material
- * reads its finish from the paint. Warm saturated yellows become polished
- * gold, dark blue plates become blued steel, bright blue runes glow, and
- * everything else stays painted cloth, leather and skin. `_metal` (0 on
- * hair and beard, which are painted the same yellow as the gold) gates the
- * metals.
- */
-export function paintedMaterial(map: THREE.Texture): THREE.Material {
-  let m = painted.get(map) as THREE.MeshPhysicalNodeMaterial | undefined;
-  if (m) return m;
-  map.anisotropy = 8;
-  m = new THREE.MeshPhysicalNodeMaterial({ side: THREE.DoubleSide, clearcoat: 0.3, clearcoatRoughness: 0.3 });
-  m.envMap = studioEnv();
-  m.envMapIntensity = 1.0;
-  const c = texture(map, uv()).rgb;
-  const r = c.x;
-  const g = c.y;
-  const b = c.z;
-  const hi = max(max(r, g), b);
-  const allow = attribute('_metal', 'float');
-  const gold = smoothstep(0.07, 0.18, min(r, g).sub(b)).mul(smoothstep(0.38, 0.58, g.div(r.add(1e-4)))).mul(smoothstep(0.1, 0.25, hi)).mul(allow);
-  const rune = smoothstep(0.28, 0.6, b).mul(smoothstep(0.12, 0.32, b.sub(r)));
-  const steel = smoothstep(0.004, 0.03, b.sub(r)).mul(float(1).sub(smoothstep(0.1, 0.3, hi))).mul(allow);
-  const shade = mix(float(1), ao(), 0.92);
-  // gold a touch richer than the paint, the dark plates lifted toward blue so they read as steel, not bronze
-  const base = mix(mix(c, c.mul(vec3(1.08, 0.98, 0.82)), gold), c.mul(vec3(1.0, 1.15, 1.45)), steel);
-  m.colorNode = base.mul(shade);
-  m.metalnessNode = gold.mul(0.85);
-  m.roughnessNode = mix(mix(float(0.78), float(0.34), gold), float(0.4), steel);
-  m.emissiveNode = c.mul(rune.mul(2.6)).add(color(0xffd9a0).mul(rim().mul(0.07))).mul(mix(float(1), ao(), 0.5));
-  m.name = 'painted';
-  painted.set(map, m);
-  return m;
-}
 
 /** Materials for one god (shared by every instance), keyed by the material names the build script writes. */
 export function godMaterials(id: string, variant?: string): Map<string, THREE.Material> {
