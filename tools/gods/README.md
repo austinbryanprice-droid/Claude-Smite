@@ -22,3 +22,13 @@ How a god is made (`forge/gods/<god>.py`):
 - **Grip**: `meta.curl` closes the weapon hand on top of every clip.
 
 Preview any god with `?showcase=zeus,thor&view=close|portrait|front|back|side|three&pose=idle|jog|cast&flip`.
+
+## Sculpted gods
+
+Thor is a painted sculpt (a Meshy export, `sources/thor_meshy.glb`) rigged onto the same UAL
+skeleton by `python3 tools/gods/meshy.py thor`: the forge skeleton (`sources/ual_rig.json`) is
+swung onto landmarks read off the sculpt, weights come from distance to the bones, the hammer is
+re-seated in the hand where the forge Thor held his (`sources/thor_hammer_ref.json`), and the
+low-poly surface gets one level of Phong tessellation plus baked AO. In game its texture drives
+one `paintedMaterial` (gold, blued steel and glowing runes are read from the paint).
+`build.py` with no arguments skips sculpted gods; `build.py thor` rebuilds the old code-built Thor.
